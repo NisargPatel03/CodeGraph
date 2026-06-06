@@ -2,9 +2,7 @@ import React, { useState, useRef } from 'react';
 import { UploadCloud, Key, Sparkles, AlertCircle } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { fetchGitHubRepo, parseZipFile } from '../utils/repoParser';
-import logo1 from '../assets/logo1.png';
-import logo2 from '../assets/logo2.png';
-import logo3 from '../assets/logo3.png';
+import logoImg from '../assets/logo.png';
 
 const GithubIcon = ({ size = 18 }: { size?: number }) => (
   <svg
@@ -26,17 +24,9 @@ interface RepoSelectorProps {
   onDataLoaded: (data: { files: ParsedFile[]; repoName: string }) => void;
   apiKey: string;
   setApiKey: (key: string) => void;
-  selectedLogo: 'logo1' | 'logo2' | 'logo3';
-  setSelectedLogo: (logo: 'logo1' | 'logo2' | 'logo3') => void;
 }
 
-export const RepoSelector: React.FC<RepoSelectorProps> = ({ 
-  onDataLoaded, 
-  apiKey, 
-  setApiKey,
-  selectedLogo,
-  setSelectedLogo
-}) => {
+export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, apiKey, setApiKey }) => {
   const [gitUrl, setGitUrl] = useState('');
   const [gitToken, setGitToken] = useState(() => localStorage.getItem('gh_token') || '');
   const [loading, setLoading] = useState(false);
@@ -292,12 +282,10 @@ export function runGlobalCheck(appInstance: typeof App) {
     localStorage.setItem('gh_token', val);
   };
 
-  const logoSrc = selectedLogo === 'logo1' ? logo1 : selectedLogo === 'logo2' ? logo2 : logo3;
-
   return (
     <div className="selector-screen">
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-        <img src={logoSrc} alt="CodeGraph Logo" style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 0 15px rgba(0, 242, 254, 0.4))' }} />
+        <img src={logoImg} alt="CodeGraph Logo" style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 0 15px rgba(0, 242, 254, 0.4))' }} />
         <h1 className="selector-title">CodeGraph</h1>
         <p className="selector-subtitle">
           Instantly generate interactive dependency graphs, call flow maps, component trees, and AI guides for any codebase.
@@ -384,39 +372,6 @@ export function runGlobalCheck(appInstance: typeof App) {
           />
         </div>
 
-        {/* Logo Theme selection block */}
-        <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
-            <Sparkles size={14} style={{ color: 'var(--color-secondary)' }} />
-            Choose Active Logo Concept (Favicon will sync automatically)
-          </label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              type="button"
-              className={`cyber-button secondary ${selectedLogo === 'logo1' ? 'active' : ''}`}
-              onClick={() => setSelectedLogo('logo1')}
-              style={{ flex: 1, padding: '8px 10px', fontSize: '0.8rem', justifyContent: 'center' }}
-            >
-              Option 1: Minimalist
-            </button>
-            <button
-              type="button"
-              className={`cyber-button secondary ${selectedLogo === 'logo2' ? 'active' : ''}`}
-              onClick={() => setSelectedLogo('logo2')}
-              style={{ flex: 1, padding: '8px 10px', fontSize: '0.8rem', justifyContent: 'center' }}
-            >
-              Option 2: Neural Tree
-            </button>
-            <button
-              type="button"
-              className={`cyber-button secondary ${selectedLogo === 'logo3' ? 'active' : ''}`}
-              onClick={() => setSelectedLogo('logo3')}
-              style={{ flex: 1, padding: '8px 10px', fontSize: '0.8rem', justifyContent: 'center' }}
-            >
-              Option 3: 3D Cube
-            </button>
-          </div>
-        </div>
 
         {error && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-alert)', background: 'rgba(244, 63, 94, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)', fontSize: '0.85rem', textAlign: 'left' }}>
