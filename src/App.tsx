@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, CheckCircle, BrainCircuit } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, CheckCircle } from 'lucide-react';
 import type { ParsedFile } from './utils/repoParser';
 import { analyzeCodebase } from './utils/codeAnalyzer';
 import type { CodebaseGraph } from './utils/codeAnalyzer';
@@ -7,6 +7,7 @@ import { RepoSelector } from './components/RepoSelector';
 import { GraphCanvas } from './components/GraphCanvas';
 import { Inspector } from './components/Inspector';
 import { Reports } from './components/Reports';
+import logoImg from './assets/logo.png';
 
 // Tree interface for File Explorer
 interface FileTreeItem {
@@ -173,7 +174,7 @@ export default function App() {
       {/* Top Header */}
       <header className="glass-panel app-header">
         <div className="logo-container">
-          <BrainCircuit size={26} style={{ color: 'var(--color-secondary)' }} />
+          <img src={logoImg} alt="CodeGraph Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <h1 className="logo-text">CodeGraph</h1>
           <span className="logo-badge">Beta v1.0</span>
         </div>

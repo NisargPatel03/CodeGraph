@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { UploadCloud, Key, Sparkles, AlertCircle } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { fetchGitHubRepo, parseZipFile } from '../utils/repoParser';
+import logoImg from '../assets/logo.png';
 
 const GithubIcon = ({ size = 18 }: { size?: number }) => (
   <svg
@@ -283,7 +284,8 @@ export function runGlobalCheck(appInstance: typeof App) {
 
   return (
     <div className="selector-screen">
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+        <img src={logoImg} alt="CodeGraph Logo" style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 0 15px rgba(0, 242, 254, 0.4))' }} />
         <h1 className="selector-title">CodeGraph</h1>
         <p className="selector-subtitle">
           Instantly generate interactive dependency graphs, call flow maps, component trees, and AI guides for any codebase.
