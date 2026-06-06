@@ -136,7 +136,14 @@ async function fetchViaTreesApi(owner: string, repo: string, defaultBranch: stri
   const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
   const treeRes = await fetch(treeUrl, { headers });
   if (!treeRes.ok) {
-    throw new Error(`Failed to fetch repository tree: ${treeRes.statusText}`);
+    let errMsg = treeRes.statusText || `Status ${treeRes.status}`;
+    try {
+      const errorJson = await treeRes.json();
+      if (errorJson && errorJson.message) {
+        errMsg = errorJson.message;
+      }
+    } catch (_) {}
+    throw new Error(`Failed to fetch repository tree: ${errMsg}`);
   }
   
   const treeData = await treeRes.json();
@@ -212,10 +219,21 @@ export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<
   // 1. Fetch repo details to get default branch name
   const repoDetailsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
   if (!repoDetailsRes.ok) {
+    let errMsg = repoDetailsRes.statusText || `Status ${repoDetailsRes.status}`;
+    try {
+      const errorJson = await repoDetailsRes.json();
+      if (errorJson && errorJson.message) {
+        errMsg = errorJson.message;
+      }
+    } catch (_) {}
+
     if (repoDetailsRes.status === 404) {
       throw new Error('Repository not found. Ensure the URL is correct and the repository is public, or provide a GitHub Token.');
     }
-    throw new Error(`Failed to fetch repo details: ${repoDetailsRes.statusText}`);
+    if (repoDetailsRes.status === 403 && errMsg.toLowerCase().includes('rate limit')) {
+      throw new Error('GitHub API rate limit exceeded. Please provide a GitHub Personal Access Token (PAT) in the token field, or upload the repository as a ZIP archive instead.');
+    }
+    throw new Error(`Failed to fetch repo details: ${errMsg}`);
   }
   
   const repoDetails = await repoDetailsRes.json();
