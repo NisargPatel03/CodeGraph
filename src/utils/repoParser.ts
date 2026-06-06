@@ -132,6 +132,62 @@ export async function parseZipFile(file: File): Promise<ParsedFile[]> {
   return parsedFiles;
 }
 
+async function fetchViaTreesApi(owner: string, repo: string, defaultBranch: string, headers: HeadersInit): Promise<ParsedFile[]> {
+  const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
+  const treeRes = await fetch(treeUrl, { headers });
+  if (!treeRes.ok) {
+    throw new Error(`Failed to fetch repository tree: ${treeRes.statusText}`);
+  }
+  
+  const treeData = await treeRes.json();
+  if (!treeData.tree || !Array.isArray(treeData.tree)) {
+    throw new Error('Invalid repository tree structure returned from GitHub.');
+  }
+
+  // Filter out directories, ignored files, and limit total files to prevent API spam (e.g. max 150 files)
+  const fileEntries = treeData.tree.filter((item: any) => {
+    return item.type === 'blob' && !isIgnored(item.path);
+  });
+
+  if (fileEntries.length > 150) {
+    throw new Error(`Repository is too large (${fileEntries.length} files) for client-side API fetching. Please download it as a ZIP and drag-and-drop it instead.`);
+  }
+
+  const parsedFiles: ParsedFile[] = [];
+  const batchSize = 10;
+  
+  for (let i = 0; i < fileEntries.length; i += batchSize) {
+    const batch = fileEntries.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (item: any) => {
+      try {
+        const blobRes = await fetch(item.url, { headers });
+        if (blobRes.ok) {
+          const blobData = await blobRes.json();
+          const base64Content = blobData.content.replace(/\s/g, '');
+          const binaryString = atob(base64Content);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let j = 0; j < binaryString.length; j++) {
+            bytes[j] = binaryString.charCodeAt(j);
+          }
+          const text = new TextDecoder('utf-8').decode(bytes);
+
+          parsedFiles.push({
+            path: item.path,
+            name: item.path.split('/').pop() || '',
+            content: text,
+            size: item.size || text.length,
+            language: getLanguageFromExtension(item.path),
+          });
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch file content for ${item.path}:`, err);
+      }
+    }));
+  }
+
+  return parsedFiles;
+}
+
 export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<{ files: ParsedFile[]; repoName: string }> {
   // Parse repoUrl: e.g. "https://github.com/facebook/react" or "facebook/react"
   let cleanUrl = repoUrl.trim().replace(/\/$/, '');
@@ -165,16 +221,48 @@ export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<
   const repoDetails = await repoDetailsRes.json();
   const defaultBranch = repoDetails.default_branch || 'main';
 
-  // 2. Fetch repo zip archive
+  // 2. Try fetching via zipball direct or proxy
+  let files: ParsedFile[] = [];
   const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball/${defaultBranch}`;
-  const zipRes = await fetch(zipUrl, { headers });
-  if (!zipRes.ok) {
-    throw new Error(`Failed to fetch repository zip archive: ${zipRes.statusText}`);
+  
+  try {
+    // Attempt direct fetch first
+    const zipRes = await fetch(zipUrl, { headers });
+    if (!zipRes.ok) {
+      throw new Error(`Direct zip fetch failed with status ${zipRes.status}`);
+    }
+    const blob = await zipRes.blob();
+    const zipFile = new File([blob], `${repo}.zip`, { type: 'application/zip' });
+    files = await parseZipFile(zipFile);
+  } catch (directError) {
+    console.warn('Direct zip fetch failed, attempting fallback methods...', directError);
+    
+    // Fallback 1: If it's a public repository (no token), try using a CORS proxy
+    if (!token) {
+      try {
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(zipUrl)}`;
+        const proxyRes = await fetch(proxyUrl);
+        if (proxyRes.ok) {
+          const blob = await proxyRes.blob();
+          const zipFile = new File([blob], `${repo}.zip`, { type: 'application/zip' });
+          files = await parseZipFile(zipFile);
+        } else {
+          throw new Error('CORS proxy returned non-OK status');
+        }
+      } catch (proxyError) {
+        console.warn('CORS proxy fetch failed, falling back to Trees API...', proxyError);
+        // Fallback 2: Fallback to recursive Trees API
+        files = await fetchViaTreesApi(owner, repo, defaultBranch, headers);
+      }
+    } else {
+      // Fallback 2: For private repos or token requests, fall back directly to Trees API to avoid leaking token to proxy
+      files = await fetchViaTreesApi(owner, repo, defaultBranch, headers);
+    }
   }
 
-  const blob = await zipRes.blob();
-  const zipFile = new File([blob], `${repo}.zip`, { type: 'application/zip' });
-  const files = await parseZipFile(zipFile);
+  if (files.length === 0) {
+    throw new Error('No readable code files found in the repository.');
+  }
 
   return { files, repoName };
 }
