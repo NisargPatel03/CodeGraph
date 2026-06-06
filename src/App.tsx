@@ -7,7 +7,9 @@ import { RepoSelector } from './components/RepoSelector';
 import { GraphCanvas } from './components/GraphCanvas';
 import { Inspector } from './components/Inspector';
 import { Reports } from './components/Reports';
-import logoImg from './assets/logo.png';
+import logo1 from './assets/logo1.png';
+import logo2 from './assets/logo2.png';
+import logo3 from './assets/logo3.png';
 
 // Tree interface for File Explorer
 interface FileTreeItem {
@@ -19,6 +21,9 @@ interface FileTreeItem {
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_key') || '');
+  const [selectedLogo, setSelectedLogo] = useState<'logo1' | 'logo2' | 'logo3'>(
+    () => (localStorage.getItem('codegraph_logo') as any) || 'logo1'
+  );
   const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -32,6 +37,20 @@ export default function App() {
     setApiKey(key);
     localStorage.setItem('gemini_key', key);
   };
+
+  // Synchronize logo and dynamically update the favicon in the browser tab
+  useEffect(() => {
+    localStorage.setItem('codegraph_logo', selectedLogo);
+    const faviconLink = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (faviconLink) {
+      faviconLink.href = `/favicon${selectedLogo.replace('logo', '')}.png`;
+    } else {
+      const newLink = document.createElement('link');
+      newLink.rel = 'icon';
+      newLink.href = `/favicon${selectedLogo.replace('logo', '')}.png`;
+      document.head.appendChild(newLink);
+    }
+  }, [selectedLogo]);
 
   // Run analysis when files are loaded
   useEffect(() => {
@@ -169,12 +188,14 @@ export default function App() {
     );
   };
 
+  const logoSrc = selectedLogo === 'logo1' ? logo1 : selectedLogo === 'logo2' ? logo2 : logo3;
+
   return (
     <div className="app-container">
       {/* Top Header */}
       <header className="glass-panel app-header">
         <div className="logo-container">
-          <img src={logoImg} alt="CodeGraph Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+          <img src={logoSrc} alt="CodeGraph Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <h1 className="logo-text">CodeGraph</h1>
           <span className="logo-badge">Beta v1.0</span>
         </div>
@@ -206,7 +227,13 @@ export default function App() {
 
       {/* Main Content Area */}
       {!repoData ? (
-        <RepoSelector onDataLoaded={handleDataLoaded} apiKey={apiKey} setApiKey={handleSetApiKey} />
+        <RepoSelector 
+          onDataLoaded={handleDataLoaded} 
+          apiKey={apiKey} 
+          setApiKey={handleSetApiKey} 
+          selectedLogo={selectedLogo}
+          setSelectedLogo={setSelectedLogo}
+        />
       ) : (
         graphData && (
           <main className={`workspace-layout ${isBottomExpanded ? 'expanded-bottom' : ''}`}>

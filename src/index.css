@@ -251,6 +251,12 @@ code, pre {
   box-shadow: none;
 }
 
+.cyber-button.secondary.active {
+  background: rgba(0, 242, 254, 0.12);
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+}
+
 /* --- Drag and Drop Zip Box --- */
 .dropzone {
   border: 2px dashed rgba(255, 255, 255, 0.1);
