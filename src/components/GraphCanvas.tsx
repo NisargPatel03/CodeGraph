@@ -802,13 +802,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         rootNode.descendants().forEach(d => {
           const angle = d.x;
           const radius = d.y;
-          const targetNode = nodes.find(n => n.id === d.data.id);
-          if (targetNode) {
-            targetNode.x = radius * Math.cos(angle - Math.PI / 2);
-            targetNode.y = radius * Math.sin(angle - Math.PI / 2);
-            targetNode.treeDepth = d.depth;
-            targetNode.fx = targetNode.x;
-            targetNode.fy = targetNode.y;
+          if (angle !== undefined && radius !== undefined) {
+            const targetNode = nodes.find(n => n.id === d.data.id);
+            if (targetNode) {
+              targetNode.x = radius * Math.cos(angle - Math.PI / 2);
+              targetNode.y = radius * Math.sin(angle - Math.PI / 2);
+              targetNode.treeDepth = d.depth;
+              targetNode.fx = targetNode.x;
+              targetNode.fy = targetNode.y;
+            }
           }
         });
       } else {
@@ -816,14 +818,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         treeLayout(rootNode);
 
         rootNode.descendants().forEach(d => {
-          const targetNode = nodes.find(n => n.id === d.data.id);
-          if (targetNode) {
-            const yOffset = rootHierarchy.id === 'virtual-root' ? -150 : 0;
-            targetNode.x = d.x;
-            targetNode.y = d.y + yOffset - 150;
-            targetNode.treeDepth = d.depth;
-            targetNode.fx = targetNode.x;
-            targetNode.fy = targetNode.y;
+          if (d.x !== undefined && d.y !== undefined) {
+            const targetNode = nodes.find(n => n.id === d.data.id);
+            if (targetNode) {
+              const yOffset = rootHierarchy.id === 'virtual-root' ? -150 : 0;
+              targetNode.x = d.x;
+              targetNode.y = d.y + yOffset - 150;
+              targetNode.treeDepth = d.depth;
+              targetNode.fx = targetNode.x;
+              targetNode.fy = targetNode.y;
+            }
           }
         });
       }
