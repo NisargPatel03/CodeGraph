@@ -32,6 +32,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isBottomExpanded, setIsBottomExpanded] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
 
   // Sync theme to root element
   useEffect(() => {
@@ -192,12 +193,40 @@ export default function App() {
         {item.path && (
           <div
             className="file-node"
-            style={{ paddingLeft: `${depth * 14 + 8}px`, fontWeight: 500, color: 'var(--text-primary)' }}
-            onClick={() => toggleFolder(item.path)}
+            style={{ paddingLeft: `${depth * 14 + 8}px`, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
           >
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <Folder size={14} style={{ color: 'var(--color-secondary)', opacity: 0.8 }} />
-            <span>{item.name}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', flex: 1, overflow: 'hidden' }} onClick={() => toggleFolder(item.path)}>
+              {isExpanded ? <ChevronDown size={14} style={{ flexShrink: 0 }} /> : <ChevronRight size={14} style={{ flexShrink: 0 }} />}
+              <Folder size={14} style={{ color: 'var(--color-secondary)', opacity: 0.8, flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+            </div>
+            {(viewMode === 'dependency' || viewMode === 'cluster') && (
+              <button
+                className="tree-graph-toggle"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCollapsedFolders(prev => {
+                    const next = new Set(prev);
+                    if (next.has(item.path)) next.delete(item.path);
+                    else next.add(item.path);
+                    return next;
+                  });
+                }}
+                title={collapsedFolders.has(item.path) ? "Expand in Graph" : "Collapse in Graph"}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: collapsedFolders.has(item.path) ? 'var(--color-warning)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                  fontSize: '0.65rem',
+                  flexShrink: 0,
+                  transition: 'color 0.2s ease'
+                }}
+              >
+                {collapsedFolders.has(item.path) ? '📁 collapsed' : '📂 collapse'}
+              </button>
+            )}
           </div>
         )}
         {(isExpanded || !item.path || searchQuery) && (
@@ -337,6 +366,8 @@ export default function App() {
                 setSelectedNode={setSelectedNodeId}
                 viewMode={viewMode}
                 searchQuery={searchQuery}
+                collapsedFolders={collapsedFolders}
+                setCollapsedFolders={setCollapsedFolders}
               />
             </section>
 
@@ -347,6 +378,9 @@ export default function App() {
               apiKey={apiKey}
               cycles={graphData.cycles}
               imports={activeFileImports}
+              selectedNodeId={selectedNodeId}
+              setSelectedNodeId={setSelectedNodeId}
+              setCollapsedFolders={setCollapsedFolders}
             />
 
             {/* Bottom Panel - Onboarding Guides & Architecture Cycles */}

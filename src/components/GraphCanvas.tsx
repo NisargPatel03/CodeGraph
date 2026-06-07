@@ -9,6 +9,8 @@ interface GraphCanvasProps {
   setSelectedNode: (id: string | null) => void;
   viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy';
   searchQuery: string;
+  collapsedFolders: Set<string>;
+  setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -17,6 +19,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   setSelectedNode,
   viewMode,
   searchQuery,
+  collapsedFolders,
+  setCollapsedFolders,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,6 +224,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return getColorForNode(d);
   };
 
+  const allFolders = useMemo(() => {
+    const folders = new Set<string>();
+    graphData.nodes.forEach(n => {
+      if (n.folder) folders.add(n.folder);
+    });
+    return Array.from(folders).sort();
+  }, [graphData.nodes]);
+
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
 
@@ -233,13 +245,126 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     let links: any[] = [];
 
     if (viewMode === 'dependency' || viewMode === 'cluster') {
+      let activeNodes: any[] = [];
+      let activeLinks: any[] = [];
+
       if (showNpmPackages && viewMode === 'dependency') {
-        nodes = [...graphData.nodes.map((n) => ({ ...n })), ...(graphData.npmNodes || []).map((n) => ({ ...n }))];
-        links = [...graphData.links.map((l) => ({ ...l })), ...(graphData.npmLinks || []).map((l) => ({ ...l }))];
+        activeNodes = [...graphData.nodes.map((n) => ({ ...n })), ...(graphData.npmNodes || []).map((n) => ({ ...n }))];
+        activeLinks = [...graphData.links.map((l) => ({ ...l })), ...(graphData.npmLinks || []).map((l) => ({ ...l }))];
       } else {
-        nodes = graphData.nodes.map((n) => ({ ...n }));
-        links = graphData.links.map((l) => ({ ...l }));
+        activeNodes = graphData.nodes.map((n) => ({ ...n }));
+        activeLinks = graphData.links.map((l) => ({ ...l }));
       }
+
+      const getCollapsedAncestor = (nodeFolder: string): string | null => {
+        if (!nodeFolder) return null;
+        const sortedCollapsed = Array.from(collapsedFolders).sort((a, b) => a.length - b.length);
+        for (const folder of sortedCollapsed) {
+          if (nodeFolder === folder || nodeFolder.startsWith(folder + '/')) {
+            return folder;
+          }
+        }
+        return null;
+      };
+
+      const folderCoupling = new Map<string, number>();
+      activeLinks.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+        const sNode = activeNodes.find(n => n.id === sId);
+        const tNode = activeNodes.find(n => n.id === tId);
+        if (sNode && tNode && sNode.folder && tNode.folder && sNode.folder !== tNode.folder) {
+          const key = `${sNode.folder}->${tNode.folder}`;
+          folderCoupling.set(key, (folderCoupling.get(key) || 0) + 1);
+        }
+      });
+
+      const collapsedFolderNodes = new Map<string, any>();
+      activeNodes.forEach(node => {
+        const ancestor = getCollapsedAncestor(node.folder);
+        if (ancestor) {
+          if (!collapsedFolderNodes.has(ancestor)) {
+            collapsedFolderNodes.set(ancestor, {
+              id: `folder:${ancestor}`,
+              name: ancestor.split('/').pop() || ancestor,
+              folder: ancestor,
+              isFolder: true,
+              size: 0,
+              language: 'folder',
+              churn: 0,
+              complexity: 0,
+              fileCount: 0,
+              x: 0,
+              y: 0,
+              sumX: 0,
+              sumY: 0
+            });
+          }
+          const fNode = collapsedFolderNodes.get(ancestor)!;
+          fNode.size += node.size || 0;
+          fNode.churn = Math.max(fNode.churn, node.churn || 0);
+          fNode.complexity += node.complexity || 0;
+          fNode.fileCount += 1;
+          if (node.x !== undefined) {
+            fNode.sumX += node.x;
+            fNode.sumY += node.y;
+            fNode.x = fNode.sumX / fNode.fileCount;
+            fNode.y = fNode.sumY / fNode.fileCount;
+          }
+        }
+      });
+
+      const visibleFileNodes = activeNodes.filter(n => !getCollapsedAncestor(n.folder));
+      const visibleFolderNodes = Array.from(collapsedFolderNodes.values());
+      visibleFolderNodes.forEach(fNode => {
+        delete fNode.sumX;
+        delete fNode.sumY;
+      });
+      nodes = [...visibleFileNodes, ...visibleFolderNodes];
+
+      const aggregatedLinks = new Map<string, any>();
+      activeLinks.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        const sNode = activeNodes.find(n => n.id === sId);
+        const tNode = activeNodes.find(n => n.id === tId);
+        if (!sNode || !tNode) return;
+
+        const sAncestor = getCollapsedAncestor(sNode.folder);
+        const tAncestor = getCollapsedAncestor(tNode.folder);
+
+        const finalSourceId = sAncestor ? `folder:${sAncestor}` : sId;
+        const finalTargetId = tAncestor ? `folder:${tAncestor}` : tId;
+
+        if (finalSourceId === finalTargetId) return;
+
+        const key = `${finalSourceId}->${finalTargetId}`;
+        if (!aggregatedLinks.has(key)) {
+          aggregatedLinks.set(key, {
+            source: finalSourceId,
+            target: finalTargetId,
+            weight: 0,
+            isAggregated: !!(sAncestor || tAncestor),
+            isCrossFolder: false,
+            coupling: 1
+          });
+        }
+        aggregatedLinks.get(key)!.weight += 1;
+      });
+
+      aggregatedLinks.forEach(link => {
+        if (!link.isAggregated) {
+          const sNode = nodes.find(n => n.id === link.source);
+          const tNode = nodes.find(n => n.id === link.target);
+          if (sNode && tNode && sNode.folder && tNode.folder && sNode.folder !== tNode.folder) {
+            link.isCrossFolder = true;
+            link.coupling = folderCoupling.get(`${sNode.folder}->${tNode.folder}`) || 1;
+          }
+        }
+      });
+
+      links = Array.from(aggregatedLinks.values());
     } else if (viewMode === 'call') {
       nodes = graphData.callNodes.map((n) => ({ ...n }));
       links = graphData.callLinks.map((l) => ({ ...l }));
@@ -344,7 +469,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     zoomBehaviorRef.current = zoomBehavior;
 
-    svgElement.call(zoomBehavior);
+    svgElement.call(zoomBehavior).on('dblclick.zoom', null);
     svgElement.call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
 
     const simulation = d3.forceSimulation<any>(nodes)
@@ -359,6 +484,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         return -220;
       }))
       .force('collision', d3.forceCollide<any>().radius((d) => {
+        if (d.isFolder) return 24;
         const baseRad = viewMode === 'call' ? 12 : (viewMode === 'hierarchy' ? 14 : 15);
         return baseRad + Math.sqrt(d.size || 0) * 0.05 + 5;
       }))
@@ -439,7 +565,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       hullNodesGroup.get(key)!.push(n);
     });
 
-    const hullDataList = Array.from(hullNodesGroup.entries()).filter(([_, members]) => members.length > 0);
+    const hullDataList = Array.from(hullNodesGroup.entries())
+      .filter(([key, members]) => members.length > 0 && !collapsedFolders.has(key));
+
     const hulls = hullGroup.selectAll('.hull-boundary')
       .data(hullDataList)
       .enter()
@@ -448,7 +576,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('fill', (_, i) => hullColors[i % hullColors.length])
       .attr('stroke', (_, i) => hullColors[i % hullColors.length])
       .attr('stroke-opacity', 0.25)
-      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 1.0 : 0);
+      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 1.0 : 0)
+      .on('dblclick', (event, [folderPath]) => {
+        event.stopPropagation();
+        setCollapsedFolders((prev) => {
+          const next = new Set(prev);
+          next.add(folderPath);
+          return next;
+        });
+      });
 
     const hullLabels = hullGroup.selectAll('.hull-label')
       .data(hullDataList)
@@ -456,7 +592,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .append('text')
       .attr('class', 'hull-label')
       .text(([key]) => key.split('/').pop() || key)
-      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 0.6 : 0);
+      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 0.6 : 0)
+      .on('dblclick', (event, [folderPath]) => {
+        event.stopPropagation();
+        setCollapsedFolders((prev) => {
+          const next = new Set(prev);
+          next.add(folderPath);
+          return next;
+        });
+      });
 
     const updateHulls = () => {
       hulls.each(function ([_, members]: any) {
@@ -482,11 +626,37 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         });
     };
 
-    const link = mainGroup.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('class', 'link-element').attr('stroke', 'var(--link-stroke)').attr('stroke-width', 1.5).attr('marker-end', 'url(#arrow-normal)');
+    const pipeline = mainGroup.append('g').selectAll('.pipeline-element')
+      .data(links.filter((l: any) => l.isAggregated || l.isCrossFolder))
+      .enter()
+      .append('line')
+      .attr('class', 'pipeline-element')
+      .attr('stroke', 'var(--color-secondary-glow)')
+      .attr('stroke-opacity', 0.18)
+      .attr('stroke-width', (d: any) => d.isAggregated ? 5 + Math.min(d.weight * 2.5, 18) : 5 + Math.min(d.coupling * 2.0, 14))
+      .style('filter', 'drop-shadow(0 0 5px var(--color-secondary))');
+
+    const link = mainGroup.append('g').selectAll('.link-element')
+      .data(links)
+      .enter()
+      .append('line')
+      .attr('class', 'link-element')
+      .attr('stroke', 'var(--link-stroke)')
+      .attr('stroke-width', (d: any) => d.isAggregated ? 1.5 + Math.min(d.weight * 0.4, 4) : 1.5)
+      .attr('marker-end', 'url(#arrow-normal)');
 
     const node = mainGroup.append('g').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
       .on('click', (event, d) => { event.stopPropagation(); setSelectedNode(d.id); })
+      .on('dblclick', (event, d) => {
+        if (d.isFolder) {
+          event.stopPropagation();
+          setCollapsedFolders((prev) => {
+            const next = new Set(prev);
+            next.delete(d.folder);
+            return next;
+          });
+        }
+      })
       .on('mouseenter', (_, d) => setHoveredNode(d.id))
       .on('mouseleave', () => setHoveredNode(null))
       .call(d3.drag<any, any>().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
@@ -495,7 +665,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     node.each(function (d: any) {
       const element = d3.select(this);
-      if (d.isNpm) {
+      if (d.isFolder) {
+        element.append('path')
+          .attr('d', 'M-12,-8 H-4 L-1,-5 H12 V8 H-12 Z')
+          .attr('class', 'folder-node')
+          .attr('transform', 'scale(1.2)');
+      } else if (d.isNpm) {
         element.append('polygon')
           .attr('points', '0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6')
           .attr('fill', 'var(--color-primary-glow)')
@@ -519,6 +694,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     simulation.on('tick', () => {
       link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      if (pipeline) {
+        pipeline.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      }
       node.attr('transform', (d) => `translate(${d.x}, ${d.y})`);
       if (viewMode === 'cluster' || viewMode === 'call') updateHulls();
       drawMinimap();
@@ -533,7 +711,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -552,7 +730,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     // Update node fills based on heatmap mode
     nodesG.select('circle').style('fill', (d: any) => getHeatmapColor(d));
     nodesG.select('polygon').style('fill', (d: any) => getHeatmapColor(d));
+    nodesG.select('path.folder-node').style('fill', (d: any) => {
+      if (heatmapMode !== 'none') {
+        return getHeatmapColor(d);
+      }
+      return 'var(--color-warning)';
+    });
     nodesG.classed('hotspot', (d: any) => heatmapMode === 'churn' && d.churn && d.churn >= 45);
+
+    const pipelines = svgElement.selectAll('.pipeline-element');
 
     if (shortestPath) {
       const pathSet = new Set(shortestPath);
@@ -569,11 +755,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           line.attr('class', 'link-element').style('stroke-opacity', 0.02).style('stroke', 'var(--link-stroke)');
         }
       });
+      pipelines.style('stroke-opacity', 0.01);
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else if (activeId) {
       const neighbors = new Set<string>([activeId]);
-      let filteredLinks: any[] = viewMode === 'dependency' || viewMode === 'cluster' ? graphData.links : (viewMode === 'call' ? graphData.callLinks : graphData.classLinks);
-      filteredLinks.forEach((link: any) => {
+      const activeRenderedLinks: any[] = [];
+      linksLine.each(function (l: any) {
+        if (l) activeRenderedLinks.push(l);
+      });
+      activeRenderedLinks.forEach((link: any) => {
         const { sId, tId } = getLinkId(link);
         if (sId === activeId) neighbors.add(tId);
         if (tId === activeId) neighbors.add(sId);
@@ -588,6 +778,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         else if (tId === activeId) line.attr('class', 'link-element flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
         else line.attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
+      pipelines.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const line = d3.select(this);
+        if (sId === activeId || tId === activeId) {
+          line.style('stroke-opacity', 0.8);
+        } else {
+          line.style('stroke-opacity', 0.01);
+        }
+      });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else if (query) {
       const matches = new Set<string>();
@@ -600,6 +799,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const isMatch = matches.has(sId) || matches.has(tId);
         d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isMatch ? 0.7 : 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
+      pipelines.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const isMatch = matches.has(sId) || matches.has(tId);
+        d3.select(this).style('stroke-opacity', isMatch ? 0.6 : 0.01);
+      });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else {
       nodesG.style('opacity', 1.0);
@@ -608,6 +812,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isCyclic ? 0.6 : 0.2).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+      });
+      pipelines.each(function () {
+        const line = d3.select(this);
+        line.style('stroke-opacity', (d: any) => d.isAggregated ? 0.18 : 0.12);
       });
       hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
     }
@@ -719,6 +927,52 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   <button className={`heatmap-tab ${heatmapMode === 'complexity' ? 'active' : ''}`} onClick={() => setHeatmapMode('complexity')}>
                     LOC
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Module Clusters (Folders) */}
+            {(viewMode === 'dependency' || viewMode === 'cluster') && (
+              <div className="toolbox-section">
+                <div className="section-header">📁 Module Clusters</div>
+                <div className="folder-list-container" style={{ maxHeight: '110px', overflowY: 'auto', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '5px', paddingRight: '4px' }}>
+                  {allFolders.length === 0 ? (
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>No folder structures found</span>
+                  ) : (
+                    allFolders.map(folder => {
+                      const isCollapsed = collapsedFolders.has(folder);
+                      return (
+                        <label key={folder} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
+                          <input
+                            type="checkbox"
+                            checked={isCollapsed}
+                            onChange={() => {
+                              setCollapsedFolders(prev => {
+                                const next = new Set(prev);
+                                if (next.has(folder)) next.delete(folder);
+                                else next.add(folder);
+                                return next;
+                              });
+                            }}
+                            style={{ cursor: 'pointer', accentColor: 'var(--color-warning)' }}
+                          />
+                          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={folder}>
+                            {folder}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="flex-row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                  <span className="path-status-text" style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    {collapsedFolders.size} collapsed
+                  </span>
+                  {collapsedFolders.size > 0 && (
+                    <button className="cyber-button text-btn" onClick={() => setCollapsedFolders(new Set())} style={{ padding: '3px 6px', fontSize: '0.65rem' }}>
+                      Expand All
+                    </button>
+                  )}
                 </div>
               </div>
             )}

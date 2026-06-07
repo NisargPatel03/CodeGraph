@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase } from '../utils/aiHelper';
 
@@ -9,6 +9,9 @@ interface InspectorProps {
   apiKey: string;
   cycles: string[][];
   imports: string[];
+  selectedNodeId: string | null;
+  setSelectedNodeId: (id: string | null) => void;
+  setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -17,6 +20,9 @@ export const Inspector: React.FC<InspectorProps> = ({
   apiKey,
   cycles,
   imports,
+  selectedNodeId,
+  setSelectedNodeId,
+  setCollapsedFolders,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -92,6 +98,20 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const fileExplanation = selectedFile ? explanations[selectedFile.path] : '';
 
+  const isSelectedNodeFolder = selectedNodeId && selectedNodeId.startsWith('folder:');
+  const selectedFolder = isSelectedNodeFolder ? selectedNodeId!.slice(7) : null;
+
+  const folderFiles = useMemo(() => {
+    if (!selectedFolder) return [];
+    return allFiles.filter(f => f.path === selectedFolder || f.path.startsWith(selectedFolder + '/'));
+  }, [selectedFolder, allFiles]);
+
+  const totalLoc = useMemo(() => {
+    return folderFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+  }, [folderFiles]);
+
+  const fileFolder = selectedFile ? selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/')) : null;
+
   return (
     <aside className="glass-panel sidebar-right">
       <div className="inspector-tabs">
@@ -114,7 +134,55 @@ export const Inspector: React.FC<InspectorProps> = ({
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {activeTab === 'info' ? (
           <div className="inspector-content">
-            {!selectedFile ? (
+            {selectedFolder ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-warning)', marginBottom: '8px' }}>
+                    <Folder size={18} />
+                    <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem' }}>{selectedFolder.split('/').pop()}</h3>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{selectedFolder}</p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                    📁 Folder Cluster
+                  </span>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
+                    {folderFiles.length} files
+                  </span>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
+                    {(totalLoc / 1024).toFixed(1)} KB
+                  </span>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Files in Cluster</h4>
+                  <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {folderFiles.map((f) => (
+                      <div key={f.path} style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', background: 'rgba(255,255,255,0.02)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.03)', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                        {f.path.replace(selectedFolder + '/', '')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="cyber-button"
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '0.85rem', marginTop: '12px' }}
+                  onClick={() => {
+                    setCollapsedFolders(prev => {
+                      const next = new Set(prev);
+                      next.delete(selectedFolder);
+                      return next;
+                    });
+                    setSelectedNodeId(null);
+                  }}
+                >
+                  📁 Expand Folder Cluster
+                </button>
+              </div>
+            ) : !selectedFile ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '12px', textAlign: 'center', padding: '20px' }}>
                 <HelpCircle size={40} style={{ opacity: 0.5 }} />
                 <div>
@@ -143,6 +211,24 @@ export const Inspector: React.FC<InspectorProps> = ({
                       ⏱️ {selectedFile.content.split('\n').length} LOC
                     </span>
                   </div>
+
+                  {fileFolder && (
+                    <button
+                      className="cyber-button text-btn"
+                      onClick={() => {
+                        setCollapsedFolders(prev => {
+                          const next = new Set(prev);
+                          next.add(fileFolder);
+                          return next;
+                        });
+                        setSelectedNodeId(null);
+                      }}
+                      style={{ marginTop: '12px', width: '100%', fontSize: '0.75rem', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    >
+                      <Folder size={12} />
+                      Collapse Parent Folder ({fileFolder.split('/').pop()})
+                    </button>
+                  )}
                 </div>
 
                 {/* Circular Dependency Warnings */}

@@ -1134,12 +1134,12 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   animation: hotspot-warn-glow 2s infinite ease-in-out;
 }
 
-/* --- Graph Control Toolbox --- */
 .graph-control-toolbox {
   position: absolute;
   top: 20px;
   left: 20px;
   width: 260px;
+  max-height: calc(100% - 40px);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), var(--glow-shadow);
@@ -1152,6 +1152,24 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   backdrop-filter: blur(12px);
   pointer-events: auto;
   font-family: var(--font-sans);
+  overflow-y: auto;
+}
+
+.graph-control-toolbox::-webkit-scrollbar {
+  width: 4px;
+}
+
+.graph-control-toolbox::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.graph-control-toolbox::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
+
+.graph-control-toolbox::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
 }
 
 .toolbox-header {
@@ -1367,5 +1385,76 @@ input:checked + .slider:before {
   border-radius: 4px;
   background: linear-gradient(90deg, #3b82f6 0%, #f59e0b 50%, #ef4444 100%);
   border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* --- Folder Collapsing & Coupling Pipelines --- */
+.folder-node {
+  fill: var(--color-warning) !important;
+  stroke: var(--bg-main) !important;
+  stroke-width: 1.5px;
+  cursor: pointer;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.4));
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease;
+}
+
+.folder-node:hover {
+  filter: brightness(1.2) drop-shadow(0 0 8px rgba(245, 158, 11, 0.8));
+}
+
+.pipeline-element {
+  pointer-events: none;
+  stroke-linecap: round;
+  transition: stroke-width 0.3s ease, stroke-opacity 0.3s ease;
+}
+
+.hull-boundary {
+  cursor: pointer;
+  stroke-dasharray: 4, 4;
+  fill-opacity: 0.04;
+  transition: fill-opacity 0.2s ease, stroke-opacity 0.2s ease;
+}
+
+.hull-boundary:hover {
+  fill-opacity: 0.12;
+  stroke-opacity: 0.5;
+}
+
+.hull-label {
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 600;
+  fill: var(--text-secondary);
+  font-family: var(--font-sans);
+  text-anchor: middle;
+  pointer-events: all;
+  user-select: none;
+}
+
+.hull-label:hover {
+  fill: var(--color-secondary) !important;
+  font-weight: 700;
+}
+
+/* Tree Toggle and Checkbox List Styling */
+.tree-graph-toggle:hover {
+  color: var(--color-warning) !important;
+  text-shadow: 0 0 4px rgba(245, 158, 11, 0.4);
+}
+
+.folder-list-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.folder-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.folder-list-container::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
+
+.folder-list-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
 }
 
