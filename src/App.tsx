@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, CheckCircle, Sparkles } from 'lucide-react';
 import type { ParsedFile } from './utils/repoParser';
 import { analyzeCodebase } from './utils/codeAnalyzer';
 import type { CodebaseGraph } from './utils/codeAnalyzer';
@@ -7,6 +7,7 @@ import { RepoSelector } from './components/RepoSelector';
 import { GraphCanvas } from './components/GraphCanvas';
 import { Inspector } from './components/Inspector';
 import { Reports } from './components/Reports';
+import { AiChatDrawer } from './components/AiChatDrawer';
 import logoImg from './assets/logo.png';
 
 // Tree interface for File Explorer
@@ -24,7 +25,8 @@ export default function App() {
     if (saved && validThemes.includes(saved)) return saved;
     return 'cyberpunk';
   });
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_key') || '');
+  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -69,11 +71,7 @@ export default function App() {
     setTheme(themeId);
   };
 
-  // Save Gemini Key to local storage
-  const handleSetApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('gemini_key', key);
-  };
+
 
   // Run analysis when files are loaded
   useEffect(() => {
@@ -300,8 +298,6 @@ export default function App() {
       {!repoData ? (
         <RepoSelector 
           onDataLoaded={handleDataLoaded} 
-          apiKey={apiKey} 
-          setApiKey={handleSetApiKey} 
         />
       ) : (
         graphData && (
@@ -408,6 +404,54 @@ export default function App() {
             />
           </main>
         )
+      )}
+
+      {/* Floating AI Chat Toggle Bubble */}
+      {repoData && (
+        <button
+          onClick={() => setIsChatOpen(true)}
+          className="glass-panel"
+          title="Ask AI Assistant"
+          style={{
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            width: '50px',
+            height: '50px',
+            borderRadius: '50%',
+            background: 'var(--panel-bg)',
+            border: '1px solid var(--panel-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 999,
+            boxShadow: '0 8px 32px 0 rgba(99, 102, 241, 0.4)',
+            color: 'var(--text-primary)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1) rotate(10deg)';
+            e.currentTarget.style.borderColor = 'var(--color-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+            e.currentTarget.style.borderColor = 'var(--panel-border)';
+          }}
+        >
+          <Sparkles size={22} style={{ color: 'var(--color-primary)' }} />
+        </button>
+      )}
+
+      {/* AI Chat Drawer component */}
+      {repoData && (
+        <AiChatDrawer
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          selectedFile={activeFile}
+          allFiles={repoData.files}
+          apiKey={apiKey}
+        />
       )}
     </div>
   );

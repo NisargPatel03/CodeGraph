@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   BookOpen, 
   Milestone, 
@@ -13,11 +14,49 @@ import {
   Printer, 
   Download, 
   Sparkles, 
-  Gauge
+  Gauge,
+  X
 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
-import { generateOnboardingGuide, generateArchitectureOverview } from '../utils/aiHelper';
+import { generateOnboardingGuide, generateArchitectureOverview, refactorCodeSmell } from '../utils/aiHelper';
+
+function formatMarkdown(text: string): string {
+  if (!text) return '';
+  return text
+    // 1. Code blocks (triple backticks)
+    .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+      // Escape HTML entities to prevent rendering tags inside code block
+      const escapedCode = code
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      
+      const displayLang = lang ? lang.toUpperCase() : 'CODE';
+      
+      return `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span>${displayLang}</span>
+            <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
+          </div>
+          <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+        </div>
+      `;
+    })
+    // 2. Headings
+    .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
+    .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
+    .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary); font-weight:600; margin:16px 0 6px 0;">$1</h4>')
+    .replace(/^#### (.*$)/gim, '<h5 style="color:var(--text-primary); font-weight:600; margin:12px 0 4px 0;">$1</h5>')
+    .replace(/^##### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin:10px 0 4px 0;">$1</h6>')
+    // 3. Lists
+    .replace(/^\s*[\-\*\+]\s+(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
+    // 4. Bold
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // 5. Inline Code
+    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; color: var(--color-secondary);">$1</code>');
+}
 
 interface ReportsProps {
   files: ParsedFile[];
@@ -44,6 +83,31 @@ export const Reports: React.FC<ReportsProps> = ({
   const [architectureDoc, setArchitectureDoc] = useState('');
   const [loadingArchitecture, setLoadingArchitecture] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [refactorSmell, setRefactorSmell] = useState<any | null>(null);
+  const [refactorResult, setRefactorResult] = useState<string | null>(null);
+  const [refactoringLoading, setRefactoringLoading] = useState(false);
+
+  const handleRefactor = async (smell: any) => {
+    setRefactorSmell(smell);
+    setRefactoringLoading(true);
+    setRefactorResult(null);
+    try {
+      const fileObj = files.find(f => f.path === smell.file);
+      const fileContent = fileObj?.content || '';
+      const suggestion = await refactorCodeSmell(
+        smell.file,
+        fileContent,
+        smell.message,
+        smell.details,
+        apiKey
+      );
+      setRefactorResult(suggestion);
+    } catch (err: any) {
+      setRefactorResult(`### ⚠️ Refactoring Failed\nError: ${err.message || err}`);
+    } finally {
+      setRefactoringLoading(false);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -491,20 +555,41 @@ export const Reports: React.FC<ReportsProps> = ({
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: '1.3' }}>{smell.details}</span>
                       </div>
                       
-                      <span style={{ 
-                        fontSize: '0.6rem', 
-                        fontWeight: 700, 
-                        textTransform: 'uppercase', 
-                        letterSpacing: '0.05em', 
-                        padding: '2px 6px', 
-                        borderRadius: '4px', 
-                        color: badgeColor, 
-                        background: badgeBg, 
-                        border: `1px solid ${badgeColor}30`,
-                        flexShrink: 0
-                      }}>
-                        {smell.severity}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRefactor(smell);
+                          }}
+                          className="cyber-button"
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'rgba(139, 92, 246, 0.15)',
+                            borderColor: 'rgba(139, 92, 246, 0.3)',
+                          }}
+                        >
+                          <Sparkles size={10} style={{ color: 'var(--color-primary)' }} />
+                          AI Refactor
+                        </button>
+
+                        <span style={{ 
+                          fontSize: '0.6rem', 
+                          fontWeight: 700, 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '0.05em', 
+                          padding: '2px 6px', 
+                          borderRadius: '4px', 
+                          color: badgeColor, 
+                          background: badgeBg, 
+                          border: `1px solid ${badgeColor}30`,
+                        }}>
+                          {smell.severity}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -587,12 +672,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 {/* Content */}
                 <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
                   <div dangerouslySetInnerHTML={{
-                    __html: onboardingDoc
-                      .replace(/^### (.*$)/gim, '<h5 style="color:#fff; font-weight:600; margin:16px 0 8px 0;">$1</h5>')
-                      .replace(/^#### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin:12px 0 6px 0;">$1</h6>')
-                      .replace(/^\s*\-\s*(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
-                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px;">$1</code>')
+                    __html: formatMarkdown(onboardingDoc)
                   }} />
                 </div>
               </div>
@@ -619,12 +699,7 @@ export const Reports: React.FC<ReportsProps> = ({
             {architectureDoc ? (
               <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
                 <div dangerouslySetInnerHTML={{
-                  __html: architectureDoc
-                    .replace(/^### (.*$)/gim, '<h5 style="color:#fff; font-weight:600; margin:16px 0 8px 0;">$1</h5>')
-                    .replace(/^#### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin:12px 0 6px 0;">$1</h6>')
-                    .replace(/^\s*\-\s*(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px;">$1</code>')
+                  __html: formatMarkdown(architectureDoc)
                 }} />
               </div>
             ) : (
@@ -645,8 +720,172 @@ export const Reports: React.FC<ReportsProps> = ({
         )}
       </div>
 
+      {/* AI Refactor Suggestion Modal Overlay */}
+      {refactorSmell && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setRefactorSmell(null)}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              width: '800px',
+              maxWidth: '95%',
+              maxHeight: '85vh',
+              background: 'var(--panel-bg)',
+              border: '1px solid var(--panel-border)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid var(--panel-border)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(255, 255, 255, 0.01)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} style={{ color: 'var(--color-primary)' }} />
+                <div>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                    AI Code Smell Refactoring
+                  </h3>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    Refactoring suggestion for: <code style={{ color: 'var(--color-secondary)' }}>{refactorSmell.file.split('/').pop()}</code>
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setRefactorSmell(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Smell Card Overview */}
+            <div
+              style={{
+                padding: '12px 20px',
+                background: 'rgba(244, 63, 94, 0.03)',
+                borderBottom: '1px solid var(--panel-border)',
+                fontSize: '0.75rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <div>
+                <strong style={{ color: 'var(--color-alert)' }}>Smell: </strong>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{refactorSmell.message}</span>
+              </div>
+              <div style={{ opacity: 0.8 }}>
+                {refactorSmell.details}
+              </div>
+            </div>
+
+            {/* Content Body */}
+            <div
+              style={{
+                flex: 1,
+                padding: '20px',
+                overflowY: 'auto',
+                fontSize: '0.85rem',
+                lineHeight: '1.5',
+                color: 'var(--text-secondary)',
+                background: 'rgba(0,0,0,0.15)',
+              }}
+            >
+              {refactoringLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', gap: '12px' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+                    <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.2s' }} />
+                    <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.4s' }} />
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gemini is refactoring your code...</span>
+                </div>
+              ) : (
+                refactorResult && (
+                  <div className="markdown-body">
+                    <div dangerouslySetInnerHTML={{
+                      __html: formatMarkdown(refactorResult)
+                    }} />
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '12px 20px',
+                borderTop: '1px solid var(--panel-border)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '10px',
+                background: 'rgba(255,255,255,0.01)',
+              }}
+            >
+              {refactorResult && !refactoringLoading && (
+                <button
+                  className="cyber-button"
+                  onClick={() => {
+                    const preMatch = refactorResult.match(/\`\`\`(?:[a-zA-Z]+)?\n([\s\S]*?)\n\`\`\`/);
+                    const codeToCopy = preMatch ? preMatch[1] : refactorResult;
+                    navigator.clipboard.writeText(codeToCopy);
+                    showToast('Refactored code copied to clipboard!');
+                  }}
+                  style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Copy size={12} />
+                  Copy Code block
+                </button>
+              )}
+              <button
+                className="cyber-button secondary"
+                onClick={() => setRefactorSmell(null)}
+                style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Toast Notification overlay */}
-      {toastMessage && (
+      {toastMessage && createPortal(
         <div style={{ 
           position: 'fixed', 
           bottom: '20px', 
@@ -663,7 +902,8 @@ export const Reports: React.FC<ReportsProps> = ({
           animation: 'fade-in 0.3s ease'
         }}>
           {toastMessage}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

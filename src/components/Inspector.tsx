@@ -3,6 +3,44 @@ import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertT
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase } from '../utils/aiHelper';
 
+function formatMarkdown(text: string): string {
+  if (!text) return '';
+  return text
+    // 1. Code blocks (triple backticks)
+    .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+      // Escape HTML entities to prevent rendering tags inside code block
+      const escapedCode = code
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      
+      const displayLang = lang ? lang.toUpperCase() : 'CODE';
+      
+      return `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span>${displayLang}</span>
+            <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
+          </div>
+          <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+        </div>
+      `;
+    })
+    // 2. Headings
+    .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
+    .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
+    .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary); font-weight:600; margin:16px 0 6px 0;">$1</h4>')
+    .replace(/^#### (.*$)/gim, '<h5 style="color:var(--text-primary); font-weight:600; margin:12px 0 4px 0;">$1</h5>')
+    .replace(/^##### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin:10px 0 4px 0;">$1</h6>')
+    // 3. Lists
+    .replace(/^\s*[\-\*\+]\s+(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
+    // 4. Bold
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // 5. Inline Code
+    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; color: var(--color-secondary);">$1</code>');
+}
+
+
 interface ParsedFunction {
   name: string;
   line: number;
@@ -823,12 +861,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   {fileExplanation ? (
                     <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.5' }}>
                       <div dangerouslySetInnerHTML={{ 
-                        __html: fileExplanation
-                          .replace(/^### (.*$)/gim, '<h5 style="color:#fff; font-weight:600; margin: 10px 0 6px 0;">$1</h5>')
-                          .replace(/^#### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin: 8px 0 4px 0;">$1</h6>')
-                          .replace(/^\s*\-\s*(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle;">$1</li>')
-                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; font-size:0.8rem;">$1</code>')
+                        __html: formatMarkdown(fileExplanation)
                       }} />
                     </div>
                   ) : (

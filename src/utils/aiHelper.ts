@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+const GEMINI_MODEL = 'gemini-3.5-flash';
+
 // Simple check if API key exists and is valid format
 export function isValidApiKey(key: string): boolean {
   return key.trim().length > 10;
@@ -31,7 +33,7 @@ export async function getFileExplanation(filePath: string, fileContent: string, 
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const prompt = `You are a Senior Principal Engineer. Explain the purpose of this file in plain English.
 Explain what it does, its main responsibilities, how it fits into a typical application architecture, and its primary exports/methods.
@@ -73,7 +75,7 @@ This repository contains ${filesSummary.length} files across languages like **${
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const prompt = `You are a Technical Lead onboarding a new developer to this project. 
 Based on the file list and their sizes below, construct a professional, step-by-step Developer Onboarding Guide.
@@ -111,7 +113,7 @@ Based on the file paths:
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const prompt = `You are a Software Architect.
 Based on the file tree list below, write an Architecture Overview Report.
@@ -150,7 +152,7 @@ Here is a mock answer based on the current workspace context:
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     let context = `You are an AI developer assistant built into the "CodeGraph" dashboard.
 The user is asking a question about their codebase.
@@ -177,5 +179,56 @@ Provide a detailed, helpful developer response. If you don't know the answer or 
     return result.response.text();
   } catch (error: any) {
     return `⚠️ Chat request failed. Error: ${error.message}`;
+  }
+}
+
+export async function refactorCodeSmell(
+  filePath: string,
+  fileContent: string,
+  smellMessage: string,
+  smellDetails: string,
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    return `### 💡 Mock Refactoring Suggestion (Offline Mode)
+
+**File:** \`${filePath}\`
+**Smell:** *${smellMessage}* (${smellDetails})
+
+*To get actual AI suggestions, please add your Gemini API Key in the settings.*
+
+Here is a general refactoring tip:
+1. **Extract Method / Function**: Break down the long block of logic into smaller, self-contained functions.
+2. **Remove Duplicate Code**: If a block of code appears in multiple places, extract it to a shared helper.
+3. **Use Descriptors**: Use clear parameter names and extract complex nested conditionals into descriptive variables.`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Senior Software Engineer and Architect.
+We have identified a code smell in the file: \`${filePath}\`.
+
+**Code Smell Identified**: ${smellMessage}
+**Details**: ${smellDetails}
+
+Here is the file content:
+\`\`\`
+${fileContent.substring(0, 15000)}
+\`\`\`
+
+Analyze the code smell and provide a concrete refactoring suggestion.
+Format your answer in markdown.
+Your response MUST include:
+1. **Why this is a problem**: A brief explanation of the issue.
+2. **Refactored Code**: Provide a complete, clean, and refactored version of the problematic function or block of code.
+3. **Key Improvements**: Bullet points explaining what you changed and why it is better.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ AI Refactoring Failed
+Error: ${error.message || error}`;
   }
 }

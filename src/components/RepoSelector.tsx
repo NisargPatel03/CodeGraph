@@ -22,11 +22,9 @@ const GithubIcon = ({ size = 18 }: { size?: number }) => (
 
 interface RepoSelectorProps {
   onDataLoaded: (data: { files: ParsedFile[]; repoName: string }) => void;
-  apiKey: string;
-  setApiKey: (key: string) => void;
 }
 
-export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, apiKey, setApiKey }) => {
+export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
   const [gitUrl, setGitUrl] = useState('');
   const [gitToken, setGitToken] = useState(() => localStorage.getItem('gh_token') || '');
   const [loading, setLoading] = useState(false);
@@ -354,22 +352,6 @@ export function runGlobalCheck(appInstance: typeof App) {
               onChange={(e) => handleSaveToken(e.target.value)}
             />
           </div>
-        </div>
-
-        {/* Gemini API Key input block */}
-        <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
-            <Sparkles size={14} style={{ color: 'var(--color-primary)' }} />
-            Gemini API Key (Stored in Local Browser Storage)
-          </label>
-          <input
-            type="password"
-            className="cyber-input"
-            style={{ padding: '8px 12px', fontSize: '0.85rem' }}
-            placeholder="AI capabilities (summaries, reports, chat) require a Gemini Key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
         </div>
 
 
