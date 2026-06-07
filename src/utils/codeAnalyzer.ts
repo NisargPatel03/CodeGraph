@@ -14,6 +14,7 @@ export interface DependencyNode {
 export interface DependencyLink {
   source: string; // Importer path
   target: string; // Imported path
+  weight?: number; // Import weight / frequency
 }
 
 export interface CallNode {
@@ -122,8 +123,9 @@ function resolveImportPath(importerPath: string, importString: string, filePaths
 }
 
 // Parses imports in JavaScript, TypeScript, Python, and other languages via RegExp
-function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: string[]; external: string[] } {
-  const imports: string[] = [];
+function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: { path: string; weight: number }[]; external: { name: string; weight: number }[] } {
+  const internalMap = new Map<string, number>();
+  const externalMap = new Map<string, number>();
   const content = file.content;
   
   if (['typescript', 'javascript'].includes(file.language)) {
@@ -132,63 +134,21 @@ function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: str
     const es6Regex = /(?:import|export)\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
     let match;
     while ((match = es6Regex.exec(content)) !== null) {
-      imports.push(match[1]);
-    }
-    
-    // 2. ES6 dynamic import(...)
-    const dynamicRegex = /\bimport\((['"])([^'"]+)\1\)/g;
-    while ((match = dynamicRegex.exec(content)) !== null) {
-      imports.push(match[2]);
-    }
-    
-    // 3. CommonJS require('...')
-    const cjsRegex = /\brequire\((['"])([^'"]+)\1\)/g;
-    while ((match = cjsRegex.exec(content)) !== null) {
-      imports.push(match[2]);
-    }
-  } else if (file.language === 'python') {
-    // Matches: import module OR from module import name
-    const pyImportRegex = /^\s*(?:import\s+([\w.]+)|from\s+([\w.]+)\s+import)/gm;
-    let match;
-    while ((match = pyImportRegex.exec(content)) !== null) {
-      const moduleName = match[1] || match[2];
-      if (moduleName) {
-        // Python imports are dot-separated (e.g. src.utils.helper)
-        const possiblePath = moduleName.replace(/\./g, '/');
-        imports.push(possiblePath);
+      const imp = match[1];
+      let symbolCount = 1;
+      const braceMatch = match[0].match(/\{([\s\S]*?)\}/);
+      if (braceMatch) {
+        const symbols = braceMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+        symbolCount = symbols.length || 1;
       }
-    }
-  } else if (file.language === 'rust') {
-    // Matches: use crate::module::sub; or mod module;
-    const rustRegex = /^\s*(?:use\s+(?:crate::|self::|super::)?([\w:]+)|mod\s+(\w+))/gm;
-    let match;
-    while ((match = rustRegex.exec(content)) !== null) {
-      const modPath = match[1] || match[2];
-      if (modPath) {
-        imports.push(modPath.replace(/::/g, '/'));
-      }
-    }
-  } else if (file.language === 'cpp' || file.language === 'c') {
-    // Matches: #include "header.h"
-    const cppRegex = /^\s*#\s*include\s+["']([^"']+)["']/gm;
-    let match;
-    while ((match = cppRegex.exec(content)) !== null) {
-      imports.push(match[1]);
-    }
-  }
-  
-  const internal = new Set<string>();
-  const external = new Set<string>();
-  
-  for (const imp of imports) {
-    const isRel = imp.startsWith('.') || imp.startsWith('@/');
-    if (isRel) {
-      const resolved = resolveImportPath(file.path, imp, filePaths);
-      if (resolved && resolved !== file.path) {
-        internal.add(resolved);
-      }
-    } else {
-      if (['typescript', 'javascript'].includes(file.language)) {
+      
+      const isRel = imp.startsWith('.') || imp.startsWith('@/');
+      if (isRel) {
+        const resolved = resolveImportPath(file.path, imp, filePaths);
+        if (resolved && resolved !== file.path) {
+          internalMap.set(resolved, (internalMap.get(resolved) || 0) + symbolCount);
+        }
+      } else {
         let pkg = imp;
         if (imp.startsWith('@')) {
           const parts = imp.split('/');
@@ -198,15 +158,93 @@ function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: str
         } else {
           pkg = imp.split('/')[0];
         }
-        external.add(pkg);
+        externalMap.set(pkg, (externalMap.get(pkg) || 0) + symbolCount);
+      }
+    }
+    
+    // 2. ES6 dynamic import(...)
+    const dynamicRegex = /\bimport\((['"])([^'"]+)\1\)/g;
+    while ((match = dynamicRegex.exec(content)) !== null) {
+      const imp = match[2];
+      const isRel = imp.startsWith('.') || imp.startsWith('@/');
+      if (isRel) {
+        const resolved = resolveImportPath(file.path, imp, filePaths);
+        if (resolved && resolved !== file.path) {
+          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+        }
+      } else {
+        const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
+        externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
+      }
+    }
+    
+    // 3. CommonJS require('...')
+    const cjsRegex = /\brequire\((['"])([^'"]+)\1\)/g;
+    while ((match = cjsRegex.exec(content)) !== null) {
+      const imp = match[2];
+      const isRel = imp.startsWith('.') || imp.startsWith('@/');
+      if (isRel) {
+        const resolved = resolveImportPath(file.path, imp, filePaths);
+        if (resolved && resolved !== file.path) {
+          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+        }
+      } else {
+        const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
+        externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
+      }
+    }
+  } else if (file.language === 'python') {
+    // Matches: import module OR from module import name
+    const pyImportRegex = /^\s*(?:import\s+([\w.]+)|from\s+([\w.]+)\s+import)/gm;
+    let match;
+    while ((match = pyImportRegex.exec(content)) !== null) {
+      const moduleName = match[1] || match[2];
+      if (moduleName) {
+        const possiblePath = moduleName.replace(/\./g, '/');
+        const resolved = resolveImportPath(file.path, possiblePath, filePaths);
+        if (resolved && resolved !== file.path) {
+          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+        }
+      }
+    }
+  } else if (file.language === 'rust') {
+    // Matches: use crate::module::sub; or mod module;
+    const rustRegex = /^\s*(?:use\s+(?:crate::|self::|super::)?([\w:]+)|mod\s+(\w+))/gm;
+    let match;
+    while ((match = rustRegex.exec(content)) !== null) {
+      const modPath = match[1] || match[2];
+      if (modPath) {
+        const possiblePath = modPath.replace(/::/g, '/');
+        const resolved = resolveImportPath(file.path, possiblePath, filePaths);
+        if (resolved && resolved !== file.path) {
+          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+        }
+      }
+    }
+  } else if (file.language === 'cpp' || file.language === 'c') {
+    // Matches: #include "header.h"
+    const cppRegex = /^\s*#\s*include\s+["']([^"']+)["']/gm;
+    let match;
+    while ((match = cppRegex.exec(content)) !== null) {
+      const imp = match[1];
+      const resolved = resolveImportPath(file.path, imp, filePaths);
+      if (resolved && resolved !== file.path) {
+        internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
       }
     }
   }
   
-  return {
-    internal: Array.from(internal),
-    external: Array.from(external),
-  };
+  const internal: { path: string; weight: number }[] = [];
+  internalMap.forEach((weight, path) => {
+    internal.push({ path, weight });
+  });
+  
+  const external: { name: string; weight: number }[] = [];
+  externalMap.forEach((weight, name) => {
+    external.push({ name, weight });
+  });
+  
+  return { internal, external };
 }
 
 // Find all simple cycles (circular dependencies) using Tarjan's or simple DFS cycle finder
@@ -464,16 +502,18 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
     for (const target of internal) {
       links.push({
         source: file.path,
-        target: target,
+        target: target.path,
+        weight: target.weight,
       });
-      adjList.get(file.path)?.push(target);
+      adjList.get(file.path)?.push(target.path);
     }
     
     for (const pkg of external) {
-      npmPackagesSeen.add(pkg);
+      npmPackagesSeen.add(pkg.name);
       npmLinks.push({
         source: file.path,
-        target: `npm::${pkg}`,
+        target: `npm::${pkg.name}`,
+        weight: pkg.weight,
       });
     }
   }

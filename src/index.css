@@ -1493,4 +1493,45 @@ input:checked + .slider:before {
   fill: var(--text-muted) !important;
   opacity: 0.5;
 }
+@keyframes link-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
 
+.link-element.flowing {
+  stroke-dasharray: 4, 8;
+  animation: link-flow 1.5s linear infinite;
+  stroke: var(--color-secondary-glow) !important;
+  stroke-opacity: 0.85 !important;
+}
+
+.hull-watermark {
+  font-size: 3rem;
+  font-weight: 800;
+  font-family: var(--font-sans);
+  fill: var(--color-primary);
+  fill-opacity: 0.03;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cluster-hover-card {
+  position: absolute;
+  z-index: 1000;
+  pointer-events: none;
+  background: rgba(10, 10, 15, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}

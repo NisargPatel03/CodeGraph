@@ -37,6 +37,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [hoveredCluster, setHoveredCluster] = useState<{
+    folder: string;
+    fileCount: number;
+    connectionsCount: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
@@ -129,6 +136,38 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         .call(zoomBehaviorRef.current.transform, targetTransform);
     }
   };
+
+  // Pre-calculate node in-degree counts for importance-based sizing
+  const inDegreeMap = useMemo(() => {
+    const map = new Map<string, number>();
+    
+    graphData.nodes.forEach(n => map.set(n.id, 0));
+    if (graphData.npmNodes) {
+      graphData.npmNodes.forEach(n => map.set(n.id, 0));
+    }
+    if (graphData.callNodes) {
+      graphData.callNodes.forEach(n => map.set(n.id, 0));
+    }
+    if (graphData.classNodes) {
+      graphData.classNodes.forEach(n => map.set(n.id, 0));
+    }
+    
+    const links = [
+      ...graphData.links,
+      ...(graphData.npmLinks || []),
+      ...(graphData.callLinks || []),
+      ...(graphData.classLinks || [])
+    ];
+    
+    links.forEach(l => {
+      const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
+      if (map.has(targetId)) {
+        map.set(targetId, map.get(targetId)! + 1);
+      }
+    });
+    
+    return map;
+  }, [graphData]);
 
   // Pre-calculate cyclic dependency links for quick lookup
   const cyclicLinks = useMemo(() => {
@@ -623,7 +662,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }))
       .force('collision', d3.forceCollide<any>().radius((d) => {
         if (d.isFolder) return 24;
-        const baseRad = viewMode === 'call' ? 12 : (viewMode === 'hierarchy' ? 14 : 15);
+        if (viewMode === 'call') return 12 + Math.min(d.callCount * 1.5, 20);
+        if (viewMode === 'dependency') {
+          const inDeg = inDegreeMap.get(d.id) || 0;
+          return 12 + Math.min(inDeg * 2.0, 24);
+        }
+        const baseRad = viewMode === 'hierarchy' ? 14 : 15;
         return baseRad + Math.sqrt(d.size || 0) * 0.05 + 5;
       }))
       .force('center', d3.forceCenter(0, 0));
@@ -706,6 +750,58 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const hullDataList = Array.from(hullNodesGroup.entries())
       .filter(([key, members]) => members.length > 0 && !collapsedFolders.has(key));
 
+    const hullWatermarks = hullGroup.selectAll('.hull-watermark')
+      .data(hullDataList)
+      .enter()
+      .append('text')
+      .attr('class', 'hull-watermark')
+      .text(([key]) => key.split('/').pop() || key)
+      .style('display', viewMode === 'cluster' ? 'block' : 'none');
+
+    const handleHullMouseEnter = (event: any, [folderPath, members]: any) => {
+      if (viewMode !== 'cluster') return;
+      const memberIds = new Set(members.map((m: any) => m.id));
+      let connectionsCount = 0;
+      graphData.links.forEach((l: any) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sIn = memberIds.has(sId);
+        const tIn = memberIds.has(tId);
+        if ((sIn && !tIn) || (!sIn && tIn)) {
+          connectionsCount++;
+        }
+      });
+      setHoveredCluster({
+        folder: folderPath,
+        fileCount: members.length,
+        connectionsCount,
+        x: event.clientX,
+        y: event.clientY,
+      });
+    };
+
+    const handleHullMouseMove = (event: any) => {
+      if (viewMode !== 'cluster') return;
+      setHoveredCluster(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
+    };
+
+    const handleHullMouseLeave = () => {
+      setHoveredCluster(null);
+    };
+
+    const handleHullClick = (event: any, [folderPath]: any) => {
+      event.stopPropagation();
+      setCollapsedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderPath)) {
+          next.delete(folderPath);
+        } else {
+          next.add(folderPath);
+        }
+        return next;
+      });
+    };
+
     const hulls = hullGroup.selectAll('.hull-boundary')
       .data(hullDataList)
       .enter()
@@ -715,14 +811,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('stroke', (_, i) => hullColors[i % hullColors.length])
       .attr('stroke-opacity', 0.25)
       .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 1.0 : 0)
-      .on('dblclick', (event, [folderPath]) => {
-        event.stopPropagation();
-        setCollapsedFolders((prev) => {
-          const next = new Set(prev);
-          next.add(folderPath);
-          return next;
-        });
-      });
+      .on('click', handleHullClick)
+      .on('mouseenter', handleHullMouseEnter)
+      .on('mousemove', handleHullMouseMove)
+      .on('mouseleave', handleHullMouseLeave);
 
     const hullLabels = hullGroup.selectAll('.hull-label')
       .data(hullDataList)
@@ -731,14 +823,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('class', 'hull-label')
       .text(([key]) => key.split('/').pop() || key)
       .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 0.6 : 0)
-      .on('dblclick', (event, [folderPath]) => {
-        event.stopPropagation();
-        setCollapsedFolders((prev) => {
-          const next = new Set(prev);
-          next.add(folderPath);
-          return next;
-        });
-      });
+      .on('click', handleHullClick)
+      .on('mouseenter', handleHullMouseEnter)
+      .on('mousemove', handleHullMouseMove)
+      .on('mouseleave', handleHullMouseLeave);
 
     const updateHulls = () => {
       hulls.each(function ([_, members]: any) {
@@ -762,6 +850,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           const pad = viewMode === 'call' ? 22 : 36;
           return yVal - pad;
         });
+      hullWatermarks
+        .attr('x', ([_, members]: any) => d3.mean(members, (m: any) => m.x) || 0)
+        .attr('y', ([_, members]: any) => d3.mean(members, (m: any) => m.y) || 0);
     };
 
     const pipeline = mainGroup.append('g').selectAll('.pipeline-element')
@@ -778,13 +869,36 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .data(links)
       .enter()
       .append('line')
-      .attr('class', 'link-element')
+      .attr('class', (d: any) => {
+        let cls = 'link-element';
+        if (viewMode === 'dependency') cls += ' flowing';
+        return cls;
+      })
       .attr('stroke', 'var(--link-stroke)')
-      .attr('stroke-width', (d: any) => d.isAggregated ? 1.5 + Math.min(d.weight * 0.4, 4) : 1.5)
+      .attr('stroke-width', (d: any) => {
+        if (viewMode === 'dependency' && d.weight !== undefined) {
+          return 1.0 + Math.min(d.weight * 0.5, 6.0);
+        }
+        return d.isAggregated ? 1.5 + Math.min(d.weight * 0.4, 4) : 1.5;
+      })
       .attr('marker-end', 'url(#arrow-normal)');
 
     const node = mainGroup.append('g').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
-      .on('click', (event, d) => { event.stopPropagation(); setSelectedNode(d.id); })
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        setSelectedNode(d.id);
+        if (d.isFolder) {
+          setCollapsedFolders((prev) => {
+            const next = new Set(prev);
+            if (next.has(d.folder)) {
+              next.delete(d.folder);
+            } else {
+              next.add(d.folder);
+            }
+            return next;
+          });
+        }
+      })
       .on('dblclick', (event, d) => {
         if (d.isFolder) {
           event.stopPropagation();
@@ -793,6 +907,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             next.delete(d.folder);
             return next;
           });
+        } else {
+          event.stopPropagation();
+          svgElement.transition().duration(750).call(
+            zoomBehavior.transform,
+            d3.zoomIdentity.translate(width / 2 - d.x * 1.6, height / 2 - d.y * 1.6).scale(1.6)
+          );
         }
       })
       .on('mouseenter', (_, d) => setHoveredNode(d.id))
@@ -819,6 +939,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const circle = element.append('circle')
           .attr('r', (d: any) => {
             if (viewMode === 'call') return 8 + Math.min(d.callCount * 1.5, 20);
+            if (viewMode === 'dependency') {
+              const inDeg = inDegreeMap.get(d.id) || 0;
+              return 8 + Math.min(inDeg * 2.0, 24);
+            }
             const baseSize = viewMode === 'hierarchy' ? 9 : 8;
             return baseSize + Math.min(Math.sqrt(d.size || 0) * 0.04, 30);
           })
@@ -959,9 +1083,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const { sId, tId } = getLinkId(l);
         const line = d3.select(this);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
-        if (sId === activeId) line.attr('class', 'link-element flow-out').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight)');
-        else if (tId === activeId) line.attr('class', 'link-element flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
-        else line.attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        const isFlowing = viewMode === 'dependency';
+        let cls = 'link-element';
+        if (isFlowing) cls += ' flowing';
+        
+        if (sId === activeId) {
+          line.attr('class', cls + ' flow-out').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight)');
+        } else if (tId === activeId) {
+          line.attr('class', cls + ' flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
+        } else {
+          line.attr('class', isCyclic ? 'link-element flow-cycle' : (isFlowing ? cls : 'link-element'))
+            .style('stroke-opacity', isCyclic ? 0.25 : 0.03)
+            .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
+            .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        }
       });
       pipelines.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
@@ -982,7 +1117,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isMatch = matches.has(sId) || matches.has(tId);
-        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isMatch ? 0.7 : 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        const isFlowing = viewMode === 'dependency';
+        const cls = isFlowing ? 'link-element flowing' : 'link-element';
+        
+        d3.select(this)
+          .attr('class', isCyclic ? 'link-element flow-cycle' : cls)
+          .style('stroke-opacity', isMatch ? 0.7 : 0.03)
+          .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
+          .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
       pipelines.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
@@ -996,7 +1138,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
-        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isCyclic ? 0.6 : 0.2).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        const isFlowing = viewMode === 'dependency';
+        const cls = isFlowing ? 'link-element flowing' : 'link-element';
+        
+        d3.select(this)
+          .attr('class', isCyclic ? 'link-element flow-cycle' : cls)
+          .style('stroke-opacity', isCyclic ? 0.6 : (isFlowing ? 0.75 : 0.2))
+          .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
+          .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
       pipelines.each(function () {
         const line = d3.select(this);
@@ -1299,6 +1448,33 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           onClick={handleMinimapClick}
         />
       </div>
+      {/* Cluster Hover Card */}
+      {hoveredCluster && (
+        <div 
+          className="cluster-hover-card"
+          style={{ 
+            left: `${hoveredCluster.x}px`, 
+            top: `${hoveredCluster.y}px`,
+            position: 'fixed',
+            transform: 'translate(15px, 15px)',
+            opacity: 1
+          }}
+        >
+          <div style={{ fontWeight: 700, color: 'var(--color-primary)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px', marginBottom: '6px', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+            📁 {hoveredCluster.folder.split('/').pop() || hoveredCluster.folder}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
+              <span>Files:</span>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{hoveredCluster.fileCount}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
+              <span>Cross-connections:</span>
+              <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{hoveredCluster.connectionsCount}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
