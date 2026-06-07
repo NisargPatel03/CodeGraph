@@ -1540,3 +1540,41 @@ input:checked + .slider:before {
   pointer-events: none;
   transition: opacity 0.15s ease;
 }
+
+/* --- Component Tree Props Flow & Card Animations --- */
+@keyframes props-flow-anim {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.link-element.props-flow {
+  stroke-dasharray: 4, 12;
+  animation: props-flow-anim 1.2s linear infinite;
+  stroke: var(--color-secondary) !important;
+  stroke-opacity: 0.95 !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 5px var(--color-secondary));
+}
+
+.component-mini-card {
+  z-index: 50;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.component-mini-card div::-webkit-scrollbar {
+  width: 4px;
+}
+
+.component-mini-card div::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.component-mini-card div::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 2px;
+}
+
+.component-mini-card div::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.5);
+}

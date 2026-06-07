@@ -44,6 +44,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+  // Component Tree States
+  const [treeLayoutStyle, setTreeLayoutStyle] = useState<'top-down' | 'radial'>('top-down');
+  const [hoveredComponentDetails, setHoveredComponentDetails] = useState<any | null>(null);
+
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
@@ -282,7 +286,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
     
     if (viewMode === 'hierarchy') {
-      return d.type === 'component' ? 'var(--color-accent)' : 'var(--color-primary)';
+      const depth = d.treeDepth || 0;
+      const depthColors = [
+        '#6366f1', // Indigo (Root)
+        '#00f2fe', // Cyan (Level 1)
+        '#10b981', // Emerald (Level 2)
+        '#f59e0b', // Amber (Level 3)
+        '#ec4899', // Pink (Level 4)
+        '#a855f7', // Purple (Level 5+)
+      ];
+      return depthColors[depth % depthColors.length];
     }
 
     const lang = d.language?.toLowerCase() || '';
@@ -672,11 +685,112 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .force('center', d3.forceCenter(0, 0));
 
     if (viewMode === 'hierarchy') {
-      nodes.forEach((n) => {
-        n.depth = hierarchicalLevels.get(n.id) || 0;
+      // Build parent-child tree hierarchy
+      const childrenMap = new Map<string, string[]>();
+      nodes.forEach(n => childrenMap.set(n.id, []));
+      links.forEach(l => {
+        const parent = typeof l.source === 'object' ? l.source.id : l.source;
+        const child = typeof l.target === 'object' ? l.target.id : l.target;
+        if (childrenMap.has(parent)) {
+          childrenMap.get(parent)!.push(child);
+        }
       });
-      simulation.force('y', d3.forceY((d: any) => (d.depth || 0) * 120 - 150).strength(1.2));
-      simulation.force('x', d3.forceX(0).strength(0.06));
+
+      // Find nodes that have no parents (roots)
+      const childSet = new Set<string>();
+      links.forEach(l => {
+        const child = typeof l.target === 'object' ? l.target.id : l.target;
+        childSet.add(child);
+      });
+      const roots = nodes.filter(n => !childSet.has(n.id));
+
+      // Build tree hierarchy
+      interface HierarchicalNode {
+        id: string;
+        name: string;
+        data: any;
+        children?: HierarchicalNode[];
+      }
+
+      const buildHierarchy = (nodeId: string, visited = new Set<string>()): HierarchicalNode => {
+        visited.add(nodeId);
+        const nodeData = nodes.find(n => n.id === nodeId);
+        const childrenIds = childrenMap.get(nodeId) || [];
+        const children: HierarchicalNode[] = [];
+        childrenIds.forEach(cId => {
+          if (!visited.has(cId)) {
+            children.push(buildHierarchy(cId, visited));
+          }
+        });
+        return {
+          id: nodeId,
+          name: nodeData?.name || nodeId,
+          data: nodeData,
+          children: children.length > 0 ? children : undefined
+        };
+      };
+
+      let rootHierarchy: HierarchicalNode;
+      if (roots.length === 1) {
+        rootHierarchy = buildHierarchy(roots[0].id);
+      } else if (roots.length > 1) {
+        rootHierarchy = {
+          id: 'virtual-root',
+          name: 'Virtual Root',
+          data: { id: 'virtual-root', name: 'Virtual Root', type: 'component', isVirtual: true },
+          children: roots.map(r => buildHierarchy(r.id))
+        };
+      } else if (nodes.length > 0) {
+        rootHierarchy = buildHierarchy(nodes[0].id);
+      } else {
+        rootHierarchy = { id: 'empty', name: 'Empty', data: null };
+      }
+
+      const rootNode = d3.hierarchy<HierarchicalNode>(rootHierarchy);
+      const treeLayout = d3.tree<HierarchicalNode>();
+
+      if (treeLayoutStyle === 'radial') {
+        treeLayout.size([2 * Math.PI, 240]); 
+        treeLayout(rootNode);
+
+        rootNode.descendants().forEach(d => {
+          const angle = d.x;
+          const radius = d.y;
+          const targetNode = nodes.find(n => n.id === d.data.id);
+          if (targetNode) {
+            targetNode.x = radius * Math.cos(angle - Math.PI / 2);
+            targetNode.y = radius * Math.sin(angle - Math.PI / 2);
+            targetNode.treeDepth = d.depth;
+            targetNode.fx = targetNode.x;
+            targetNode.fy = targetNode.y;
+          }
+        });
+      } else {
+        treeLayout.nodeSize([160, 150]);
+        treeLayout(rootNode);
+
+        rootNode.descendants().forEach(d => {
+          const targetNode = nodes.find(n => n.id === d.data.id);
+          if (targetNode) {
+            const yOffset = rootHierarchy.id === 'virtual-root' ? -150 : 0;
+            targetNode.x = d.x;
+            targetNode.y = d.y + yOffset - 150;
+            targetNode.treeDepth = d.depth;
+            targetNode.fx = targetNode.x;
+            targetNode.fy = targetNode.y;
+          }
+        });
+      }
+
+      // Ensure any virtual-root node coordinates are handled if referenced by links
+      const virtualNode = nodes.find(n => n.id === 'virtual-root');
+      if (virtualNode) {
+        virtualNode.x = 0;
+        virtualNode.y = -150;
+        virtualNode.treeDepth = 0;
+        virtualNode.fx = 0;
+        virtualNode.fy = -150;
+      }
     }
 
     if (viewMode === 'cluster') {
@@ -862,6 +976,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('class', () => {
         let cls = 'link-element';
         if (viewMode === 'dependency') cls += ' flowing';
+        if (viewMode === 'hierarchy') cls += ' props-flow';
         return cls;
       })
       .attr('stroke', 'var(--link-stroke)')
@@ -926,10 +1041,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             connectionsCount,
           });
         }
+        if (viewMode === 'hierarchy') {
+          setHoveredComponentDetails(d);
+        }
       })
       .on('mouseleave', () => {
         setHoveredNode(null);
         setHoveredCluster(null);
+        setHoveredComponentDetails(null);
       })
       .call(d3.drag<any, any>().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
@@ -968,6 +1087,120 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           circle.attr('class', 'call-node-unused');
         }
       }
+
+      if (viewMode === 'hierarchy' && selectedNode === d.id && d.type === 'component') {
+        const card = element.append('foreignObject')
+          .attr('class', 'component-mini-card')
+          .attr('width', 220)
+          .attr('height', 140)
+          .attr('x', 15)
+          .attr('y', -70);
+
+        const cardDiv = card.append('xhtml:div')
+          .style('width', '210px')
+          .style('height', '130px')
+          .style('background', 'var(--panel-bg)')
+          .style('backdrop-filter', 'blur(8px)')
+          .style('border', '1px solid var(--color-primary)')
+          .style('box-shadow', '0 4px 15px rgba(0,0,0,0.3)')
+          .style('border-radius', '6px')
+          .style('padding', '6px 10px')
+          .style('font-family', 'var(--font-sans)')
+          .style('color', 'var(--text-secondary)')
+          .style('overflow-y', 'auto')
+          .style('pointer-events', 'all')
+          .on('click', (event: any) => event.stopPropagation())
+          .on('dblclick', (event: any) => event.stopPropagation())
+          .on('mousedown', (event: any) => event.stopPropagation());
+
+        cardDiv.append('div')
+          .style('font-weight', '700')
+          .style('color', 'var(--color-primary)')
+          .style('font-size', '0.75rem')
+          .style('border-bottom', '1px solid rgba(255,255,255,0.1)')
+          .style('padding-bottom', '2px')
+          .style('margin-bottom', '4px')
+          .text(`⚛️ ${d.name}`);
+
+        // Props Section
+        const propsContainer = cardDiv.append('div').style('margin-bottom', '6px');
+        propsContainer.append('span')
+          .style('font-size', '0.6rem')
+          .style('color', 'var(--text-muted)')
+          .style('text-transform', 'uppercase')
+          .style('display', 'block')
+          .text('Props');
+        
+        if (d.props && d.props.length > 0) {
+          const list = propsContainer.append('div')
+            .style('display', 'flex')
+            .style('flex-wrap', 'wrap')
+            .style('gap', '3px')
+            .style('margin-top', '2px');
+          d.props.forEach((p: string) => {
+            list.append('span')
+              .style('font-size', '0.55rem')
+              .style('background', 'var(--color-primary-glow)')
+              .style('color', 'var(--text-primary)')
+              .style('padding', '1px 4px')
+              .style('border-radius', '3px')
+              .text(p);
+          });
+        } else {
+          propsContainer.append('div')
+            .style('font-size', '0.6rem')
+            .style('color', 'var(--text-muted)')
+            .style('font-style', 'italic')
+            .text('None');
+        }
+
+        // State & Hooks Section
+        const hooksContainer = cardDiv.append('div');
+        hooksContainer.append('span')
+          .style('font-size', '0.6rem')
+          .style('color', 'var(--text-muted)')
+          .style('text-transform', 'uppercase')
+          .style('display', 'block')
+          .text('State & Hooks');
+        
+        const hasStateOrHooks = (d.state && d.state.length > 0) || (d.hooks && d.hooks.length > 0);
+        if (hasStateOrHooks) {
+          const list = hooksContainer.append('div')
+            .style('display', 'flex')
+            .style('flex-wrap', 'wrap')
+            .style('gap', '3px')
+            .style('margin-top', '2px');
+
+          if (d.state) {
+            d.state.forEach((s: string) => {
+              list.append('span')
+                .style('font-size', '0.55rem')
+                .style('background', 'rgba(16, 185, 129, 0.1)')
+                .style('color', '#10b981')
+                .style('padding', '1px 4px')
+                .style('border-radius', '3px')
+                .text(`state: ${s}`);
+            });
+          }
+          if (d.hooks) {
+            d.hooks.forEach((h: string) => {
+              list.append('span')
+                .style('font-size', '0.55rem')
+                .style('background', 'rgba(245, 158, 11, 0.1)')
+                .style('color', '#f59e0b')
+                .style('padding', '1px 4px')
+                .style('border-radius', '3px')
+                .text(h);
+            });
+          }
+        } else {
+          hooksContainer.append('div')
+            .style('font-size', '0.6rem')
+            .style('color', 'var(--text-muted)')
+            .style('font-style', 'italic')
+            .text('None');
+        }
+      }
     });
 
     node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
@@ -991,7 +1224,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1399,6 +1632,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </div>
             )}
 
+            {/* Component Tree Controls */}
+            {viewMode === 'hierarchy' && (
+              <div className="toolbox-section">
+                <div className="section-header">🌳 Component Tree Layout</div>
+                <div className="toggle-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6.5px' }}>
+                  <span>Radial Layout</span>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={treeLayoutStyle === 'radial'} 
+                      onChange={(e) => setTreeLayoutStyle(e.target.checked ? 'radial' : 'top-down')} 
+                    />
+                    <span className="slider round"></span>
+                  </label>
+                </div>
+                <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '4.5px', lineHeight: '1.2' }}>
+                  Toggle between a top-down hierarchical tree and a radial concentric circular layout.
+                </div>
+              </div>
+            )}
+
             {/* Module Clusters (Folders) */}
             {(viewMode === 'dependency' || viewMode === 'cluster') && (
               <div className="toolbox-section">
@@ -1508,6 +1762,54 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '24px' }}>
               <span>Cross-connections:</span>
               <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{hoveredCluster.connectionsCount}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Component Hover Details Card */}
+      {viewMode === 'hierarchy' && hoveredNode && hoveredNode !== selectedNode && hoveredComponentDetails && hoveredComponentDetails.type === 'component' && (
+        <div 
+          className="cluster-hover-card"
+          style={{ 
+            left: `${mousePos.x}px`, 
+            top: `${mousePos.y}px`,
+            position: 'fixed',
+            transform: 'translate(15px, 15px)',
+            opacity: 1,
+            maxWidth: '280px',
+            pointerEvents: 'none'
+          }}
+        >
+          <div style={{ fontWeight: 700, color: 'var(--color-primary)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px', marginBottom: '6px', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+            ⚛️ {hoveredComponentDetails.name}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Props</span>
+              {hoveredComponentDetails.props && hoveredComponentDetails.props.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                  {hoveredComponentDetails.props.map((p: string) => (
+                    <span key={p} style={{ fontSize: '0.65rem', background: 'var(--color-primary-glow)', color: 'var(--text-primary)', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>{p}</span>
+                  ))}
+                </div>
+              ) : (
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>None detected</span>
+              )}
+            </div>
+            <div>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Hooks & State</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                {hoveredComponentDetails.state && hoveredComponentDetails.state.map((s: string) => (
+                  <span key={s} style={{ fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>useState ({s})</span>
+                ))}
+                {hoveredComponentDetails.hooks && hoveredComponentDetails.hooks.map((h: string) => (
+                  <span key={h} style={{ fontSize: '0.65rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '1px 5px', borderRadius: '3px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>{h}</span>
+                ))}
+                {(!hoveredComponentDetails.state?.length && !hoveredComponentDetails.hooks?.length) && (
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>None detected</span>
+                )}
+              </div>
             </div>
           </div>
         </div>

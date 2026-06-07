@@ -34,6 +34,9 @@ export interface ClassNode {
   name: string;
   file: string;
   type: 'class' | 'component';
+  props?: string[];
+  state?: string[];
+  hooks?: string[];
 }
 
 export interface ClassLink {
@@ -385,6 +388,51 @@ function extractCallGraph(files: ParsedFile[]): { callNodes: CallNode[]; callLin
   };
 }
 
+function parseComponentDetails(content: string, name: string): { props: string[]; state: string[]; hooks: string[] } {
+  const props: string[] = [];
+  const state: string[] = [];
+  const hooks: string[] = [];
+
+  // Find component definition to extract props
+  const defRegex = new RegExp(`(?:const|function)\\s+${name}\\s*(?:=\\s*)?\\(([^)]*)\\)`, 'i');
+  const defMatch = defRegex.exec(content);
+  if (defMatch) {
+    const params = defMatch[1];
+    const braceMatch = params.match(/\{([^}]+)\}/);
+    if (braceMatch) {
+      braceMatch[1]
+        .split(',')
+        .map(p => p.split(':')[0].trim())
+        .map(p => p.replace(/[{}()]/g, '').trim())
+        .filter(p => p && !p.startsWith('//') && !p.startsWith('/*'))
+        .forEach(p => props.push(p));
+    } else if (params.trim()) {
+      props.push(params.trim());
+    }
+  }
+
+  // Extract state variables: matches useState(...)
+  const stateRegex = /const\s+\[\s*(\w+)\s*,\s*\w+\s*\]\s*=\s*useState/g;
+  let match;
+  while ((match = stateRegex.exec(content)) !== null) {
+    if (match[1]) state.push(match[1]);
+  }
+
+  // Extract hooks: matches useXYZ(...)
+  const hookRegex = /\b(use[A-Z]\w*)\b/g;
+  while ((match = hookRegex.exec(content)) !== null) {
+    if (match[1] && match[1] !== 'useState') {
+      hooks.push(match[1]);
+    }
+  }
+
+  return {
+    props: Array.from(new Set(props)),
+    state: Array.from(new Set(state)),
+    hooks: Array.from(new Set(hooks))
+  };
+}
+
 // React component hierarchy & Class hierarchy parser
 function extractClassHierarchy(files: ParsedFile[]): { classNodes: ClassNode[]; classLinks: ClassLink[] } {
   const classNodes: ClassNode[] = [];
@@ -424,14 +472,23 @@ function extractClassHierarchy(files: ParsedFile[]): { classNodes: ClassNode[]; 
 
     // React functional components: PascalCase functions returning jsx
     if (['typescript', 'javascript'].includes(file.language) && (file.path.endsWith('.tsx') || file.path.endsWith('.jsx'))) {
-      const reactCompRegex = /const\s+([A-Z]\w*)\s*=\s*(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>/g;
+      const reactCompRegex = /(?:const\s+([A-Z]\w*)\s*=\s*(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>|function\s+([A-Z]\w*)\s*\()/g;
       const seenComp = new Set<string>();
       while ((match = reactCompRegex.exec(content)) !== null) {
-        const name = match[1];
+        const name = match[1] || match[2];
         if (name && !seenComp.has(name) && !classMap.has(name)) {
           seenComp.add(name);
           const id = `${file.path}::${name}`;
-          const node: ClassNode = { id, name, file: file.path, type: 'component' };
+          const { props, state, hooks } = parseComponentDetails(content, name);
+          const node: ClassNode = { 
+            id, 
+            name, 
+            file: file.path, 
+            type: 'component',
+            props,
+            state,
+            hooks
+          };
           classNodes.push(node);
           classMap.set(name, node);
         }
