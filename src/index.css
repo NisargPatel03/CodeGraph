@@ -1578,3 +1578,70 @@ input:checked + .slider:before {
 .component-mini-card div::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.5);
 }
+
+/* --- Inspector Extended Elements --- */
+.toast-notification {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  padding: 8px 16px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  color: #10b981;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: toast-fade 0.2s ease-out;
+  z-index: 2000;
+}
+
+@keyframes toast-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.func-list-item:hover, .caller-list-item:hover, .similar-file-item:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  transform: translateX(2px);
+  transition: all 0.15s ease;
+}
+
+/* --- Expanded Minimap HUD --- */
+.minimap-hud.expanded {
+  width: 450px !important;
+  height: 350px !important;
+  bottom: 50% !important;
+  right: 50% !important;
+  transform: translate(50%, 50%) !important;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.minimap-expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.minimap-expand-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}

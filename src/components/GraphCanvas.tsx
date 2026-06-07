@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 
 interface GraphCanvasProps {
@@ -54,7 +54,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [pathSource, setPathSource] = useState<string | null>(null);
   const [pathTarget, setPathTarget] = useState<string | null>(null);
   const [isToolboxCollapsed, setIsToolboxCollapsed] = useState(false);
-
+  const [isMinimapExpanded, setIsMinimapExpanded] = useState(false);
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
 
   const traceSteps = useMemo(() => {
@@ -613,6 +613,52 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const toCanvasX = (x: number) => ((x - minX) / boundsWidth) * canvasWidth;
       const toCanvasY = (y: number) => ((y - minY) / boundsHeight) * canvasHeight;
 
+      // 1. Grid Density Mapping
+      const gridCols = 8;
+      const gridRows = 8;
+      const grid = Array(gridRows).fill(0).map(() => Array(gridCols).fill(0));
+      
+      nodes.forEach((n: any) => {
+        if (typeof n.x === 'number' && typeof n.y === 'number') {
+          const cx = toCanvasX(n.x);
+          const cy = toCanvasY(n.y);
+          const col = Math.max(0, Math.min(gridCols - 1, Math.floor((cx / canvasWidth) * gridCols)));
+          const row = Math.max(0, Math.min(gridRows - 1, Math.floor((cy / canvasHeight) * gridRows)));
+          grid[row][col]++;
+        }
+      });
+
+      let maxDensity = 1;
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          if (grid[r][c] > maxDensity) maxDensity = grid[r][c];
+        }
+      }
+
+      // 2. Draw Density Heat Gradients
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          const count = grid[r][c];
+          if (count > 0) {
+            const centerX = ((c + 0.5) / gridCols) * canvasWidth;
+            const centerY = ((r + 0.5) / gridRows) * canvasHeight;
+            const intensity = count / maxDensity;
+            const radius = Math.min(canvasWidth / gridCols, canvasHeight / gridRows) * 1.5;
+
+            const gradient = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, radius);
+            gradient.addColorStop(0, `rgba(0, 242, 254, ${0.22 * intensity})`);
+            gradient.addColorStop(0.5, `rgba(99, 102, 241, ${0.1 * intensity})`);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        }
+      }
+
+      // 3. Draw Nodes
       nodes.forEach((n: any) => {
         const cx = toCanvasX(n.x);
         const cy = toCanvasY(n.y);
@@ -1425,7 +1471,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     if (drawMinimapRef.current) {
       drawMinimapRef.current();
     }
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded]);
 
   return (
     <div 
@@ -1726,16 +1772,29 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       )}
 
       {/* Radar HUD Minimap */}
-      <div className="minimap-hud" onClick={(e) => e.stopPropagation()}>
+      <div className={`minimap-hud ${isMinimapExpanded ? 'expanded' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="minimap-header">
-          <span className="minimap-title">RADAR NAVIGATION HUD</span>
-          <div className="radar-status-dot"></div>
+          <span className="minimap-title">
+            {isMinimapExpanded ? '🔍 FULL RADAR OVERVIEW' : 'RADAR NAVIGATION HUD'}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="radar-status-dot"></div>
+            <button 
+              className="minimap-expand-btn"
+              onClick={() => setIsMinimapExpanded(!isMinimapExpanded)}
+              title={isMinimapExpanded ? "Minimize Overview" : "Maximize Overview"}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              {isMinimapExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
+          </div>
         </div>
         <canvas
           ref={minimapCanvasRef}
-          width={158}
-          height={98}
+          width={isMinimapExpanded ? 432 : 158}
+          height={isMinimapExpanded ? 298 : 98}
           className="minimap-canvas"
+          style={{ width: '100%', height: 'calc(100% - 24px)', display: 'block' }}
           onClick={handleMinimapClick}
         />
       </div>

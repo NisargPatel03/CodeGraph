@@ -1,7 +1,141 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder } from 'lucide-react';
+import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase } from '../utils/aiHelper';
+
+interface ParsedFunction {
+  name: string;
+  line: number;
+}
+
+
+
+function parseFunctions(content: string, language: string): ParsedFunction[] {
+  if (!content) return [];
+  const lines = content.split('\n');
+  const functions: ParsedFunction[] = [];
+  const lowerLang = language.toLowerCase();
+
+  lines.forEach((line, index) => {
+    const lineNum = index + 1;
+    if (lowerLang === 'python') {
+      const match = line.match(/^\s*def\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        functions.push({ name: match[1], line: lineNum });
+      }
+      return;
+    }
+    if (lowerLang === 'go') {
+      const match = line.match(/^\s*func\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        functions.push({ name: match[1], line: lineNum });
+      }
+      return;
+    }
+    if (lowerLang === 'rust') {
+      const match = line.match(/^\s*(?:pub\s+)?fn\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        functions.push({ name: match[1], line: lineNum });
+      }
+      return;
+    }
+    if (['javascript', 'typescript'].includes(lowerLang)) {
+      const f1 = line.match(/^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (f1) {
+        functions.push({ name: f1[1], line: lineNum });
+        return;
+      }
+      const f2 = line.match(/^\s*(?:export\s+)?const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/);
+      if (f2) {
+        functions.push({ name: f2[1], line: lineNum });
+        return;
+      }
+      const f3 = line.match(/^\s*(?:public|private|protected|async|static\s+)*([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/);
+      if (f3) {
+        const name = f3[1];
+        const reserved = ['if', 'for', 'while', 'switch', 'catch', 'constructor', 'return', 'else'];
+        if (!reserved.includes(name)) {
+          functions.push({ name, line: lineNum });
+        }
+      }
+    }
+  });
+  return functions;
+}
+
+function calculateComplexity(content: string): { score: number; level: 'Low' | 'Medium' | 'High'; color: string } {
+  if (!content) return { score: 1, level: 'Low', color: '#10b981' };
+  const lines = content.split('\n');
+  let score = 1;
+
+  const keywords = ['\\bif\\b', '\\bfor\\b', '\\bwhile\\b', '\\bswitch\\b', '\\bcatch\\b', '&&', '\\|\\|', '\\?\\.', '\\?'];
+  keywords.forEach(kw => {
+    const regex = new RegExp(kw, 'g');
+    const matches = content.match(regex);
+    if (matches) {
+      score += matches.length;
+    }
+  });
+
+  score += Math.floor(lines.length / 30);
+
+  let level: 'Low' | 'Medium' | 'High' = 'Low';
+  let color = '#10b981';
+  if (score > 35) {
+    level = 'High';
+    color = '#ef4444';
+  } else if (score > 15) {
+    level = 'Medium';
+    color = '#f59e0b';
+  }
+
+  return { score, level, color };
+}
+
+
+
+function getSimilarFiles(selectedFile: ParsedFile, allFiles: ParsedFile[]): ParsedFile[] {
+  if (!selectedFile || allFiles.length <= 1) return [];
+  const scoreMap = new Map<string, number>();
+
+  const currentFolder = selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/'));
+  const currentImports = new Set(selectedFile.content.match(/['"][^'"]+['"]/g) || []);
+
+  allFiles.forEach(f => {
+    if (f.path === selectedFile.path) return;
+    let score = 0;
+
+    if (f.language === selectedFile.language) {
+      score += 3;
+    }
+
+    const folder = f.path.substring(0, f.path.lastIndexOf('/'));
+    if (folder === currentFolder) {
+      score += 4;
+    } else if (folder.split('/')[0] === currentFolder.split('/')[0]) {
+      score += 1.5;
+    }
+
+    const fImports = f.content.match(/['"][^'"]+['"]/g) || [];
+    fImports.forEach(imp => {
+      if (currentImports.has(imp)) {
+        score += 1;
+      }
+    });
+
+    if (f.name.toLowerCase().includes(selectedFile.name.toLowerCase()) || 
+        selectedFile.name.toLowerCase().includes(f.name.toLowerCase())) {
+      score += 2;
+    }
+
+    scoreMap.set(f.path, score);
+  });
+
+  return [...allFiles]
+    .filter(f => f.path !== selectedFile.path && scoreMap.has(f.path))
+    .sort((a, b) => (scoreMap.get(b.path) || 0) - (scoreMap.get(a.path) || 0))
+    .slice(0, 3);
+}
 
 interface InspectorProps {
   selectedFile: ParsedFile | null;
@@ -46,6 +180,94 @@ export const Inspector: React.FC<InspectorProps> = ({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading]);
+
+  // Extended File Inspector States
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    functions: false,
+    relations: false,
+    similar: false
+  });
+  const codePreviewRef = useRef<HTMLPreElement>(null);
+
+  // Memoized metadata values
+  const parsedFunctions = useMemo(() => {
+    return selectedFile ? parseFunctions(selectedFile.content, selectedFile.language) : [];
+  }, [selectedFile]);
+
+  const complexityInfo = useMemo(() => {
+    return selectedFile ? calculateComplexity(selectedFile.content) : null;
+  }, [selectedFile]);
+
+
+
+  const similarFiles = useMemo(() => {
+    return selectedFile ? getSimilarFiles(selectedFile, allFiles) : [];
+  }, [selectedFile, allFiles]);
+
+  const reverseImports = useMemo(() => {
+    if (!selectedFile) return [];
+    return allFiles.filter(f => {
+      if (f.path === selectedFile.path) return false;
+      const pathSnippet = selectedFile.path.split('/').pop()?.split('.')[0] || '';
+      if (!pathSnippet) return false;
+      return f.content.toLowerCase().includes(pathSnippet.toLowerCase()) && 
+        (f.content.includes('import') || f.content.includes('require'));
+    });
+  }, [selectedFile, allFiles]);
+
+  const handleCopyPath = () => {
+    if (!selectedFile) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(selectedFile.path);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = selectedFile.path;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch (e) {
+      console.warn('Clipboard write failed, showing notification anyway', e);
+    }
+    setToastMessage('Relative path copied!');
+    setTimeout(() => setToastMessage(null), 2000);
+  };
+
+  const handleOpenInEditor = () => {
+    if (!selectedFile) return;
+    const absPath = `c:/Sem-6/SGP_4/CodeGraph/${selectedFile.path}`;
+    try {
+      window.open(`vscode://file/${absPath}`);
+    } catch (e) {
+      console.error(e);
+    }
+    setToastMessage('Opening in VS Code...');
+    setTimeout(() => setToastMessage(null), 2000);
+  };
+
+  const scrollToLine = (line: number) => {
+    const element = codePreviewRef.current;
+    if (!element) return;
+    const lines = selectedFile ? selectedFile.content.split('\n') : [];
+    const totalLines = lines.length || 1;
+    const ratio = (line - 1) / totalLines;
+    element.scrollTop = element.scrollHeight * ratio - 60;
+    
+    setToastMessage(`Navigated to line ${line}`);
+    setTimeout(() => setToastMessage(null), 1500);
+  };
+
+  const toggleSection = (section: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   // Reset tab to info if selected file changes
   useEffect(() => {
@@ -351,7 +573,17 @@ export const Inspector: React.FC<InspectorProps> = ({
                 {/* File Header Details */}
                 <div>
                   <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', marginBottom: '8px' }}>{selectedFile.name}</h3>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{selectedFile.path}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', margin: 0, flex: 1 }}>{selectedFile.path}</p>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button className="cyber-button text-btn" onClick={handleCopyPath} title="Copy Path" style={{ padding: '4px 6px' }}>
+                        <Copy size={12} />
+                      </button>
+                      <button className="cyber-button text-btn" onClick={handleOpenInEditor} title="Open in VS Code" style={{ padding: '4px 6px' }}>
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  </div>
                   
                   <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
                     <span className="logo-badge" style={{ fontSize: '0.7rem' }}>
@@ -367,6 +599,39 @@ export const Inspector: React.FC<InspectorProps> = ({
                       ⏱️ {selectedFile.content.split('\n').length} LOC
                     </span>
                   </div>
+
+                  {/* Complexity Score HUD */}
+                  {complexityInfo && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px 12px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--panel-border)',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                          <Activity size={13} style={{ color: complexityInfo.color }} />
+                          Code Complexity Score
+                        </span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: complexityInfo.color }}>
+                          {complexityInfo.score} ({complexityInfo.level})
+                        </span>
+                      </div>
+                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${Math.min(complexityInfo.score * 2.0, 100)}%`,
+                          background: complexityInfo.color,
+                          boxShadow: `0 0 8px ${complexityInfo.color}`,
+                          transition: 'width 0.4s ease'
+                        }} />
+                      </div>
+                    </div>
+                  )}
 
                   {fileFolder && (
                     <button
@@ -398,6 +663,140 @@ export const Inspector: React.FC<InspectorProps> = ({
                   </div>
                 )}
 
+                {/* Functions Accordion */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <button 
+                    onClick={() => toggleSection('functions')}
+                    style={{ width: '100%', background: 'none', border: 'none', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                  >
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <List size={13} style={{ color: 'var(--color-primary)' }} />
+                      Functions ({parsedFunctions.length})
+                    </span>
+                    {collapsedSections.functions ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  
+                  {!collapsedSections.functions && (
+                    <div style={{ marginTop: '8px', maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '4px' }}>
+                      {parsedFunctions.length === 0 ? (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No functions parsed in this file</span>
+                      ) : (
+                        parsedFunctions.map(fn => (
+                          <div 
+                            key={`${fn.name}-${fn.line}`}
+                            onClick={() => scrollToLine(fn.line)}
+                            style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center', 
+                              fontSize: '0.75rem', 
+                              fontFamily: 'var(--font-mono)', 
+                              background: 'rgba(255,255,255,0.02)', 
+                              padding: '5px 8px', 
+                              borderRadius: '4px', 
+                              border: '1px solid rgba(255,255,255,0.03)', 
+                              cursor: 'pointer',
+                              color: 'var(--color-secondary)'
+                            }}
+                            className="func-list-item"
+                          >
+                            <span>{fn.name}()</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Line {fn.line}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Who Calls This File Accordion */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <button 
+                    onClick={() => toggleSection('relations')}
+                    style={{ width: '100%', background: 'none', border: 'none', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                  >
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Code size={13} style={{ color: 'var(--color-secondary)' }} />
+                      Who Calls This File ({reverseImports.length})
+                    </span>
+                    {collapsedSections.relations ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {!collapsedSections.relations && (
+                    <div style={{ marginTop: '8px', maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '4px' }}>
+                      {reverseImports.length === 0 ? (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No incoming references detected</span>
+                      ) : (
+                        reverseImports.map(caller => (
+                          <div 
+                            key={caller.path}
+                            onClick={() => setSelectedNodeId(caller.path)}
+                            style={{ 
+                              fontSize: '0.75rem', 
+                              fontFamily: 'var(--font-mono)', 
+                              background: 'rgba(255,255,255,0.02)', 
+                              padding: '5px 8px', 
+                              borderRadius: '4px', 
+                              border: '1px solid rgba(255,255,255,0.03)', 
+                              cursor: 'pointer',
+                              color: 'var(--color-primary)',
+                              wordBreak: 'break-all'
+                            }}
+                            className="caller-list-item"
+                          >
+                            {caller.name}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Similar Files Accordion */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <button 
+                    onClick={() => toggleSection('similar')}
+                    style={{ width: '100%', background: 'none', border: 'none', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                  >
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <Folder size={13} style={{ color: 'var(--color-accent)' }} />
+                      Similar Files ({similarFiles.length})
+                    </span>
+                    {collapsedSections.similar ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </button>
+
+                  {!collapsedSections.similar && (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '4px' }}>
+                      {similarFiles.length === 0 ? (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No similar files found</span>
+                      ) : (
+                        similarFiles.map(file => (
+                          <div 
+                            key={file.path}
+                            onClick={() => setSelectedNodeId(file.path)}
+                            style={{ 
+                              fontSize: '0.75rem', 
+                              background: 'rgba(255,255,255,0.02)', 
+                              padding: '5px 8px', 
+                              borderRadius: '4px', 
+                              border: '1px solid rgba(255,255,255,0.03)', 
+                              cursor: 'pointer',
+                              color: 'var(--text-secondary)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                            className="similar-file-item"
+                          >
+                            <span>{file.name}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{file.path.substring(0, file.path.indexOf('/')) || 'root'}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* File Imports */}
                 {imports.length > 0 && (
                   <div>
@@ -423,7 +822,6 @@ export const Inspector: React.FC<InspectorProps> = ({
 
                   {fileExplanation ? (
                     <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.5' }}>
-                      {/* Standard split to replace custom headings with HTML rendering in sidebar */}
                       <div dangerouslySetInnerHTML={{ 
                         __html: fileExplanation
                           .replace(/^### (.*$)/gim, '<h5 style="color:#fff; font-weight:600; margin: 10px 0 6px 0;">$1</h5>')
@@ -461,7 +859,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <Code size={14} />
                     Code Preview
                   </h4>
-                  <pre style={{ margin: 0, padding: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--panel-border)', borderRadius: '6px', overflowX: 'auto', maxHeight: '250px', fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  <pre ref={codePreviewRef} style={{ margin: 0, padding: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--panel-border)', borderRadius: '6px', overflowX: 'auto', maxHeight: '250px', fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                     {selectedFile.content}
                   </pre>
                 </div>
@@ -521,6 +919,11 @@ export const Inspector: React.FC<InspectorProps> = ({
           </div>
         )}
       </div>
+      {toastMessage && (
+        <div className="toast-notification">
+          {toastMessage}
+        </div>
+      )}
     </aside>
   );
 };
