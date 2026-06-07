@@ -136,6 +136,12 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
                       {(selectedFile.size / 1024).toFixed(2)} KB
                     </span>
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Simulated Git Commit Frequency">
+                      🔥 {Math.floor(((selectedFile.size + selectedFile.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 55) + 5)} commits
+                    </span>
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }} title="Lines of Code Complexity">
+                      ⏱️ {selectedFile.content.split('\n').length} LOC
+                    </span>
                   </div>
                 </div>
 

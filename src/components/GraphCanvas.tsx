@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 
 interface GraphCanvasProps {
@@ -25,6 +25,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+
+  // Advanced features states
+  const [showNpmPackages, setShowNpmPackages] = useState(false);
+  const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
+  const [pathSource, setPathSource] = useState<string | null>(null);
+  const [pathTarget, setPathTarget] = useState<string | null>(null);
+  const [isToolboxCollapsed, setIsToolboxCollapsed] = useState(false);
 
   const handleMinimapClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = minimapCanvasRef.current;
@@ -160,6 +167,59 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
   };
 
+  const shortestPath = useMemo(() => {
+    if (!pathSource || !pathTarget || viewMode !== 'dependency') return null;
+    
+    const activeNodes = showNpmPackages ? [...graphData.nodes, ...(graphData.npmNodes || [])] : graphData.nodes;
+    const activeLinks = showNpmPackages ? [...graphData.links, ...(graphData.npmLinks || [])] : graphData.links;
+    
+    const adj = new Map<string, string[]>();
+    activeNodes.forEach(n => adj.set(n.id, []));
+    activeLinks.forEach(l => {
+      const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+      const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+      if (adj.has(s)) adj.get(s)!.push(t);
+    });
+    
+    const queue: string[][] = [[pathSource]];
+    const visited = new Set<string>([pathSource]);
+    
+    while (queue.length > 0) {
+      const path = queue.shift()!;
+      const lastNode = path[path.length - 1];
+      
+      if (lastNode === pathTarget) return path;
+      
+      const neighbors = adj.get(lastNode) || [];
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push([...path, neighbor]);
+        }
+      }
+    }
+    return null;
+  }, [pathSource, pathTarget, graphData, viewMode, showNpmPackages]);
+
+  const getHeatmapColor = (d: any) => {
+    if (d.isNpm) return 'var(--color-primary-glow)';
+    
+    const colorScale = d3.scaleLinear<string>()
+      .domain([0, 0.5, 1])
+      .range(['#3b82f6', '#f59e0b', '#ef4444']);
+      
+    if (heatmapMode === 'churn') {
+      const churn = d.churn || 1;
+      const ratio = Math.min(Math.max((churn - 5) / 50, 0), 1);
+      return colorScale(ratio);
+    } else if (heatmapMode === 'complexity') {
+      const complexity = d.complexity || 1;
+      const ratio = Math.min(Math.max(Math.log10(complexity) / 3, 0), 1);
+      return colorScale(ratio);
+    }
+    return getColorForNode(d);
+  };
+
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
 
@@ -173,8 +233,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     let links: any[] = [];
 
     if (viewMode === 'dependency' || viewMode === 'cluster') {
-      nodes = graphData.nodes.map((n) => ({ ...n }));
-      links = graphData.links.map((l) => ({ ...l }));
+      if (showNpmPackages && viewMode === 'dependency') {
+        nodes = [...graphData.nodes.map((n) => ({ ...n })), ...(graphData.npmNodes || []).map((n) => ({ ...n }))];
+        links = [...graphData.links.map((l) => ({ ...l })), ...(graphData.npmLinks || []).map((l) => ({ ...l }))];
+      } else {
+        nodes = graphData.nodes.map((n) => ({ ...n }));
+        links = graphData.links.map((l) => ({ ...l }));
+      }
     } else if (viewMode === 'call') {
       nodes = graphData.callNodes.map((n) => ({ ...n }));
       links = graphData.callLinks.map((l) => ({ ...l }));
@@ -428,13 +493,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
         .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
 
-    node.append('circle')
-      .attr('r', (d) => {
-        if (viewMode === 'call') return 8 + Math.min(d.callCount * 1.5, 20);
-        const baseSize = viewMode === 'hierarchy' ? 9 : 8;
-        return baseSize + Math.min(Math.sqrt(d.size || 0) * 0.04, 30);
-      })
-      .attr('fill', getColorForNode).attr('stroke', 'rgba(0,0,0,0.5)').attr('stroke-width', 1.5);
+    node.each(function (d: any) {
+      const element = d3.select(this);
+      if (d.isNpm) {
+        element.append('polygon')
+          .attr('points', '0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6')
+          .attr('fill', 'var(--color-primary-glow)')
+          .attr('stroke', 'var(--color-primary)')
+          .attr('stroke-width', 1.5)
+          .attr('class', 'npm-node');
+      } else {
+        element.append('circle')
+          .attr('r', (d: any) => {
+            if (viewMode === 'call') return 8 + Math.min(d.callCount * 1.5, 20);
+            const baseSize = viewMode === 'hierarchy' ? 9 : 8;
+            return baseSize + Math.min(Math.sqrt(d.size || 0) * 0.04, 30);
+          })
+          .attr('fill', getColorForNode)
+          .attr('stroke', 'rgba(0,0,0,0.5)')
+          .attr('stroke-width', 1.5);
+      }
+    });
 
     node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
 
@@ -454,7 +533,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -470,7 +549,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       tId: typeof l.target === 'object' ? l.target.id : l.target
     });
 
-    if (activeId) {
+    // Update node fills based on heatmap mode
+    nodesG.select('circle').style('fill', (d: any) => getHeatmapColor(d));
+    nodesG.select('polygon').style('fill', (d: any) => getHeatmapColor(d));
+    nodesG.classed('hotspot', (d: any) => heatmapMode === 'churn' && d.churn && d.churn >= 45);
+
+    if (shortestPath) {
+      const pathSet = new Set(shortestPath);
+      nodesG.style('opacity', (d: any) => pathSet.has(d.id) ? 1.0 : 0.08);
+      nodesG.select('text').style('fill', (d: any) => pathSet.has(d.id) ? 'var(--text-primary)' : 'var(--text-secondary)').style('font-weight', (d: any) => pathSet.has(d.id) ? '700' : '500');
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const sIdx = shortestPath.indexOf(sId);
+        const inPath = sIdx !== -1 && shortestPath[sIdx + 1] === tId;
+        const line = d3.select(this);
+        if (inPath) {
+          line.attr('class', 'link-element shortest-path').style('stroke-opacity', 1.0);
+        } else {
+          line.attr('class', 'link-element').style('stroke-opacity', 0.02).style('stroke', 'var(--link-stroke)');
+        }
+      });
+      hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+    } else if (activeId) {
       const neighbors = new Set<string>([activeId]);
       let filteredLinks: any[] = viewMode === 'dependency' || viewMode === 'cluster' ? graphData.links : (viewMode === 'call' ? graphData.callLinks : graphData.classLinks);
       filteredLinks.forEach((link: any) => {
@@ -515,10 +615,117 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     if (drawMinimapRef.current) {
       drawMinimapRef.current();
     }
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath]);
 
   return (
     <div ref={containerRef} className="graph-viewport" onClick={() => setSelectedNode(null)}>
+      {/* Floating Control Toolbox */}
+      <div className="graph-control-toolbox" onClick={(e) => e.stopPropagation()}>
+        <div className="toolbox-header" onClick={() => setIsToolboxCollapsed(!isToolboxCollapsed)}>
+          <span className="toolbox-title">⚙️ Graph Control Center</span>
+          <button className="collapse-toggle-btn" style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}>
+            {isToolboxCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+        </div>
+
+        {!isToolboxCollapsed && (
+          <>
+            {/* Shortest Path Finder */}
+            {viewMode === 'dependency' && (
+              <div className="toolbox-section">
+                <div className="section-header">📍 Shortest Path Finder</div>
+                <div className="flex-row">
+                  <div className="select-container">
+                    <label>Source:</label>
+                    <select value={pathSource || ''} onChange={(e) => setPathSource(e.target.value || null)}>
+                      <option value="">-- Select Source --</option>
+                      {graphData.nodes.map(n => (
+                        <option key={n.id} value={n.id}>{n.name}</option>
+                      ))}
+                      {showNpmPackages && (graphData.npmNodes || []).map(n => (
+                        <option key={n.id} value={n.id}>{`[npm] ${n.name}`}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button 
+                    className="cyber-button text-btn" 
+                    onClick={() => selectedNode && setPathSource(selectedNode)}
+                    disabled={!selectedNode}
+                    title="Set as Source"
+                  >
+                    Set
+                  </button>
+                </div>
+
+                <div className="flex-row mt-2">
+                  <div className="select-container">
+                    <label>Target:</label>
+                    <select value={pathTarget || ''} onChange={(e) => setPathTarget(e.target.value || null)}>
+                      <option value="">-- Select Target --</option>
+                      {graphData.nodes.map(n => (
+                        <option key={n.id} value={n.id}>{n.name}</option>
+                      ))}
+                      {showNpmPackages && (graphData.npmNodes || []).map(n => (
+                        <option key={n.id} value={n.id}>{`[npm] ${n.name}`}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button 
+                    className="cyber-button text-btn" 
+                    onClick={() => selectedNode && setPathTarget(selectedNode)}
+                    disabled={!selectedNode}
+                    title="Set as Target"
+                  >
+                    Set
+                  </button>
+                </div>
+                {pathSource && pathTarget && (
+                  <div className="flex-row mt-2" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="path-status-text">
+                      {shortestPath ? `${shortestPath.length - 1} hops` : 'No path found'}
+                    </span>
+                    <button className="cyber-button text-btn alert" onClick={() => { setPathSource(null); setPathTarget(null); }}>
+                      Clear Path
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* NPM Package Toggle */}
+            {viewMode === 'dependency' && (
+              <div className="toolbox-section">
+                <div className="toggle-row">
+                  <span>📦 External Packages</span>
+                  <label className="switch">
+                    <input type="checkbox" checked={showNpmPackages} onChange={(e) => setShowNpmPackages(e.target.checked)} />
+                    <span className="slider round"></span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Heatmaps Mode */}
+            {viewMode === 'dependency' && (
+              <div className="toolbox-section">
+                <div className="section-header">⏱️ Heatmap Overlay</div>
+                <div className="heatmap-btn-group">
+                  <button className={`heatmap-tab ${heatmapMode === 'none' ? 'active' : ''}`} onClick={() => setHeatmapMode('none')}>
+                    None
+                  </button>
+                  <button className={`heatmap-tab ${heatmapMode === 'churn' ? 'active' : ''}`} onClick={() => setHeatmapMode('churn')}>
+                    Churn
+                  </button>
+                  <button className={`heatmap-tab ${heatmapMode === 'complexity' ? 'active' : ''}`} onClick={() => setHeatmapMode('complexity')}>
+                    LOC
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="graph-controls">
         <button className="control-btn" title="Zoom In" onClick={(e) => { e.stopPropagation(); (window as any).graphZoom?.zoomIn(); }}>
           <ZoomIn size={16} />
@@ -532,6 +739,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       </div>
 
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+
+      {/* Heatmap Legend */}
+      {viewMode === 'dependency' && heatmapMode !== 'none' && (
+        <div className="heatmap-legend" onClick={(e) => e.stopPropagation()}>
+          <span>Cool</span>
+          <div className="legend-bar" />
+          <span>Hot</span>
+        </div>
+      )}
 
       {/* Radar HUD Minimap */}
       <div className="minimap-hud" onClick={(e) => e.stopPropagation()}>

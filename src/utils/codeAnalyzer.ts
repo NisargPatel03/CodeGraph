@@ -6,6 +6,9 @@ export interface DependencyNode {
   size: number; // Size in bytes
   language: string;
   folder: string; // Parent folder
+  isNpm?: boolean;
+  churn?: number;
+  complexity?: number;
 }
 
 export interface DependencyLink {
@@ -40,6 +43,8 @@ export interface ClassLink {
 export interface CodebaseGraph {
   nodes: DependencyNode[];
   links: DependencyLink[];
+  npmNodes: DependencyNode[];
+  npmLinks: DependencyLink[];
   cycles: string[][];
   callNodes: CallNode[];
   callLinks: CallLink[];
@@ -117,7 +122,7 @@ function resolveImportPath(importerPath: string, importString: string, filePaths
 }
 
 // Parses imports in JavaScript, TypeScript, Python, and other languages via RegExp
-function parseImports(file: ParsedFile, filePaths: Set<string>): string[] {
+function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: string[]; external: string[] } {
   const imports: string[] = [];
   const content = file.content;
   
@@ -172,16 +177,36 @@ function parseImports(file: ParsedFile, filePaths: Set<string>): string[] {
     }
   }
   
-  // Resolve import paths relative to project
-  const resolvedTargets = new Set<string>();
+  const internal = new Set<string>();
+  const external = new Set<string>();
+  
   for (const imp of imports) {
-    const resolved = resolveImportPath(file.path, imp, filePaths);
-    if (resolved && resolved !== file.path) {
-      resolvedTargets.add(resolved);
+    const isRel = imp.startsWith('.') || imp.startsWith('@/');
+    if (isRel) {
+      const resolved = resolveImportPath(file.path, imp, filePaths);
+      if (resolved && resolved !== file.path) {
+        internal.add(resolved);
+      }
+    } else {
+      if (['typescript', 'javascript'].includes(file.language)) {
+        let pkg = imp;
+        if (imp.startsWith('@')) {
+          const parts = imp.split('/');
+          if (parts.length >= 2) {
+            pkg = `${parts[0]}/${parts[1]}`;
+          }
+        } else {
+          pkg = imp.split('/')[0];
+        }
+        external.add(pkg);
+      }
     }
   }
   
-  return Array.from(resolvedTargets);
+  return {
+    internal: Array.from(internal),
+    external: Array.from(external),
+  };
 }
 
 // Find all simple cycles (circular dependencies) using Tarjan's or simple DFS cycle finder
@@ -403,16 +428,29 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   const filePaths = new Set(files.map((f) => f.path));
   
   // 1. Build nodes
-  const nodes: DependencyNode[] = files.map((file) => ({
-    id: file.path,
-    name: file.name,
-    size: file.size,
-    language: file.language,
-    folder: getFolder(file.path),
-  }));
+  const nodes: DependencyNode[] = files.map((file) => {
+    // Generate pseudo-random but reproducible churn score (e.g. 1 to 60 commits)
+    const pathSum = file.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const churn = Math.floor(((file.size + pathSum) % 55) + 5);
+    
+    // Lines of code complexity
+    const complexity = file.content.split('\n').length;
+    
+    return {
+      id: file.path,
+      name: file.name,
+      size: file.size,
+      language: file.language,
+      folder: getFolder(file.path),
+      churn,
+      complexity,
+    };
+  });
   
   // 2. Build links and build Adjacency List
   const links: DependencyLink[] = [];
+  const npmLinks: DependencyLink[] = [];
+  const npmPackagesSeen = new Set<string>();
   const adjList = new Map<string, string[]>();
   
   // Initialize adj list
@@ -421,15 +459,36 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   }
   
   for (const file of files) {
-    const targets = parseImports(file, filePaths);
-    for (const target of targets) {
+    const { internal, external } = parseImports(file, filePaths);
+    
+    for (const target of internal) {
       links.push({
         source: file.path,
         target: target,
       });
       adjList.get(file.path)?.push(target);
     }
+    
+    for (const pkg of external) {
+      npmPackagesSeen.add(pkg);
+      npmLinks.push({
+        source: file.path,
+        target: `npm::${pkg}`,
+      });
+    }
   }
+  
+  // Build npm nodes
+  const npmNodes: DependencyNode[] = Array.from(npmPackagesSeen).map((pkg) => ({
+    id: `npm::${pkg}`,
+    name: pkg,
+    size: 200,
+    language: 'npm',
+    folder: 'node_modules',
+    isNpm: true,
+    churn: 1,
+    complexity: 1,
+  }));
   
   // 3. Cycle Detection
   const cycles = findCircularDependencies(files.map((f) => f.path), adjList);
@@ -443,6 +502,8 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   return {
     nodes,
     links,
+    npmNodes,
+    npmLinks,
     cycles,
     callNodes,
     callLinks,
