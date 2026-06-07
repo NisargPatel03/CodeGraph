@@ -175,7 +175,7 @@ code, pre {
 
 .selector-title {
   font-size: 2.5rem;
-  background: linear-gradient(to right, #fff, var(--color-primary), var(--color-secondary));
+  background: linear-gradient(to right, var(--text-primary), var(--color-primary), var(--color-secondary));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -266,7 +266,7 @@ code, pre {
 
 /* --- Drag and Drop Zip Box --- */
 .dropzone {
-  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border: 2px dashed var(--panel-border);
   border-radius: 12px;
   padding: 40px 20px;
   cursor: pointer;
@@ -275,7 +275,7 @@ code, pre {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.01);
+  background: var(--input-bg);
 }
 
 .dropzone:hover, .dropzone.active {
@@ -919,6 +919,14 @@ code, pre {
 [data-theme="arctic-light"] .node-label.active {
   fill: #6366F1;
   text-shadow: 0 1px 2px #ffffff, 0 0 6px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="arctic-light"] .cyber-button.secondary {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+[data-theme="arctic-light"] .cyber-button.secondary:hover {
+  background: rgba(15, 23, 42, 0.08);
 }
 
 /* --- 600ms Smooth Theme Crossfade Transition --- */
