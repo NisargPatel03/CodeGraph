@@ -57,6 +57,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [isMinimapExpanded, setIsMinimapExpanded] = useState(false);
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
 
+
   const traceSteps = useMemo(() => {
     if (!activeTraceNodeId || viewMode !== 'call') return [];
     
@@ -278,7 +279,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
   const getColorForNode = (d: any) => {
     if (viewMode === 'call') {
-      if (isFunctionUnused(d)) return 'var(--text-muted)';
+      if (isFunctionUnused(d)) return '#6b7280'; // Unused: Gray
       if (d.callCount >= 8) return '#ef4444'; // Hot (Red)
       if (d.callCount >= 4) return '#f97316'; // Warm (Orange)
       if (d.callCount >= 2) return '#eab308'; // Lukewarm (Yellow)
@@ -296,6 +297,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         '#a855f7', // Purple (Level 5+)
       ];
       return depthColors[depth % depthColors.length];
+    }
+
+    // Folders
+    if (d.isFolder) {
+      return 'var(--color-warning)';
+    }
+
+    // NPM packages
+    if (d.isNpm || d.language === 'npm') {
+      return 'var(--color-primary-glow)';
     }
 
     const lang = d.language?.toLowerCase() || '';
@@ -1423,7 +1434,41 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
     } else if (query) {
       const matches = new Set<string>();
-      nodesG.each((d: any) => { if ((d.name && d.name.toLowerCase().includes(query)) || (d.id && d.id.toLowerCase().includes(query))) matches.add(d.id); });
+      nodesG.each((d: any) => {
+        // If node is NPM/External, only check query
+        if (d.isNpm || d.language === 'npm') {
+          if (query && d.name.toLowerCase().includes(query)) {
+            matches.add(d.id);
+          }
+          return;
+        }
+
+        // Search Query
+        let isMatch = false;
+        const idLower = (d.id || '').toLowerCase();
+        const nameLower = (d.name || '').toLowerCase();
+        if (idLower.includes(query) || nameLower.includes(query)) {
+          isMatch = true;
+        }
+        if (!isMatch && graphData.callNodes) {
+          isMatch = graphData.callNodes.some(fn => fn.file === d.id && fn.name.toLowerCase().includes(query));
+        }
+        if (!isMatch && graphData.classNodes) {
+          isMatch = graphData.classNodes.some(cn => {
+            if (cn.file !== d.id) return false;
+            if (cn.name.toLowerCase().includes(query)) return true;
+            if (cn.props && cn.props.some(p => p.toLowerCase().includes(query))) return true;
+            if (cn.state && cn.state.some(s => s.toLowerCase().includes(query))) return true;
+            if (cn.hooks && cn.hooks.some(h => h.toLowerCase().includes(query))) return true;
+            return false;
+          });
+        }
+        
+        if (isMatch) {
+          matches.add(d.id);
+        }
+      });
+
       nodesG.style('opacity', (d: any) => matches.has(d.id) ? 1.0 : 0.15);
       nodesG.select('text').style('fill', (d: any) => matches.has(d.id) ? 'var(--text-primary)' : 'var(--text-secondary)').style('font-weight', (d: any) => matches.has(d.id) ? '600' : '500');
       linksLine.each(function (l: any) {
@@ -1877,6 +1922,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           </div>
         </div>
       )}
+
     </div>
   );
 };

@@ -36,6 +36,7 @@ export default function App() {
   const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
   const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
 
+
   // Sync theme to root element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -106,6 +107,8 @@ export default function App() {
       .filter((link) => link.source === selectedNodeId)
       .map((link) => link.target);
   }, [selectedNodeId, graphData]);
+
+
 
   // Build Hierarchical File Tree
   const fileTree = useMemo(() => {
@@ -327,8 +330,8 @@ export default function App() {
             </aside>
 
             {/* Center Area - D3 Graph Visualizer */}
-            <section className="glass-panel center-panel">
-              <div className="tabs-header">
+            <section className="glass-panel center-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="tabs-header" style={{ flexShrink: 0 }}>
                 <div className="tabs-group">
                   <button
                     className={`tab-btn ${viewMode === 'dependency' ? 'active' : ''}`}
@@ -397,6 +400,7 @@ export default function App() {
             <Reports
               files={repoData.files}
               cycles={graphData.cycles}
+              graphData={graphData}
               apiKey={apiKey}
               isExpanded={isBottomExpanded}
               setIsExpanded={setIsBottomExpanded}

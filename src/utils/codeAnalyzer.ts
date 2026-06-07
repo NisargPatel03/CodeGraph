@@ -44,6 +44,27 @@ export interface ClassLink {
   target: string; // Parent class / parent component
 }
 
+export interface CodeSmellWarning {
+  id: string;
+  file: string;
+  type: 'file_length' | 'func_length' | 'nested_import' | 'unused_export' | 'circular_dep';
+  severity: 'critical' | 'major' | 'minor';
+  message: string;
+  details?: string;
+  line?: number;
+}
+
+export interface DuplicateFunctionGroup {
+  name: string;
+  locations: { file: string; line: number }[];
+}
+
+export interface CodebaseStats {
+  totalFiles: number;
+  totalFunctions: number;
+  totalLoc: number;
+}
+
 export interface CodebaseGraph {
   nodes: DependencyNode[];
   links: DependencyLink[];
@@ -54,6 +75,10 @@ export interface CodebaseGraph {
   callLinks: CallLink[];
   classNodes: ClassNode[];
   classLinks: ClassLink[];
+  codeSmells: CodeSmellWarning[];
+  duplicateFunctions: DuplicateFunctionGroup[];
+  deadFiles: string[];
+  stats: CodebaseStats;
 }
 
 // Helper to get directory name
@@ -518,6 +543,123 @@ function extractClassHierarchy(files: ParsedFile[]): { classNodes: ClassNode[]; 
   return { classNodes, classLinks };
 }
 
+function getFunctionLength(content: string, startIndex: number): number {
+  let braceCount = 0;
+  let started = false;
+  let lines = 0;
+  
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+    if (char === '\n') lines++;
+    if (char === '{') {
+      braceCount++;
+      started = true;
+    } else if (char === '}') {
+      braceCount--;
+      if (started && braceCount === 0) {
+        return lines + 1;
+      }
+    }
+  }
+  return lines || 1;
+}
+
+function getPythonFunctionLength(lines: string[], startIndex: number): number {
+  const startLine = lines[startIndex];
+  const match = startLine.match(/^(\s*)/);
+  const startIndent = match ? match[1].length : 0;
+  
+  let length = 1;
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') {
+      length++;
+      continue;
+    }
+    const lineIndent = line.match(/^(\s*)/)?.[1].length || 0;
+    if (lineIndent <= startIndent) {
+      break;
+    }
+    length++;
+  }
+  return length;
+}
+
+interface ExtractedFunction {
+  name: string;
+  line: number;
+  length: number;
+}
+
+function parseFunctionsInFile(content: string, language: string): ExtractedFunction[] {
+  if (!content) return [];
+  const lines = content.split('\n');
+  const functions: ExtractedFunction[] = [];
+  const lowerLang = language.toLowerCase();
+
+  lines.forEach((line, index) => {
+    let name = '';
+    let isMatch = false;
+
+    if (lowerLang === 'python') {
+      const match = line.match(/^\s*def\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        name = match[1];
+        const len = getPythonFunctionLength(lines, index);
+        functions.push({ name, line: index + 1, length: len });
+      }
+    } else if (lowerLang === 'go') {
+      const match = line.match(/^\s*func\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        name = match[1];
+        isMatch = true;
+      }
+    } else if (lowerLang === 'rust') {
+      const match = line.match(/^\s*(?:pub\s+)?fn\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        name = match[1];
+        isMatch = true;
+      }
+    } else if (['javascript', 'typescript'].includes(lowerLang)) {
+      const f1 = line.match(/^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(/);
+      if (f1) {
+        name = f1[1];
+        isMatch = true;
+      } else {
+        const f2 = line.match(/^\s*(?:export\s+)?const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/);
+        if (f2) {
+          name = f2[1];
+          isMatch = true;
+        } else {
+          const f3 = line.match(/^\s*(?:public|private|protected|async|static\s+)*([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/);
+          if (f3) {
+            const tempName = f3[1];
+            const reserved = ['if', 'for', 'while', 'switch', 'catch', 'constructor', 'return', 'else'];
+            if (!reserved.includes(tempName)) {
+              name = tempName;
+              isMatch = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (isMatch && name) {
+      let charIndex = 0;
+      for (let i = 0; i < index; i++) {
+        charIndex += lines[i].length + 1;
+      }
+      const slice = content.slice(charIndex);
+      const relativeIndex = slice.indexOf('{');
+      const startBraceIndex = relativeIndex !== -1 ? charIndex + relativeIndex : charIndex;
+      const len = getFunctionLength(content, startBraceIndex);
+      functions.push({ name, line: index + 1, length: len });
+    }
+  });
+
+  return functions;
+}
+
 // Main analyzer runner
 export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   const filePaths = new Set(files.map((f) => f.path));
@@ -595,6 +737,214 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   
   // 5. Class / React Component Hierarchies
   const { classNodes, classLinks } = extractClassHierarchy(files);
+
+  // --- CODE SMELL AND ADVANCED ANALYSIS ---
+  const codeSmells: CodeSmellWarning[] = [];
+  let totalLoc = 0;
+  const fileFunctionsMap = new Map<string, ExtractedFunction[]>();
+  let totalFunctions = 0;
+
+  // Track all functions across files to find duplicates
+  const allExtractedFunctions: { name: string; file: string; line: number }[] = [];
+
+  files.forEach(file => {
+    const loc = file.content.split('\n').length;
+    totalLoc += loc;
+
+    // 1. File over 500 lines check
+    if (loc > 500) {
+      codeSmells.push({
+        id: `file-length-${file.path}`,
+        file: file.path,
+        type: 'file_length',
+        severity: 'major',
+        message: `File is too long (${loc} lines)`,
+        details: `Files exceeding 500 lines are harder to maintain and test. Consider breaking this file into smaller, modular components.`
+      });
+    }
+
+    // Parse functions in this file
+    const funcs = parseFunctionsInFile(file.content, file.language);
+    fileFunctionsMap.set(file.path, funcs);
+    totalFunctions += funcs.length;
+
+    funcs.forEach(fn => {
+      // Track for duplicate check
+      allExtractedFunctions.push({ name: fn.name, file: file.path, line: fn.line });
+
+      // 2. Function over 50 lines check
+      if (fn.length > 50) {
+        codeSmells.push({
+          id: `func-length-${file.path}-${fn.name}-${fn.line}`,
+          file: file.path,
+          type: 'func_length',
+          severity: 'major',
+          message: `Long function: "${fn.name}()" has ${fn.length} lines`,
+          details: `Functions exceeding 50 lines of code should be refactored into smaller, helper functions.`,
+          line: fn.line
+        });
+      }
+    });
+
+    // 3. Deeply nested imports (4+ levels) check
+    if (['typescript', 'javascript'].includes(file.language)) {
+      const importRegex = /(?:import|export)\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
+      const requireRegex = /\brequire\((['"])([^'"]+)\1\)/g;
+      
+      const checkImport = (impPath: string) => {
+        const isDeep = impPath.includes('../../../../') || 
+                       (!impPath.startsWith('.') && impPath.split('/').filter(Boolean).length >= 4);
+        if (isDeep) {
+          codeSmells.push({
+            id: `nested-import-${file.path}-${impPath}`,
+            file: file.path,
+            type: 'nested_import',
+            severity: 'minor',
+            message: `Deeply nested import path: "${impPath}"`,
+            details: `Nesting dependencies 4+ levels deep creates tight coupling. Consider path aliases or re-organizing directory structures.`
+          });
+        }
+      };
+
+      let m;
+      while ((m = importRegex.exec(file.content)) !== null) {
+        checkImport(m[1]);
+      }
+      while ((m = requireRegex.exec(file.content)) !== null) {
+        checkImport(m[2]);
+      }
+    }
+  });
+
+  // 4. Duplicate function names check
+  const duplicateFunctionsMap = new Map<string, { file: string; line: number }[]>();
+  allExtractedFunctions.forEach(fn => {
+    if (!duplicateFunctionsMap.has(fn.name)) {
+      duplicateFunctionsMap.set(fn.name, []);
+    }
+    duplicateFunctionsMap.get(fn.name)!.push({ file: fn.file, line: fn.line });
+  });
+
+  const duplicateFunctions: DuplicateFunctionGroup[] = [];
+  duplicateFunctionsMap.forEach((locations, name) => {
+    if (locations.length > 1) {
+      duplicateFunctions.push({ name, locations });
+    }
+  });
+
+  // 5. Unused exports check
+  files.forEach(file => {
+    if (!['typescript', 'javascript'].includes(file.language)) return;
+
+    const exportedSymbols: { name: string; line: number }[] = [];
+    const lines = file.content.split('\n');
+    
+    lines.forEach((line, idx) => {
+      const match = line.match(/export\s+(?:const|let|var|function\*?|class|type|interface|enum)\s+([a-zA-Z0-9_]+)/);
+      if (match && match[1]) {
+        if (match[1] !== 'default') {
+          exportedSymbols.push({ name: match[1], line: idx + 1 });
+        }
+      }
+    });
+
+    const listExportRegex = /export\s+\{([^}]+)\}/g;
+    let listMatch;
+    while ((listMatch = listExportRegex.exec(file.content)) !== null) {
+      if (listMatch[1]) {
+        listMatch[1].split(',').forEach(s => {
+          const name = s.trim().split(' as ')[0].trim();
+          if (name) {
+            const lineIdx = lines.findIndex(l => l.includes(listMatch![0]));
+            exportedSymbols.push({ name, line: lineIdx !== -1 ? lineIdx + 1 : 1 });
+          }
+        });
+      }
+    }
+
+    exportedSymbols.forEach(sym => {
+      let referenced = false;
+      for (const otherFile of files) {
+        if (otherFile.path === file.path) continue;
+        const wordRegex = new RegExp(`\\b${sym.name}\\b`);
+        if (wordRegex.test(otherFile.content)) {
+          referenced = true;
+          break;
+        }
+      }
+
+      if (!referenced) {
+        codeSmells.push({
+          id: `unused-export-${file.path}-${sym.name}`,
+          file: file.path,
+          type: 'unused_export',
+          severity: 'minor',
+          message: `Unused export: "${sym.name}" in ${file.name}`,
+          details: `Exported variables or functions that are not referenced elsewhere clutter public APIs and can be safely removed or kept private.`,
+          line: sym.line
+        });
+      }
+    });
+  });
+
+  // 6. Circular dependency code smells
+  cycles.forEach((cycle, idx) => {
+    cycle.forEach(filePath => {
+      codeSmells.push({
+        id: `circular-dep-${idx}-${filePath}`,
+        file: filePath,
+        type: 'circular_dep',
+        severity: 'critical',
+        message: `Circular import cycle participant`,
+        details: `This file is part of a circular dependency cycle: ${cycle.map(c => c.split('/').pop()).join(' -> ')}.`
+      });
+    });
+  });
+
+  // 7. Dead code files (0 incoming references)
+  const incomingRefCount = new Map<string, number>();
+  files.forEach(f => incomingRefCount.set(f.path, 0));
+  links.forEach(l => {
+    const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+    if (incomingRefCount.has(t)) {
+      incomingRefCount.set(t, incomingRefCount.get(t)! + 1);
+    }
+  });
+
+  const isEntryPoint = (path: string) => {
+    const name = path.split('/').pop()?.toLowerCase() || '';
+    return name === 'index.html' || 
+           name === 'main.tsx' || 
+           name === 'main.ts' || 
+           name === 'index.tsx' || 
+           name === 'index.ts' || 
+           name === 'app.tsx' || 
+           name === 'app.ts' || 
+           name === 'vite.config.ts' || 
+           name === 'vite.config.js' || 
+           name.includes('.config.');
+  };
+
+  const deadFiles: string[] = [];
+  incomingRefCount.forEach((count, path) => {
+    if (count === 0 && !isEntryPoint(path)) {
+      deadFiles.push(path);
+      codeSmells.push({
+        id: `dead-file-${path}`,
+        file: path,
+        type: 'unused_export',
+        severity: 'major',
+        message: `Dead Code: File has 0 incoming imports`,
+        details: `No other file in the repository imports this file. It is likely unused/dead code that can be safely deleted.`
+      });
+    }
+  });
+
+  const stats: CodebaseStats = {
+    totalFiles: files.length,
+    totalFunctions,
+    totalLoc
+  };
   
   return {
     nodes,
@@ -606,5 +956,9 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
     callLinks,
     classNodes,
     classLinks,
+    codeSmells,
+    duplicateFunctions,
+    deadFiles,
+    stats,
   };
 }
