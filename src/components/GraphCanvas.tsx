@@ -479,26 +479,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         if (tId === activeId) neighbors.add(sId);
       });
       nodesG.style('opacity', (d: any) => neighbors.has(d.id) ? 1.0 : 0.15);
-      nodesG.select('text').style('fill', (d: any) => d.id === activeId ? '#fff' : 'var(--text-secondary)').style('font-weight', (d: any) => d.id === activeId ? '700' : '500');
+      nodesG.select('text').style('fill', (d: any) => d.id === activeId ? 'var(--text-primary)' : 'var(--text-secondary)').style('font-weight', (d: any) => d.id === activeId ? '700' : '500');
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
         const line = d3.select(this);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         if (sId === activeId) line.attr('class', 'link-element flow-out').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight)');
         else if (tId === activeId) line.attr('class', 'link-element flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
-        else line.attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        else line.attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else if (query) {
       const matches = new Set<string>();
       nodesG.each((d: any) => { if ((d.name && d.name.toLowerCase().includes(query)) || (d.id && d.id.toLowerCase().includes(query))) matches.add(d.id); });
       nodesG.style('opacity', (d: any) => matches.has(d.id) ? 1.0 : 0.15);
-      nodesG.select('text').style('fill', (d: any) => matches.has(d.id) ? '#fff' : 'var(--text-secondary)').style('font-weight', (d: any) => matches.has(d.id) ? '600' : '500');
+      nodesG.select('text').style('fill', (d: any) => matches.has(d.id) ? 'var(--text-primary)' : 'var(--text-secondary)').style('font-weight', (d: any) => matches.has(d.id) ? '600' : '500');
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isMatch = matches.has(sId) || matches.has(tId);
-        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isMatch ? 0.7 : 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isMatch ? 0.7 : 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else {
@@ -507,7 +507,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
-        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isCyclic ? 0.6 : 0.2).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isCyclic ? 0.6 : 0.2).style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
       });
       hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
     }

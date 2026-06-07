@@ -25,6 +25,10 @@
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
   
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --tabs-header-bg: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glow-shadow: 0 0 15px var(--color-primary-glow);
   --glow-shadow-teal: 0 0 15px var(--color-secondary-glow);
@@ -63,7 +67,7 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -129,7 +133,7 @@ code, pre {
 .logo-text {
   font-size: 1.5rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #fff 30%, var(--color-secondary) 100%);
+  background: linear-gradient(135deg, var(--text-primary) 30%, var(--color-secondary) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -199,7 +203,7 @@ code, pre {
 
 .cyber-input {
   flex: 1;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   padding: 14px 18px;
   border-radius: 8px;
@@ -244,6 +248,7 @@ code, pre {
 .cyber-button.secondary {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--panel-border);
+  color: var(--text-primary);
   box-shadow: none;
 }
 
@@ -330,7 +335,7 @@ code, pre {
 
 .search-input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--input-bg);
   border: 1px solid var(--panel-border);
   padding: 8px 12px 8px 32px;
   border-radius: 6px;
@@ -400,7 +405,7 @@ code, pre {
   justify-content: space-between;
   padding: 8px 16px;
   border-bottom: 1px solid var(--panel-border);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--tabs-header-bg);
 }
 
 .tabs-group {
@@ -429,9 +434,9 @@ code, pre {
 }
 
 .tab-btn.active {
-  background: rgba(139, 92, 246, 0.15);
+  background: var(--color-primary-glow);
   color: var(--color-primary);
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  border: 1px solid var(--color-primary);
 }
 
 /* --- Graph Canvas --- */
@@ -484,9 +489,10 @@ code, pre {
 }
 
 .node-label.active {
-  fill: #fff;
+  fill: var(--text-primary);
   font-weight: 700;
   font-size: 11px;
+  text-shadow: 0 0 4px var(--color-primary-glow);
 }
 
 /* --- Graph Controls --- */
@@ -620,7 +626,7 @@ code, pre {
   justify-content: space-between;
   padding: 8px 16px;
   border-bottom: 1px solid var(--panel-border);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--tabs-header-bg);
 }
 
 .bottom-panel-content {
@@ -834,6 +840,9 @@ code, pre {
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --text-muted: #64748B;
+  --input-bg: rgba(15, 23, 42, 0.04);
+  --tabs-header-bg: rgba(15, 23, 42, 0.03);
+  --scrollbar-thumb: rgba(15, 23, 42, 0.12);
 }
 
 [data-theme="rose-gold"] {
@@ -900,6 +909,16 @@ code, pre {
 [data-theme="arctic-light"] .file-node.active {
   background: rgba(99, 102, 241, 0.12);
   color: #4f46e5;
+}
+
+[data-theme="arctic-light"] .node-label {
+  text-shadow: 0 1px 2px #ffffff, 0 1px 4px #ffffff, 0 0 8px #ffffff;
+  fill: #0F172A;
+}
+
+[data-theme="arctic-light"] .node-label.active {
+  fill: #6366F1;
+  text-shadow: 0 1px 2px #ffffff, 0 0 6px rgba(99, 102, 241, 0.2);
 }
 
 /* --- 600ms Smooth Theme Crossfade Transition --- */
