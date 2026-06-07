@@ -12,6 +12,10 @@ interface InspectorProps {
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
+  activeTraceNodeId: string | null;
+  setActiveTraceNodeId: (id: string | null) => void;
+  callNodes: any[];
+  callLinks: any[];
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -23,6 +27,10 @@ export const Inspector: React.FC<InspectorProps> = ({
   selectedNodeId,
   setSelectedNodeId,
   setCollapsedFolders,
+  activeTraceNodeId,
+  setActiveTraceNodeId,
+  callNodes,
+  callLinks,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -101,6 +109,40 @@ export const Inspector: React.FC<InspectorProps> = ({
   const isSelectedNodeFolder = selectedNodeId && selectedNodeId.startsWith('folder:');
   const selectedFolder = isSelectedNodeFolder ? selectedNodeId!.slice(7) : null;
 
+  const isSelectedNodeFunction = selectedNodeId && selectedNodeId.includes('::');
+  const selectedFunctionNode = useMemo(() => {
+    if (!isSelectedNodeFunction) return null;
+    return callNodes.find(n => n.id === selectedNodeId);
+  }, [isSelectedNodeFunction, selectedNodeId, callNodes]);
+
+  const selectedFunctionCallers = useMemo(() => {
+    if (!selectedNodeId) return [];
+    return callLinks
+      .filter(l => {
+        const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+        return t === selectedNodeId;
+      })
+      .map(l => {
+        const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+        return callNodes.find(n => n.id === s);
+      })
+      .filter(Boolean);
+  }, [selectedNodeId, callLinks, callNodes]);
+
+  const selectedFunctionCallees = useMemo(() => {
+    if (!selectedNodeId) return [];
+    return callLinks
+      .filter(l => {
+        const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+        return s === selectedNodeId;
+      })
+      .map(l => {
+        const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+        return callNodes.find(n => n.id === t);
+      })
+      .filter(Boolean);
+  }, [selectedNodeId, callLinks, callNodes]);
+
   const folderFiles = useMemo(() => {
     if (!selectedFolder) return [];
     return allFiles.filter(f => f.path === selectedFolder || f.path.startsWith(selectedFolder + '/'));
@@ -166,7 +208,6 @@ export const Inspector: React.FC<InspectorProps> = ({
                     ))}
                   </div>
                 </div>
-
                 <button
                   className="cyber-button"
                   style={{ width: '100%', padding: '10px 14px', fontSize: '0.85rem', marginTop: '12px' }}
@@ -181,6 +222,121 @@ export const Inspector: React.FC<InspectorProps> = ({
                 >
                   📁 Expand Folder Cluster
                 </button>
+              </div>
+            ) : isSelectedNodeFunction ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-secondary)', marginBottom: '8px' }}>
+                    <Code size={18} />
+                    <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', fontFamily: 'var(--font-mono)' }}>
+                      {selectedNodeId.split('::').pop()}()
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                    File: {selectedNodeId.split('::')[0]}
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {selectedFunctionNode && selectedFunctionNode.callCount === 0 ? (
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                      🗑️ Unused Function
+                    </span>
+                  ) : (
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                      ⚡ Active Function
+                    </span>
+                  )}
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
+                    {selectedFunctionNode ? selectedFunctionNode.callCount : 0} Calls
+                  </span>
+                </div>
+
+                {/* Trace Simulator Button */}
+                <button
+                  className="cyber-button"
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 14px', 
+                    fontSize: '0.85rem', 
+                    marginTop: '4px',
+                    backgroundColor: activeTraceNodeId === selectedNodeId ? 'var(--color-alert)' : 'var(--color-primary-glow)',
+                    borderColor: activeTraceNodeId === selectedNodeId ? 'var(--color-alert)' : 'var(--color-primary)'
+                  }}
+                  onClick={() => {
+                    if (activeTraceNodeId === selectedNodeId) {
+                      setActiveTraceNodeId(null);
+                    } else {
+                      setActiveTraceNodeId(selectedNodeId);
+                    }
+                  }}
+                >
+                  {activeTraceNodeId === selectedNodeId ? '⏹️ Stop Trace Simulation' : '⚡ Trace Execution Path'}
+                </button>
+
+                {/* Callers List */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Callers (Incoming)
+                  </h4>
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {selectedFunctionCallers.length === 0 ? (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>No callers detected</span>
+                    ) : (
+                      selectedFunctionCallers.map((caller: any) => (
+                        <div 
+                          key={caller.id} 
+                          onClick={() => setSelectedNodeId(caller.id)}
+                          style={{ 
+                            fontSize: '0.7rem', 
+                            fontFamily: 'var(--font-mono)', 
+                            background: 'rgba(255,255,255,0.02)', 
+                            padding: '4px 8px', 
+                            borderRadius: '4px', 
+                            border: '1px solid rgba(255,255,255,0.03)', 
+                            color: 'var(--color-secondary)', 
+                            cursor: 'pointer',
+                            wordBreak: 'break-all'
+                          }}
+                        >
+                          {caller.name}() <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>in {caller.file.split('/').pop()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Callees List */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Callees (Outgoing)
+                  </h4>
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {selectedFunctionCallees.length === 0 ? (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>No outgoing calls detected</span>
+                    ) : (
+                      selectedFunctionCallees.map((callee: any) => (
+                        <div 
+                          key={callee.id} 
+                          onClick={() => setSelectedNodeId(callee.id)}
+                          style={{ 
+                            fontSize: '0.7rem', 
+                            fontFamily: 'var(--font-mono)', 
+                            background: 'rgba(255,255,255,0.02)', 
+                            padding: '4px 8px', 
+                            borderRadius: '4px', 
+                            border: '1px solid rgba(255,255,255,0.03)', 
+                            color: 'var(--color-accent)', 
+                            cursor: 'pointer',
+                            wordBreak: 'break-all'
+                          }}
+                        >
+                          {callee.name}() <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>in {callee.file.split('/').pop()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             ) : !selectedFile ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '12px', textAlign: 'center', padding: '20px' }}>

@@ -342,7 +342,7 @@ function extractCallGraph(files: ParsedFile[]): { callNodes: CallNode[]; callLin
   }
 
   return {
-    callNodes: Array.from(callNodesMap.values()).filter(node => node.callCount > 0 || callLinks.some(l => l.source === node.id)),
+    callNodes: Array.from(callNodesMap.values()),
     callLinks,
   };
 }

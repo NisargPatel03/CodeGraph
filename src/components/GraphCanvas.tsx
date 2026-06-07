@@ -11,6 +11,10 @@ interface GraphCanvasProps {
   searchQuery: string;
   collapsedFolders: Set<string>;
   setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
+  activeTraceNodeId: string | null;
+  setActiveTraceNodeId: (id: string | null) => void;
+  depthFilter: number;
+  setDepthFilter: (depth: number) => void;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -21,6 +25,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   searchQuery,
   collapsedFolders,
   setCollapsedFolders,
+  activeTraceNodeId,
+  setActiveTraceNodeId,
+  depthFilter,
+  setDepthFilter,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +44,55 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [pathSource, setPathSource] = useState<string | null>(null);
   const [pathTarget, setPathTarget] = useState<string | null>(null);
   const [isToolboxCollapsed, setIsToolboxCollapsed] = useState(false);
+
+  const [currentTraceStep, setCurrentTraceStep] = useState(0);
+
+  const traceSteps = useMemo(() => {
+    if (!activeTraceNodeId || viewMode !== 'call') return [];
+    
+    const steps: { source: string; target: string }[] = [];
+    const visited = new Set<string>([activeTraceNodeId]);
+    const queue: string[] = [activeTraceNodeId];
+    let depth = 0;
+    
+    while (queue.length > 0 && depth < 3) {
+      const nextLevel: string[] = [];
+      for (const curr of queue) {
+        const outgoing = graphData.callLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          return s === curr;
+        });
+        
+        for (const link of outgoing) {
+          const sId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+          const tId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+          
+          if (!visited.has(tId)) {
+            visited.add(tId);
+            nextLevel.push(tId);
+            steps.push({ source: sId, target: tId });
+          }
+        }
+      }
+      queue.push(...nextLevel);
+      queue.splice(0, queue.length - nextLevel.length);
+      depth++;
+    }
+    
+    return steps;
+  }, [activeTraceNodeId, graphData.callLinks, viewMode]);
+
+  useEffect(() => {
+    if (traceSteps.length === 0) {
+      setCurrentTraceStep(0);
+      return;
+    }
+    setCurrentTraceStep(0);
+    const interval = setInterval(() => {
+      setCurrentTraceStep(prev => (prev + 1) % traceSteps.length);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [traceSteps]);
 
   const handleMinimapClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = minimapCanvasRef.current;
@@ -146,11 +203,44 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   }, [graphData.classNodes, graphData.classLinks, viewMode]);
 
   // Colors for languages / types
+  const isFunctionUnused = (d: any) => {
+    if (viewMode !== 'call') return false;
+    const name = d.name || '';
+    const isEntry = name.startsWith('use') || name.startsWith('App') || name.startsWith('Main') || name === 'main' || name === 'index' || /^[A-Z]/.test(name);
+    return d.callCount === 0 && !isEntry;
+  };
+
+  const applyLevelOfDetail = (k: number) => {
+    if (!svgRef.current) return;
+    const svgElement = d3.select(svgRef.current);
+    svgElement.selectAll('.node-element').each(function(d: any) {
+      if (!d) return;
+      const node = d3.select(this);
+      const label = node.select('.node-label');
+      
+      let shouldShowLabel = true;
+      if (viewMode === 'call') {
+        if (k < 0.6) {
+          shouldShowLabel = d.id === selectedNode || d.id === hoveredNode || d.callCount >= 4;
+        } else if (k < 1.1) {
+          shouldShowLabel = !isFunctionUnused(d) || d.id === selectedNode || d.id === hoveredNode;
+        }
+      } else {
+        if (k < 0.6) {
+          shouldShowLabel = d.isFolder || d.id === selectedNode || d.id === hoveredNode || (d.size && d.size > 20000);
+        }
+      }
+      label.style('display', shouldShowLabel ? 'block' : 'none');
+    });
+  };
+
   const getColorForNode = (d: any) => {
     if (viewMode === 'call') {
-      if (d.callCount > 10) return 'var(--color-alert)';
-      if (d.callCount > 4) return 'var(--color-warning)';
-      return 'var(--color-secondary)';
+      if (isFunctionUnused(d)) return 'var(--text-muted)';
+      if (d.callCount >= 8) return '#ef4444'; // Hot (Red)
+      if (d.callCount >= 4) return '#f97316'; // Warm (Orange)
+      if (d.callCount >= 2) return '#eab308'; // Lukewarm (Yellow)
+      return '#3b82f6'; // Cold (Blue)
     }
     
     if (viewMode === 'hierarchy') {
@@ -366,8 +456,54 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       links = Array.from(aggregatedLinks.values());
     } else if (viewMode === 'call') {
-      nodes = graphData.callNodes.map((n) => ({ ...n }));
-      links = graphData.callLinks.map((l) => ({ ...l }));
+      let activeNodes = graphData.callNodes.map((n) => ({ ...n }));
+      let activeLinks = graphData.callLinks.map((l) => ({ ...l }));
+
+      // If a depth filter is active and a node is selected, prune the graph
+      if (depthFilter !== -1 && selectedNode) {
+        const startNode = activeNodes.find(n => n.id === selectedNode);
+        if (startNode) {
+          const visited = new Set<string>([selectedNode]);
+          const distance = new Map<string, number>([[selectedNode, 0]]);
+          const queue: string[] = [selectedNode];
+
+          // Build adjacency list for both directions (caller and callee)
+          const adj = new Map<string, string[]>();
+          activeNodes.forEach(n => adj.set(n.id, []));
+          activeLinks.forEach(l => {
+            const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+            const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+            if (adj.has(s)) adj.get(s)!.push(t);
+            if (adj.has(t)) adj.get(t)!.push(s); // bidirectional search for context
+          });
+
+          while (queue.length > 0) {
+            const curr = queue.shift()!;
+            const dist = distance.get(curr) || 0;
+            if (dist < depthFilter) {
+              const neighbors = adj.get(curr) || [];
+              for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                  visited.add(neighbor);
+                  distance.set(neighbor, dist + 1);
+                  queue.push(neighbor);
+                }
+              }
+            }
+          }
+
+          // Filter nodes and links
+          activeNodes = activeNodes.filter(n => visited.has(n.id));
+          activeLinks = activeLinks.filter(l => {
+            const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+            const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+            return visited.has(s) && visited.has(t);
+          });
+        }
+      }
+
+      nodes = activeNodes;
+      links = activeLinks;
     } else if (viewMode === 'hierarchy') {
       nodes = graphData.classNodes.map((n) => ({ ...n }));
       links = graphData.classLinks.map((l) => ({ ...l }));
@@ -464,6 +600,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .scaleExtent([0.1, 8])
       .on('zoom', (event) => {
         mainGroup.attr('transform', event.transform);
+        applyLevelOfDetail(event.transform.k);
         drawMinimap();
       });
 
@@ -471,6 +608,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     svgElement.call(zoomBehavior).on('dblclick.zoom', null);
     svgElement.call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
+    applyLevelOfDetail(0.8);
 
     const simulation = d3.forceSimulation<any>(nodes)
       .force('link', d3.forceLink<any, any>(links).id((d) => d.id).distance(() => {
@@ -678,7 +816,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           .attr('stroke-width', 1.5)
           .attr('class', 'npm-node');
       } else {
-        element.append('circle')
+        const circle = element.append('circle')
           .attr('r', (d: any) => {
             if (viewMode === 'call') return 8 + Math.min(d.callCount * 1.5, 20);
             const baseSize = viewMode === 'hierarchy' ? 9 : 8;
@@ -687,6 +825,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           .attr('fill', getColorForNode)
           .attr('stroke', 'rgba(0,0,0,0.5)')
           .attr('stroke-width', 1.5);
+
+        if (viewMode === 'call' && isFunctionUnused(d)) {
+          circle.attr('class', 'call-node-unused');
+        }
       }
     });
 
@@ -711,7 +853,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -740,7 +882,50 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     const pipelines = svgElement.selectAll('.pipeline-element');
 
-    if (shortestPath) {
+    if (activeTraceNodeId && traceSteps.length > 0 && viewMode === 'call') {
+      const activeStep = traceSteps[currentTraceStep];
+      const traceNodeIds = new Set<string>([activeTraceNodeId]);
+      traceSteps.forEach(s => {
+        traceNodeIds.add(s.source);
+        traceNodeIds.add(s.target);
+      });
+
+      nodesG.style('opacity', (d: any) => traceNodeIds.has(d.id) ? 1.0 : 0.15);
+      
+      nodesG.each(function (d: any) {
+        const circle = d3.select(this).select('circle');
+        const isActiveTarget = activeStep && d.id === activeStep.target;
+        
+        if (isActiveTarget) {
+          circle.attr('class', 'trace-node-active');
+        } else {
+          circle.attr('class', isFunctionUnused(d) ? 'call-node-unused' : '');
+        }
+      });
+
+      nodesG.select('text')
+        .style('fill', (d: any) => d.id === activeTraceNodeId ? 'var(--text-primary)' : 'var(--text-secondary)')
+        .style('font-weight', (d: any) => d.id === activeTraceNodeId ? '700' : '500');
+
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const line = d3.select(this);
+        const isActiveLink = activeStep && sId === activeStep.source && tId === activeStep.target;
+        
+        if (isActiveLink) {
+          line.attr('class', 'link-element trace-link-active').style('stroke-opacity', 1.0);
+        } else {
+          const isPartOfTrace = traceSteps.some(s => s.source === sId && s.target === tId);
+          line.attr('class', 'link-element')
+            .style('stroke-opacity', isPartOfTrace ? 0.35 : 0.03)
+            .style('stroke', 'var(--link-stroke)')
+            .attr('marker-end', 'url(#arrow-normal)');
+        }
+      });
+
+      pipelines.style('stroke-opacity', 0.01);
+      hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+    } else if (shortestPath) {
       const pathSet = new Set(shortestPath);
       nodesG.style('opacity', (d: any) => pathSet.has(d.id) ? 1.0 : 0.08);
       nodesG.select('text').style('fill', (d: any) => pathSet.has(d.id) ? 'var(--text-primary)' : 'var(--text-secondary)').style('font-weight', (d: any) => pathSet.has(d.id) ? '700' : '500');
@@ -820,10 +1005,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
     }
 
+    const transform = d3.zoomTransform(svgRef.current);
+    applyLevelOfDetail(transform.k);
+
     if (drawMinimapRef.current) {
       drawMinimapRef.current();
     }
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps]);
 
   return (
     <div ref={containerRef} className="graph-viewport" onClick={() => setSelectedNode(null)}>
@@ -927,6 +1115,100 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   <button className={`heatmap-tab ${heatmapMode === 'complexity' ? 'active' : ''}`} onClick={() => setHeatmapMode('complexity')}>
                     LOC
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Call Graph Controls */}
+            {viewMode === 'call' && (
+              <div className="toolbox-section">
+                <div className="section-header">📞 Call Graph Analytics</div>
+                
+                {/* Depth Filter */}
+                <div className="select-container" style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Call Depth Filter:</span>
+                    <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>
+                      {depthFilter === -1 ? 'All Hops' : `${depthFilter} Hop${depthFilter > 1 ? 's' : ''}`}
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min="-1"
+                    max="3"
+                    step="1"
+                    value={depthFilter}
+                    disabled={!selectedNode}
+                    onChange={(e) => setDepthFilter(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      accentColor: 'var(--color-secondary)',
+                      marginTop: '4px',
+                      cursor: selectedNode ? 'pointer' : 'not-allowed',
+                      opacity: selectedNode ? 1 : 0.5
+                    }}
+                  />
+                  {!selectedNode && (
+                    <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Select a node to enable depth filter
+                    </span>
+                  )}
+                </div>
+
+                {/* Call Stack Trace Status */}
+                <div style={{
+                  padding: '8px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '4px',
+                  fontSize: '0.7rem'
+                }}>
+                  <div style={{ fontWeight: 600, color: 'var(--color-secondary)', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                    <span className="live-dot" style={{
+                      display: 'inline-block',
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: activeTraceNodeId ? '#10b981' : 'var(--text-muted)',
+                      boxShadow: activeTraceNodeId ? '0 0 8px #10b981' : 'none',
+                    }}></span>
+                    Call Trace Simulator
+                  </div>
+                  
+                  {activeTraceNodeId ? (
+                    <div>
+                      <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', marginBottom: '6px' }}>
+                        Tracing: <code style={{ color: 'var(--text-primary)' }}>{activeTraceNodeId.split('::').pop()}()</code>
+                      </div>
+                      {traceSteps.length > 0 ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>Step {currentTraceStep + 1} of {traceSteps.length}</span>
+                          <button 
+                            className="cyber-button text-btn" 
+                            style={{ padding: '2px 8px', fontSize: '0.65rem' }}
+                            onClick={() => setActiveTraceNodeId(null)}
+                          >
+                            Stop
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>No outgoing calls found</span>
+                          <button 
+                            className="cyber-button text-btn" 
+                            style={{ padding: '2px 8px', fontSize: '0.65rem' }}
+                            onClick={() => setActiveTraceNodeId(null)}
+                          >
+                            Stop
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                      Select a node and click <strong>Trace Execution</strong> to animate path.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

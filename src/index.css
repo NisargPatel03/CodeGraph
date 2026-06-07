@@ -1458,3 +1458,39 @@ input:checked + .slider:before {
   background: rgba(128, 128, 128, 0.5);
 }
 
+/* Call Graph Additions: Dead Code Finder & Call Trace Simulation */
+@keyframes pulse-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.trace-link-active {
+  stroke: #10b981 !important; /* neon green laser */
+  stroke-width: 4px !important;
+  stroke-dasharray: 6, 4;
+  animation: pulse-flow 0.8s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.8)) !important;
+  stroke-opacity: 1 !important;
+}
+
+.trace-node-active {
+  fill: #10b981 !important;
+  stroke: #34d399 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.9)) !important;
+}
+
+.call-node-unused {
+  stroke-dasharray: 4, 4;
+  stroke: var(--text-muted) !important;
+  fill: rgba(128, 128, 128, 0.1) !important;
+  filter: drop-shadow(0 0 2px rgba(128, 128, 128, 0.2)) !important;
+  opacity: 0.5;
+}
+
+.call-node-unused + text {
+  fill: var(--text-muted) !important;
+  opacity: 0.5;
+}
+

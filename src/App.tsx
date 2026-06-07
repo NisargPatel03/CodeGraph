@@ -33,6 +33,8 @@ export default function App() {
   const [isBottomExpanded, setIsBottomExpanded] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
+  const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
 
   // Sync theme to root element
   useEffect(() => {
@@ -368,6 +370,10 @@ export default function App() {
                 searchQuery={searchQuery}
                 collapsedFolders={collapsedFolders}
                 setCollapsedFolders={setCollapsedFolders}
+                activeTraceNodeId={activeTraceNodeId}
+                setActiveTraceNodeId={setActiveTraceNodeId}
+                depthFilter={depthFilter}
+                setDepthFilter={setDepthFilter}
               />
             </section>
 
@@ -381,6 +387,10 @@ export default function App() {
               selectedNodeId={selectedNodeId}
               setSelectedNodeId={setSelectedNodeId}
               setCollapsedFolders={setCollapsedFolders}
+              activeTraceNodeId={activeTraceNodeId}
+              setActiveTraceNodeId={setActiveTraceNodeId}
+              callNodes={graphData.callNodes || []}
+              callLinks={graphData.callLinks || []}
             />
 
             {/* Bottom Panel - Onboarding Guides & Architecture Cycles */}
