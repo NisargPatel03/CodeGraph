@@ -18,6 +18,7 @@ interface FileTreeItem {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState(() => localStorage.getItem('app_theme') || 'cyberpunk');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_key') || '');
   const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
@@ -26,6 +27,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isBottomExpanded, setIsBottomExpanded] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
+
+  // Sync theme to root element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('app_theme', theme);
+  }, [theme]);
 
   // Save Gemini Key to local storage
   const handleSetApiKey = (key: string) => {
@@ -194,8 +201,26 @@ export default function App() {
             </button>
           )}
 
+          {/* Theme Selector Bubbles */}
+          <div className="theme-selector-group">
+            {[
+              { id: 'cyberpunk', name: 'Cyber Neon' },
+              { id: 'bioluminescence', name: 'Bioluminescent' },
+              { id: 'inferno', name: 'Inferno Fire' },
+              { id: 'midnight-slate', name: 'Midnight Slate' },
+            ].map((t) => (
+              <div
+                key={t.id}
+                className={`theme-bubble ${theme === t.id ? 'active' : ''}`}
+                data-theme-id={t.id}
+                title={t.name}
+                onClick={() => setTheme(t.id)}
+              />
+            ))}
+          </div>
+
           {/* Settings API Key Toggle indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: repoData ? '1px solid var(--panel-border)' : 'none', paddingLeft: repoData ? '12px' : '0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid var(--panel-border)', paddingLeft: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: apiKey ? 'var(--color-accent)' : 'var(--text-muted)' }}>
               <CheckCircle size={14} style={{ color: apiKey ? 'var(--color-accent)' : 'var(--text-muted)' }} />
               {apiKey ? 'AI Key Verified' : 'AI Offline Mode'}

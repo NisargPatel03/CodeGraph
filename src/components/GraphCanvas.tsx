@@ -20,7 +20,47 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
+  const boundsRef = useRef({ minX: -100, maxX: 100, minY: -100, maxY: 100 });
+  const zoomBehaviorRef = useRef<any>(null);
+  const drawMinimapRef = useRef<(() => void) | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+
+  const handleMinimapClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = minimapCanvasRef.current;
+    if (!canvas || !svgRef.current || !containerRef.current) return;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    const { minX, maxX, minY, maxY } = boundsRef.current;
+    const boundsWidth = maxX - minX;
+    const boundsHeight = maxY - minY;
+
+    if (boundsWidth <= 0 || boundsHeight <= 0) return;
+
+    const targetNodeX = minX + (clickX / canvasWidth) * boundsWidth;
+    const targetNodeY = minY + (clickY / canvasHeight) * boundsHeight;
+
+    const width = containerRef.current.clientWidth || 800;
+    const height = containerRef.current.clientHeight || 500;
+
+    if (zoomBehaviorRef.current) {
+      const transform = d3.zoomTransform(svgRef.current);
+      const targetTransform = d3.zoomIdentity
+        .translate(width / 2 - targetNodeX * transform.k, height / 2 - targetNodeY * transform.k)
+        .scale(transform.k);
+
+      d3.select(svgRef.current)
+        .transition()
+        .duration(450)
+        .ease(d3.easeCubicOut)
+        .call(zoomBehaviorRef.current.transform, targetTransform);
+    }
+  };
 
   // Pre-calculate cyclic dependency links for quick lookup
   const cyclicLinks = useMemo(() => {
@@ -153,13 +193,91 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       return;
     }
 
+    const drawMinimap = () => {
+      const canvas = minimapCanvasRef.current;
+      if (!canvas || !svgRef.current) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      // Radar sweeps
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(canvasWidth / 2, canvasHeight / 2, 20, 0, 2 * Math.PI);
+      ctx.arc(canvasWidth / 2, canvasHeight / 2, 40, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach((n: any) => {
+        if (n.x < minX) minX = n.x;
+        if (n.x > maxX) maxX = n.x;
+        if (n.y < minY) minY = n.y;
+        if (n.y > maxY) maxY = n.y;
+      });
+
+      if (minX === Infinity) { minX = -100; maxX = 100; minY = -100; maxY = 100; }
+      
+      const padding = 50;
+      minX -= padding;
+      maxX += padding;
+      minY -= padding;
+      maxY += padding;
+
+      const boundsWidth = maxX - minX;
+      const boundsHeight = maxY - minY;
+
+      boundsRef.current = { minX, maxX, minY, maxY };
+
+      const toCanvasX = (x: number) => ((x - minX) / boundsWidth) * canvasWidth;
+      const toCanvasY = (y: number) => ((y - minY) / boundsHeight) * canvasHeight;
+
+      nodes.forEach((n: any) => {
+        const cx = toCanvasX(n.x);
+        const cy = toCanvasY(n.y);
+        const isActive = selectedNode === n.id || hoveredNode === n.id;
+        ctx.fillStyle = isActive ? 'var(--color-secondary)' : 'var(--color-primary)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, isActive ? 2.5 : 1.5, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      const transform = d3.zoomTransform(svgRef.current);
+      const vpLeft = (0 - transform.x) / transform.k;
+      const vpTop = (0 - transform.y) / transform.k;
+      const vpRight = (width - transform.x) / transform.k;
+      const vpBottom = (height - transform.y) / transform.k;
+
+      const rx = toCanvasX(vpLeft);
+      const ry = toCanvasY(vpTop);
+      const rw = toCanvasX(vpRight) - rx;
+      const rh = toCanvasY(vpBottom) - ry;
+
+      ctx.strokeStyle = 'var(--color-secondary)';
+      ctx.lineWidth = 1.2;
+      ctx.fillStyle = 'rgba(0, 242, 254, 0.05)';
+      ctx.beginPath();
+      ctx.rect(rx, ry, rw, rh);
+      ctx.fill();
+      ctx.stroke();
+    };
+
+    drawMinimapRef.current = drawMinimap;
+
     const mainGroup = svgElement.append('g').attr('class', 'main-container');
 
     const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 8])
       .on('zoom', (event) => {
         mainGroup.attr('transform', event.transform);
+        drawMinimap();
       });
+
+    zoomBehaviorRef.current = zoomBehavior;
 
     svgElement.call(zoomBehavior);
     svgElement.call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
@@ -324,6 +442,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
       node.attr('transform', (d) => `translate(${d.x}, ${d.y})`);
       if (viewMode === 'cluster' || viewMode === 'call') updateHulls();
+      drawMinimap();
     });
 
     (window as any).graphZoom = {
@@ -331,6 +450,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       zoomOut: () => svgElement.transition().duration(300).call(zoomBehavior.scaleBy, 0.7),
       reset: () => svgElement.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)),
     };
+
+    drawMinimap();
+
     return () => { simulation.stop(); };
   }, [graphData, viewMode, hierarchicalLevels]);
 
@@ -389,6 +511,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
       hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
     }
+
+    if (drawMinimapRef.current) {
+      drawMinimapRef.current();
+    }
   }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks]);
 
   return (
@@ -406,6 +532,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       </div>
 
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+
+      {/* Radar HUD Minimap */}
+      <div className="minimap-hud" onClick={(e) => e.stopPropagation()}>
+        <div className="minimap-header">
+          <span className="minimap-title">RADAR NAVIGATION HUD</span>
+          <div className="radar-status-dot"></div>
+        </div>
+        <canvas
+          ref={minimapCanvasRef}
+          width={158}
+          height={98}
+          className="minimap-canvas"
+          onClick={handleMinimapClick}
+        />
+      </div>
     </div>
   );
 };
