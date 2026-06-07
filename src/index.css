@@ -664,6 +664,65 @@ code, pre {
   }
 }
 
+/* --- Marching Ants Edge Flows --- */
+@keyframes flow-forward {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+@keyframes flow-backward {
+  to {
+    stroke-dashoffset: 40;
+  }
+}
+
+.link-element.flow-in {
+  stroke-dasharray: 8, 4;
+  animation: flow-forward 1.2s linear infinite;
+  stroke: var(--color-secondary) !important;
+  stroke-opacity: 0.95 !important;
+  stroke-width: 2.5px !important;
+}
+
+.link-element.flow-out {
+  stroke-dasharray: 8, 4;
+  animation: flow-backward 1.2s linear infinite;
+  stroke: var(--color-primary) !important;
+  stroke-opacity: 0.95 !important;
+  stroke-width: 2.5px !important;
+}
+
+.link-element.flow-cycle {
+  stroke-dasharray: 6, 4;
+  animation: flow-forward 1.5s linear infinite;
+  stroke: var(--color-alert) !important;
+  stroke-opacity: 0.9 !important;
+  stroke-width: 2.5px !important;
+}
+
+/* --- Hull Boundaries --- */
+.hull-boundary {
+  fill-opacity: 0.04;
+  stroke-width: 1.5px;
+  stroke-dasharray: 4, 4;
+  transition: fill-opacity 0.3s ease, stroke-opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.hull-boundary:hover {
+  fill-opacity: 0.08;
+}
+
+.hull-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--text-secondary);
+  pointer-events: none;
+  opacity: 0.6;
+  text-anchor: middle;
+}
+
 /* --- File Type Color Codes --- */
 .badge-js { background: rgba(247, 223, 30, 0.15); color: #f7df1e; border: 1px solid rgba(247, 223, 30, 0.3); }
 .badge-ts { background: rgba(49, 120, 198, 0.15); color: #3178c6; border: 1px solid rgba(49, 120, 198, 0.3); }

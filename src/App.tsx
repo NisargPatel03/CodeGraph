@@ -278,6 +278,7 @@ export default function App() {
                 selectedNode={selectedNodeId}
                 setSelectedNode={setSelectedNodeId}
                 viewMode={viewMode}
+                searchQuery={searchQuery}
               />
             </section>
 

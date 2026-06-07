@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
@@ -8,6 +8,7 @@ interface GraphCanvasProps {
   selectedNode: string | null;
   setSelectedNode: (id: string | null) => void;
   viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy';
+  searchQuery: string;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -15,26 +16,96 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   selectedNode,
   setSelectedNode,
   viewMode,
+  searchQuery,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
+  // Pre-calculate cyclic dependency links for quick lookup
+  const cyclicLinks = useMemo(() => {
+    const set = new Set<string>();
+    if (graphData.cycles) {
+      graphData.cycles.forEach((cycle) => {
+        for (let i = 0; i < cycle.length - 1; i++) {
+          set.add(`${cycle[i]}->${cycle[i + 1]}`);
+        }
+      });
+    }
+    return set;
+  }, [graphData.cycles]);
+
+  // Compute hierarchical levels for Component Tree (viewMode === 'hierarchy')
+  const hierarchicalLevels = useMemo(() => {
+    if (viewMode !== 'hierarchy') return new Map<string, number>();
+
+    const nodes = graphData.classNodes;
+    const links = graphData.classLinks;
+
+    const adj = new Map<string, string[]>();
+    const inDegree = new Map<string, number>();
+
+    nodes.forEach((n) => {
+      adj.set(n.id, []);
+      inDegree.set(n.id, 0);
+    });
+
+    links.forEach((l) => {
+      const source = typeof l.source === 'object' ? (l.source as any).id : l.source;
+      const target = typeof l.target === 'object' ? (l.target as any).id : l.target;
+
+      if (adj.has(source)) {
+        adj.get(source)!.push(target);
+      }
+      if (inDegree.has(target)) {
+        inDegree.set(target, inDegree.get(target)! + 1);
+      }
+    });
+
+    const levels = new Map<string, number>();
+    const queue: string[] = [];
+
+    // Roots are nodes with 0 in-degree
+    nodes.forEach((n) => {
+      if ((inDegree.get(n.id) || 0) === 0) {
+        queue.push(n.id);
+        levels.set(n.id, 0);
+      }
+    });
+
+    if (queue.length === 0 && nodes.length > 0) {
+      queue.push(nodes[0].id);
+      levels.set(nodes[0].id, 0);
+    }
+
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const currLevel = levels.get(curr) || 0;
+
+      const neighbors = adj.get(curr) || [];
+      neighbors.forEach((neighbor) => {
+        if (!levels.has(neighbor)) {
+          levels.set(neighbor, currLevel + 1);
+          queue.push(neighbor);
+        }
+      });
+    }
+
+    return levels;
+  }, [graphData.classNodes, graphData.classLinks, viewMode]);
 
   // Colors for languages / types
   const getColorForNode = (d: any) => {
     if (viewMode === 'call') {
-      // Color call nodes by call count (higher call count = hotter color)
-      if (d.callCount > 10) return '#f43f5e'; // Hot Rose
-      if (d.callCount > 4) return '#f59e0b'; // Amber
-      return '#00f2fe'; // Cyber Teal
+      if (d.callCount > 10) return '#f43f5e';
+      if (d.callCount > 4) return '#f59e0b';
+      return '#00f2fe';
     }
     
     if (viewMode === 'hierarchy') {
-      return d.type === 'component' ? '#10b981' : '#8b5cf6'; // Component: Green, Class: Purple
+      return d.type === 'component' ? '#10b981' : '#8b5cf6';
     }
 
-    // Default: Dependency/Cluster mode based on language
     const lang = d.language?.toLowerCase() || '';
     switch (lang) {
       case 'typescript': return '#3178c6';
@@ -52,15 +123,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
 
-    // Clear previous elements
     const svgElement = d3.select(svgRef.current);
     svgElement.selectAll('*').remove();
 
-    // Get current dimensions
     const width = containerRef.current.clientWidth || 800;
     const height = containerRef.current.clientHeight || 500;
 
-    // Define data based on viewMode
     let nodes: any[] = [];
     let links: any[] = [];
 
@@ -76,7 +144,6 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
 
     if (nodes.length === 0) {
-      // Draw empty warning
       const g = svgElement.append('g').attr('transform', `translate(${width / 2}, ${height / 2})`);
       g.append('text')
         .attr('text-anchor', 'middle')
@@ -86,10 +153,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       return;
     }
 
-    // Create main outer group for zoom & pan
     const mainGroup = svgElement.append('g').attr('class', 'main-container');
 
-    // Setup zoom behavior
     const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 8])
       .on('zoom', (event) => {
@@ -97,44 +162,63 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
 
     svgElement.call(zoomBehavior);
-
-    // Initial positioning: center of screen
     svgElement.call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
 
-    // Force simulation setup
     const simulation = d3.forceSimulation<any>(nodes)
       .force('link', d3.forceLink<any, any>(links).id((d) => d.id).distance(() => {
-        if (viewMode === 'cluster') return 50;
+        if (viewMode === 'cluster') return 65;
+        if (viewMode === 'hierarchy') return 70;
         return 100;
       }))
       .force('charge', d3.forceManyBody().strength(() => {
-        if (viewMode === 'cluster') return -80;
-        return -200;
+        if (viewMode === 'cluster') return -120;
+        if (viewMode === 'hierarchy') return -160;
+        return -220;
       }))
       .force('collision', d3.forceCollide<any>().radius((d) => {
-        const baseRad = viewMode === 'call' ? 12 : 15;
-        return baseRad + Math.sqrt(d.size || 0) * 0.05;
+        const baseRad = viewMode === 'call' ? 12 : (viewMode === 'hierarchy' ? 14 : 15);
+        return baseRad + Math.sqrt(d.size || 0) * 0.05 + 5;
       }))
       .force('center', d3.forceCenter(0, 0));
 
-    // In Cluster Map mode, add a force pulling nodes of the same folder together
+    if (viewMode === 'hierarchy') {
+      nodes.forEach((n) => {
+        n.depth = hierarchicalLevels.get(n.id) || 0;
+      });
+      simulation.force('y', d3.forceY((d: any) => (d.depth || 0) * 120 - 150).strength(1.2));
+      simulation.force('x', d3.forceX(0).strength(0.06));
+    }
+
     if (viewMode === 'cluster') {
-      const folderGroups = Array.from(new Set(nodes.map(n => n.folder)));
+      const folderGroups = Array.from(new Set(nodes.map((n) => n.folder)));
       const clusterCenters = new Map<string, { x: number; y: number }>();
-      
       folderGroups.forEach((folder, idx) => {
-        // Arrange cluster centers in a circle
         const angle = (idx / folderGroups.length) * 2 * Math.PI;
         const radius = Math.min(width, height) * 0.35;
-        clusterCenters.set(folder, {
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius,
-        });
+        clusterCenters.set(folder, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
       });
-
       simulation.force('folderGrouping', (alpha) => {
         nodes.forEach((node) => {
           const center = clusterCenters.get(node.folder);
+          if (center) {
+            node.vx += (center.x - node.x) * 0.08 * alpha;
+            node.vy += (center.y - node.y) * 0.08 * alpha;
+          }
+        });
+      });
+    }
+
+    if (viewMode === 'call') {
+      const fileGroups = Array.from(new Set(nodes.map((n) => n.file)));
+      const fileCenters = new Map<string, { x: number; y: number }>();
+      fileGroups.forEach((file, idx) => {
+        const angle = (idx / fileGroups.length) * 2 * Math.PI;
+        const radius = Math.min(width, height) * 0.35;
+        fileCenters.set(file, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+      });
+      simulation.force('fileGrouping', (alpha) => {
+        nodes.forEach((node) => {
+          const center = fileCenters.get(node.file);
           if (center) {
             node.vx += (center.x - node.x) * 0.06 * alpha;
             node.vy += (center.y - node.y) * 0.06 * alpha;
@@ -143,180 +227,172 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
     }
 
-    // Add arrow markers for directional links
     svgElement.append('defs').selectAll('marker')
-      .data(['arrow-normal', 'arrow-highlight'])
+      .data([
+        { id: 'arrow-normal', color: 'rgba(255, 255, 255, 0.15)' },
+        { id: 'arrow-highlight', color: 'var(--color-primary)' },
+        { id: 'arrow-highlight-incoming', color: 'var(--color-secondary)' },
+        { id: 'arrow-cycle', color: 'var(--color-alert)' }
+      ])
       .enter().append('marker')
-      .attr('id', d => d)
+      .attr('id', (d) => d.id)
       .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 22) // Place arrow near node boundary
+      .attr('refX', () => (viewMode === 'call' ? 16 : (viewMode === 'hierarchy' ? 18 : 22)))
       .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
+      .attr('markerWidth', 5.5)
+      .attr('markerHeight', 5.5)
       .attr('orient', 'auto')
       .append('path')
       .attr('d', 'M0,-5L10,0L0,5')
-      .attr('fill', d => d === 'arrow-highlight' ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.15)');
+      .attr('fill', (d) => d.color);
 
-    // 1. Draw Links (Edges)
-    const link = mainGroup.append('g')
-      .selectAll('line')
-      .data(links)
-      .enter().append('line')
-      .attr('class', 'link-element')
-      .attr('stroke', 'rgba(255, 255, 255, 0.08)')
-      .attr('stroke-width', 1.5)
-      .attr('marker-end', 'url(#arrow-normal)');
-
-    // 2. Draw Nodes
-    const node = mainGroup.append('g')
-      .selectAll('.node-element')
-      .data(nodes)
-      .enter().append('g')
-      .attr('class', 'node-element')
-      .on('click', (event, d) => {
-        event.stopPropagation();
-        setSelectedNode(d.id);
-      })
-      .on('mouseenter', (_, d) => {
-        setHoveredNode(d.id);
-      })
-      .on('mouseleave', () => {
-        setHoveredNode(null);
-      })
-      .call(d3.drag<any, any>()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended)
-      );
-
-    // Draw circles representing the nodes
-    node.append('circle')
-      .attr('r', (d) => {
-        if (viewMode === 'call') {
-          return 8 + Math.min(d.callCount * 1.5, 20); // Scale by hot path count
-        }
-        const baseSize = 8;
-        return baseSize + Math.min(Math.sqrt(d.size || 0) * 0.04, 30);
-      })
-      .attr('fill', getColorForNode)
-      .attr('stroke', 'rgba(0,0,0,0.5)')
-      .attr('stroke-width', 1.5);
-
-    // Draw Labels text
-    node.append('text')
-      .attr('class', 'node-label')
-      .attr('dx', 12)
-      .attr('dy', 4)
-      .text((d) => d.name);
-
-    // D3 Drag handlers
-    function dragstarted(event: any, d: any) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      d.fx = d.x;
-      d.fy = d.y;
-    }
-
-    function dragged(event: any, d: any) {
-      d.fx = event.x;
-      d.fy = event.y;
-    }
-
-    function dragended(event: any, d: any) {
-      if (!event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
-    }
-
-    // Tick update logic
-    simulation.on('tick', () => {
-      link
-        .attr('x1', (d) => d.source.x)
-        .attr('y1', (d) => d.source.y)
-        .attr('x2', (d) => d.target.x)
-        .attr('y2', (d) => d.target.y);
-
-      node.attr('transform', (d) => `translate(${d.x}, ${d.y})`);
+    const hullGroup = mainGroup.append('g').attr('class', 'hulls-container');
+    const hullColors = ['#8b5cf6', '#00f2fe', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', '#14b8a6', '#f43f5e', '#a855f7', '#6366f1'];
+    const hullNodesGroup = new Map<string, any[]>();
+    nodes.forEach((n) => {
+      const key = viewMode === 'cluster' ? n.folder : (viewMode === 'call' ? n.file : null);
+      if (!key) return;
+      if (!hullNodesGroup.has(key)) hullNodesGroup.set(key, []);
+      hullNodesGroup.get(key)!.push(n);
     });
 
-    // Save functions to window for zoom controls
+    const hullDataList = Array.from(hullNodesGroup.entries()).filter(([_, members]) => members.length > 0);
+    const hulls = hullGroup.selectAll('.hull-boundary')
+      .data(hullDataList)
+      .enter()
+      .append('path')
+      .attr('class', 'hull-boundary')
+      .attr('fill', (_, i) => hullColors[i % hullColors.length])
+      .attr('stroke', (_, i) => hullColors[i % hullColors.length])
+      .attr('stroke-opacity', 0.25)
+      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 1.0 : 0);
+
+    const hullLabels = hullGroup.selectAll('.hull-label')
+      .data(hullDataList)
+      .enter()
+      .append('text')
+      .attr('class', 'hull-label')
+      .text(([key]) => key.split('/').pop() || key)
+      .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 0.6 : 0);
+
+    const updateHulls = () => {
+      hulls.each(function ([_, members]: any) {
+        const points: [number, number][] = [];
+        members.forEach((node: any) => {
+          const r = viewMode === 'call' ? 18 : 28;
+          for (let a = 0; a < 2 * Math.PI; a += Math.PI / 4) {
+            points.push([node.x + r * Math.cos(a), node.y + r * Math.sin(a)]);
+          }
+        });
+        const hull = d3.polygonHull(points);
+        if (!hull) { d3.select(this).attr('d', null); return; }
+        const lineGenerator = d3.line().curve(d3.curveCatmullRomClosed);
+        d3.select(this).attr('d', lineGenerator(hull));
+      });
+      hullLabels
+        .attr('x', ([_, members]: any) => d3.mean(members, (m: any) => m.x) || 0)
+        .attr('y', ([_, members]: any) => {
+          const minY = d3.min(members, (m: any) => m.y) as any;
+          const yVal = minY !== undefined ? minY : 0;
+          const pad = viewMode === 'call' ? 22 : 36;
+          return yVal - pad;
+        });
+    };
+
+    const link = mainGroup.append('g').selectAll('line').data(links).enter().append('line')
+      .attr('class', 'link-element').attr('stroke', 'rgba(255, 255, 255, 0.08)').attr('stroke-width', 1.5).attr('marker-end', 'url(#arrow-normal)');
+
+    const node = mainGroup.append('g').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
+      .on('click', (event, d) => { event.stopPropagation(); setSelectedNode(d.id); })
+      .on('mouseenter', (_, d) => setHoveredNode(d.id))
+      .on('mouseleave', () => setHoveredNode(null))
+      .call(d3.drag<any, any>().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+    node.append('circle')
+      .attr('r', (d) => {
+        if (viewMode === 'call') return 8 + Math.min(d.callCount * 1.5, 20);
+        const baseSize = viewMode === 'hierarchy' ? 9 : 8;
+        return baseSize + Math.min(Math.sqrt(d.size || 0) * 0.04, 30);
+      })
+      .attr('fill', getColorForNode).attr('stroke', 'rgba(0,0,0,0.5)').attr('stroke-width', 1.5);
+
+    node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
+
+    simulation.on('tick', () => {
+      link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      node.attr('transform', (d) => `translate(${d.x}, ${d.y})`);
+      if (viewMode === 'cluster' || viewMode === 'call') updateHulls();
+    });
+
     (window as any).graphZoom = {
       zoomIn: () => svgElement.transition().duration(300).call(zoomBehavior.scaleBy, 1.3),
       zoomOut: () => svgElement.transition().duration(300).call(zoomBehavior.scaleBy, 0.7),
       reset: () => svgElement.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)),
     };
+    return () => { simulation.stop(); };
+  }, [graphData, viewMode, hierarchicalLevels]);
 
-    return () => {
-      simulation.stop();
-    };
-  }, [graphData, viewMode]);
-
-  // Effect to highlight paths (run on hover / selection changes)
   useEffect(() => {
     if (!svgRef.current) return;
     const activeId = hoveredNode || selectedNode;
-
+    const query = searchQuery ? searchQuery.toLowerCase().trim() : '';
     const svgElement = d3.select(svgRef.current);
     const nodesG = svgElement.selectAll('.node-element');
     const linksLine = svgElement.selectAll('.link-element');
+    const hullsBoundary = svgElement.selectAll('.hull-boundary');
+
+    const getLinkId = (l: any) => ({
+      sId: typeof l.source === 'object' ? l.source.id : l.source,
+      tId: typeof l.target === 'object' ? l.target.id : l.target
+    });
 
     if (activeId) {
-      // Find all neighbors
-      const neighbors = new Set<string>();
-      neighbors.add(activeId);
-
-      // Inspect connections
-      let filteredLinks: any[] = [];
-      if (viewMode === 'dependency' || viewMode === 'cluster') {
-        filteredLinks = graphData.links;
-      } else if (viewMode === 'call') {
-        filteredLinks = graphData.callLinks;
-      } else if (viewMode === 'hierarchy') {
-        filteredLinks = graphData.classLinks;
-      }
-
+      const neighbors = new Set<string>([activeId]);
+      let filteredLinks: any[] = viewMode === 'dependency' || viewMode === 'cluster' ? graphData.links : (viewMode === 'call' ? graphData.callLinks : graphData.classLinks);
       filteredLinks.forEach((link: any) => {
-        const sId = typeof link.source === 'object' ? link.source.id : link.source;
-        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+        const { sId, tId } = getLinkId(link);
         if (sId === activeId) neighbors.add(tId);
         if (tId === activeId) neighbors.add(sId);
       });
-
-      // Update node opacity
       nodesG.style('opacity', (d: any) => neighbors.has(d.id) ? 1.0 : 0.15);
-      nodesG.select('text').style('fill', (d: any) => d.id === activeId ? '#fff' : 'var(--text-secondary)');
-      
-      // Update link styles
-      linksLine
-        .style('stroke-opacity', (l: any) => {
-          const sId = typeof l.source === 'object' ? l.source.id : l.source;
-          const tId = typeof l.target === 'object' ? l.target.id : l.target;
-          return (sId === activeId || tId === activeId) ? 0.95 : 0.05;
-        })
-        .style('stroke', (l: any) => {
-          const sId = typeof l.source === 'object' ? l.source.id : l.source;
-          const tId = typeof l.target === 'object' ? l.target.id : l.target;
-          return (sId === activeId || tId === activeId) ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)';
-        })
-        .attr('marker-end', (l: any) => {
-          const sId = typeof l.source === 'object' ? l.source.id : l.source;
-          const tId = typeof l.target === 'object' ? l.target.id : l.target;
-          return (sId === activeId || tId === activeId) ? 'url(#arrow-highlight)' : 'url(#arrow-normal)';
-        });
+      nodesG.select('text').style('fill', (d: any) => d.id === activeId ? '#fff' : 'var(--text-secondary)').style('font-weight', (d: any) => d.id === activeId ? '700' : '500');
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const line = d3.select(this);
+        const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
+        if (sId === activeId) line.attr('class', 'link-element flow-out').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight)');
+        else if (tId === activeId) line.attr('class', 'link-element flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
+        else line.attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+      });
+      hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+    } else if (query) {
+      const matches = new Set<string>();
+      nodesG.each((d: any) => { if ((d.name && d.name.toLowerCase().includes(query)) || (d.id && d.id.toLowerCase().includes(query))) matches.add(d.id); });
+      nodesG.style('opacity', (d: any) => matches.has(d.id) ? 1.0 : 0.15);
+      nodesG.select('text').style('fill', (d: any) => matches.has(d.id) ? '#fff' : 'var(--text-secondary)').style('font-weight', (d: any) => matches.has(d.id) ? '600' : '500');
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
+        const isMatch = matches.has(sId) || matches.has(tId);
+        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isMatch ? 0.7 : 0.03).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+      });
+      hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
     } else {
-      // Clear highlights
       nodesG.style('opacity', 1.0);
-      nodesG.select('text').style('fill', 'var(--text-secondary)');
-      linksLine
-        .style('stroke-opacity', 0.2)
-        .style('stroke', 'rgba(255, 255, 255, 0.08)')
-        .attr('marker-end', 'url(#arrow-normal)');
+      nodesG.select('text').style('fill', 'var(--text-secondary)').style('font-weight', '500');
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
+        d3.select(this).attr('class', isCyclic ? 'link-element flow-cycle' : 'link-element').style('stroke-opacity', isCyclic ? 0.6 : 0.2).style('stroke', isCyclic ? 'var(--color-alert)' : 'rgba(255, 255, 255, 0.08)').attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+      });
+      hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
     }
-  }, [hoveredNode, selectedNode, graphData, viewMode]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks]);
 
   return (
     <div ref={containerRef} className="graph-viewport" onClick={() => setSelectedNode(null)}>
-      {/* Zoom controls */}
       <div className="graph-controls">
         <button className="control-btn" title="Zoom In" onClick={(e) => { e.stopPropagation(); (window as any).graphZoom?.zoomIn(); }}>
           <ZoomIn size={16} />
