@@ -137,26 +137,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   // Colors for languages / types
   const getColorForNode = (d: any) => {
     if (viewMode === 'call') {
-      if (d.callCount > 10) return '#f43f5e';
-      if (d.callCount > 4) return '#f59e0b';
-      return '#00f2fe';
+      if (d.callCount > 10) return 'var(--color-alert)';
+      if (d.callCount > 4) return 'var(--color-warning)';
+      return 'var(--color-secondary)';
     }
     
     if (viewMode === 'hierarchy') {
-      return d.type === 'component' ? '#10b981' : '#8b5cf6';
+      return d.type === 'component' ? 'var(--color-accent)' : 'var(--color-primary)';
     }
 
     const lang = d.language?.toLowerCase() || '';
     switch (lang) {
-      case 'typescript': return '#3178c6';
-      case 'javascript': return '#f7df1e';
-      case 'python': return '#3572A5';
-      case 'go': return '#00ADD8';
-      case 'rust': return '#dea584';
-      case 'css': return '#563d7c';
-      case 'html': return '#e34c26';
-      case 'json': return '#8b5cf6';
-      default: return '#a78bfa';
+      case 'typescript': return 'var(--color-primary)';
+      case 'javascript': return 'var(--color-secondary)';
+      case 'python': return 'var(--color-primary-glow)';
+      case 'go': return 'var(--color-secondary-glow)';
+      case 'rust': return 'var(--color-alert)';
+      case 'css': return 'var(--text-secondary)';
+      case 'html': return 'var(--color-warning)';
+      case 'json': return 'var(--text-muted)';
+      default: return 'var(--color-primary)';
     }
   };
 
@@ -418,7 +418,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     };
 
     const link = mainGroup.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('class', 'link-element').attr('stroke', 'rgba(255, 255, 255, 0.08)').attr('stroke-width', 1.5).attr('marker-end', 'url(#arrow-normal)');
+      .attr('class', 'link-element').attr('stroke', 'var(--link-stroke)').attr('stroke-width', 1.5).attr('marker-end', 'url(#arrow-normal)');
 
     const node = mainGroup.append('g').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
       .on('click', (event, d) => { event.stopPropagation(); setSelectedNode(d.id); })

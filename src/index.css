@@ -6,6 +6,7 @@
   --font-mono: 'Fira Code', monospace;
   
   --bg-main: #060913;
+  --bg-glow: #0c122b;
   --bg-grid: rgba(99, 102, 241, 0.03);
   --panel-bg: rgba(10, 15, 30, 0.75);
   --panel-border: rgba(255, 255, 255, 0.06);
@@ -18,6 +19,7 @@
   --color-accent: #10b981; /* Emerald */
   --color-alert: #f43f5e; /* Rose */
   --color-warning: #f59e0b; /* Amber */
+  --link-stroke: rgba(255, 255, 255, 0.08);
   
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
@@ -43,7 +45,7 @@ body {
   background-image: 
     linear-gradient(rgba(255, 255, 255, 0.003) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.003) 1px, transparent 1px),
-    radial-gradient(circle at 50% 50%, #0c122b 0%, var(--bg-main) 80%);
+    radial-gradient(circle at 50% 50%, var(--bg-glow) 0%, var(--bg-main) 80%);
   background-size: 24px 24px, 24px 24px, 100% 100%;
   color: var(--text-primary);
   overflow: hidden;
@@ -95,8 +97,8 @@ code, pre {
 }
 
 .glass-panel-glow {
-  border-color: rgba(139, 92, 246, 0.2);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.08), 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-color: var(--panel-border-glow);
+  box-shadow: 0 0 20px var(--panel-border-glow), 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 /* --- App Shell & Layouts --- */
@@ -137,12 +139,12 @@ code, pre {
 .logo-badge {
   font-size: 0.75rem;
   font-family: var(--font-mono);
-  background: rgba(139, 92, 246, 0.15);
+  background: var(--color-primary-glow);
   color: var(--color-primary);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  border: 1px solid var(--color-primary);
   padding: 2px 8px;
   border-radius: 20px;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 0 10px var(--color-primary-glow);
 }
 
 .header-actions {
@@ -209,11 +211,11 @@ code, pre {
 .cyber-input:focus {
   outline: none;
   border-color: var(--color-secondary);
-  box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+  box-shadow: 0 0 12px var(--color-secondary-glow);
 }
 
 .cyber-button {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   color: #fff;
   border: none;
   padding: 14px 24px;
@@ -252,7 +254,7 @@ code, pre {
 }
 
 .cyber-button.secondary.active {
-  background: rgba(0, 242, 254, 0.12);
+  background: var(--color-secondary-glow);
   border-color: var(--color-secondary);
   color: var(--color-secondary);
 }
@@ -545,7 +547,7 @@ code, pre {
 .inspector-tab.active {
   color: var(--color-primary);
   border-bottom: 2px solid var(--color-primary);
-  background: rgba(139, 92, 246, 0.03);
+  background: var(--color-primary-glow);
 }
 
 .inspector-content {
@@ -583,8 +585,8 @@ code, pre {
 }
 
 .chat-message.user {
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: var(--color-primary-glow);
+  border: 1px solid var(--color-primary);
   align-self: flex-end;
   color: #fff;
 }
@@ -766,45 +768,178 @@ code, pre {
 }
 
 /* --- Theme Variable Definitions --- */
-[data-theme="bioluminescence"] {
-  --bg-main: #020b06;
-  --bg-grid: rgba(16, 185, 129, 0.02);
-  --panel-bg: rgba(3, 16, 9, 0.82);
-  --panel-border: rgba(16, 185, 129, 0.12);
-  --panel-border-glow: rgba(16, 185, 129, 0.3);
-  --color-primary: #10b981; /* Emerald Green */
-  --color-primary-glow: rgba(16, 185, 129, 0.5);
+[data-theme="cyberpunk"] {
+  --bg-main: #060913;
+  --bg-glow: #0c122b;
+  --bg-grid: rgba(99, 102, 241, 0.03);
+  --panel-bg: rgba(10, 15, 30, 0.75);
+  --panel-border: rgba(255, 255, 255, 0.06);
+  --panel-border-glow: rgba(139, 92, 246, 0.2);
+  --color-primary: #8b5cf6; /* Violet */
+  --color-primary-glow: rgba(139, 92, 246, 0.5);
   --color-secondary: #00f2fe; /* Cyber Teal */
   --color-secondary-glow: rgba(0, 242, 254, 0.5);
+  --link-stroke: rgba(255, 255, 255, 0.08);
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
 }
 
-[data-theme="inferno"] {
-  --bg-main: #0c0303;
-  --bg-grid: rgba(244, 63, 94, 0.02);
-  --panel-bg: rgba(18, 5, 5, 0.85);
-  --panel-border: rgba(244, 63, 94, 0.12);
-  --panel-border-glow: rgba(244, 63, 94, 0.3);
-  --color-primary: #f43f5e; /* Fire Rose */
-  --color-primary-glow: rgba(244, 63, 94, 0.5);
-  --color-secondary: #f59e0b; /* Amber */
-  --color-secondary-glow: rgba(245, 158, 11, 0.5);
+[data-theme="midnight-green"] {
+  --bg-main: #060D0D;
+  --bg-glow: #021c12;
+  --bg-grid: rgba(16, 185, 129, 0.03);
+  --panel-bg: rgba(5, 15, 15, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --panel-border-glow: rgba(16, 185, 129, 0.2);
+  --color-primary: #10B981; /* Emerald Green */
+  --color-primary-glow: rgba(16, 185, 129, 0.5);
+  --color-secondary: #34D399; /* Mint */
+  --color-secondary-glow: rgba(52, 211, 153, 0.5);
+  --link-stroke: rgba(255, 255, 255, 0.08);
+  --text-primary: #ECFDF5;
+  --text-secondary: #a7f3d0;
+  --text-muted: #34d399;
 }
 
-[data-theme="midnight-slate"] {
-  --bg-main: #070b16;
-  --bg-grid: rgba(59, 130, 246, 0.02);
-  --panel-bg: rgba(10, 16, 32, 0.85);
-  --panel-border: rgba(59, 130, 246, 0.12);
-  --panel-border-glow: rgba(59, 130, 246, 0.3);
-  --color-primary: #3b82f6; /* Slate Blue */
-  --color-primary-glow: rgba(59, 130, 246, 0.5);
-  --color-secondary: #60a5fa; /* Ice Blue */
-  --color-secondary-glow: rgba(96, 165, 250, 0.5);
+[data-theme="solar-amber"] {
+  --bg-main: #0C0900;
+  --bg-glow: #241600;
+  --bg-grid: rgba(245, 158, 11, 0.03);
+  --panel-bg: rgba(15, 12, 5, 0.82);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --panel-border-glow: rgba(245, 158, 11, 0.25);
+  --color-primary: #F59E0B; /* Amber */
+  --color-primary-glow: rgba(245, 158, 11, 0.5);
+  --color-secondary: #FCD34D; /* Yellow */
+  --color-secondary-glow: rgba(252, 211, 77, 0.5);
+  --link-stroke: rgba(255, 255, 255, 0.08);
+  --text-primary: #FFFBEB;
+  --text-secondary: #fef3c7;
+  --text-muted: #d97706;
 }
 
-/* --- Smooth Theme Transition Helper --- */
-body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-panel, .cyber-input, .cyber-button, .tab-btn {
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+[data-theme="arctic-light"] {
+  --bg-main: #F8FAFC;
+  --bg-glow: #e2e8f0;
+  --bg-grid: rgba(99, 102, 241, 0.05);
+  --panel-bg: rgba(255, 255, 255, 0.88);
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --panel-border-glow: rgba(99, 102, 241, 0.12);
+  --color-primary: #6366F1; /* Indigo */
+  --color-primary-glow: rgba(99, 102, 241, 0.3);
+  --color-secondary: #0EA5E9; /* Sky Blue */
+  --color-secondary-glow: rgba(14, 165, 233, 0.3);
+  --link-stroke: rgba(15, 23, 42, 0.08);
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+}
+
+[data-theme="rose-gold"] {
+  --bg-main: #0D080C;
+  --bg-glow: #24081c;
+  --bg-grid: rgba(236, 72, 153, 0.03);
+  --panel-bg: rgba(18, 10, 16, 0.8);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --panel-border-glow: rgba(236, 72, 153, 0.25);
+  --color-primary: #EC4899; /* Pink */
+  --color-primary-glow: rgba(236, 72, 153, 0.5);
+  --color-secondary: #A855F7; /* Purple */
+  --color-secondary-glow: rgba(168, 85, 247, 0.5);
+  --link-stroke: rgba(255, 255, 255, 0.08);
+  --text-primary: #FDF2F8;
+  --text-secondary: #fbcfe8;
+  --text-muted: #db2777;
+}
+
+[data-theme="synthwave"] {
+  --bg-main: #0D0221;
+  --bg-glow: #220336;
+  --bg-grid: rgba(255, 0, 255, 0.03);
+  --panel-bg: rgba(21, 6, 45, 0.8);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --panel-border-glow: rgba(255, 0, 255, 0.3);
+  --color-primary: #FF00FF; /* Neon Magenta */
+  --color-primary-glow: rgba(255, 0, 255, 0.5);
+  --color-secondary: #00FFFF; /* Neon Cyan */
+  --color-secondary-glow: rgba(0, 242, 254, 0.5);
+  --link-stroke: rgba(255, 255, 255, 0.08);
+  --text-primary: #F0E6FF;
+  --text-secondary: #e0ccff;
+  --text-muted: #a64dff;
+}
+
+/* --- Theme Specific Overrides for Light Mode --- */
+[data-theme="arctic-light"] body {
+  background-image: 
+    linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, var(--bg-glow) 0%, var(--bg-main) 100%);
+}
+
+[data-theme="arctic-light"] .markdown-body pre {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="arctic-light"] .markdown-body h1,
+[data-theme="arctic-light"] .markdown-body h2,
+[data-theme="arctic-light"] .markdown-body h3 {
+  color: #0f172a;
+}
+
+[data-theme="arctic-light"] .file-node {
+  color: #334155;
+}
+
+[data-theme="arctic-light"] .file-node:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+[data-theme="arctic-light"] .file-node.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+/* --- 600ms Smooth Theme Crossfade Transition --- */
+body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-panel, .cyber-input, .cyber-button, .tab-btn, .glass-panel, .glass-panel-glow {
+  transition: background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Crossfade node circles, node texts, edges and hull boundaries */
+.node-element circle, .node-element text, .link-element, .hull-boundary, .hull-label {
+  transition: fill 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              stroke 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+              stroke-opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Theme Change Ripple Wave --- */
+.theme-ripple-wave {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  animation: theme-ripple-expand 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes theme-ripple-expand {
+  from {
+    width: 0;
+    height: 0;
+    opacity: 0.85;
+  }
+  to {
+    width: 300vmax;
+    height: 300vmax;
+    opacity: 0;
+  }
 }
 
 /* --- Theme Selector Bubbles --- */
@@ -839,24 +974,39 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   box-shadow: 0 0 10px currentColor;
 }
 
+/* Make bubbles white border on dark background for Arctic Light theme selector itself */
+[data-theme="arctic-light"] .theme-bubble.active {
+  border-color: #0f172a;
+}
+
 .theme-bubble[data-theme-id="cyberpunk"] {
   background-color: #8b5cf6;
   color: rgba(139, 92, 246, 0.7);
 }
 
-.theme-bubble[data-theme-id="bioluminescence"] {
-  background-color: #10b981;
+.theme-bubble[data-theme-id="midnight-green"] {
+  background-color: #10B981;
   color: rgba(16, 185, 129, 0.7);
 }
 
-.theme-bubble[data-theme-id="inferno"] {
-  background-color: #f43f5e;
-  color: rgba(244, 63, 94, 0.7);
+.theme-bubble[data-theme-id="solar-amber"] {
+  background-color: #F59E0B;
+  color: rgba(245, 158, 11, 0.7);
 }
 
-.theme-bubble[data-theme-id="midnight-slate"] {
-  background-color: #3b82f6;
-  color: rgba(59, 130, 246, 0.7);
+.theme-bubble[data-theme-id="arctic-light"] {
+  background-color: #6366F1;
+  color: rgba(99, 102, 241, 0.7);
+}
+
+.theme-bubble[data-theme-id="rose-gold"] {
+  background-color: #EC4899;
+  color: rgba(236, 72, 153, 0.7);
+}
+
+.theme-bubble[data-theme-id="synthwave"] {
+  background-color: #FF00FF;
+  color: rgba(255, 0, 255, 0.7);
 }
 
 /* --- Radar Minimap HUD --- */

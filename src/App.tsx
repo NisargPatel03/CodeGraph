@@ -18,7 +18,12 @@ interface FileTreeItem {
 }
 
 export default function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('app_theme') || 'cyberpunk');
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('app_theme');
+    const validThemes = ['cyberpunk', 'midnight-green', 'solar-amber', 'arctic-light', 'rose-gold', 'synthwave'];
+    if (saved && validThemes.includes(saved)) return saved;
+    return 'cyberpunk';
+  });
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_key') || '');
   const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
@@ -33,6 +38,32 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('app_theme', theme);
   }, [theme]);
+
+  const handleThemeClick = (e: React.MouseEvent, themeId: string) => {
+    const clickX = e.clientX;
+    const clickY = e.clientY;
+
+    const ripple = document.createElement('div');
+    ripple.className = 'theme-ripple-wave';
+    ripple.style.left = `${clickX}px`;
+    ripple.style.top = `${clickY}px`;
+
+    let color = '#8b5cf6';
+    if (themeId === 'midnight-green') color = '#10B981';
+    else if (themeId === 'solar-amber') color = '#F59E0B';
+    else if (themeId === 'arctic-light') color = '#6366F1';
+    else if (themeId === 'rose-gold') color = '#EC4899';
+    else if (themeId === 'synthwave') color = '#FF00FF';
+
+    ripple.style.backgroundColor = color;
+    document.body.appendChild(ripple);
+
+    setTimeout(() => {
+      ripple.remove();
+    }, 600);
+
+    setTheme(themeId);
+  };
 
   // Save Gemini Key to local storage
   const handleSetApiKey = (key: string) => {
@@ -205,16 +236,18 @@ export default function App() {
           <div className="theme-selector-group">
             {[
               { id: 'cyberpunk', name: 'Cyber Neon' },
-              { id: 'bioluminescence', name: 'Bioluminescent' },
-              { id: 'inferno', name: 'Inferno Fire' },
-              { id: 'midnight-slate', name: 'Midnight Slate' },
+              { id: 'midnight-green', name: 'Midnight Green (Emerald)' },
+              { id: 'solar-amber', name: 'Solar Amber (Yellow)' },
+              { id: 'arctic-light', name: 'Arctic Light (Clean Mode)' },
+              { id: 'rose-gold', name: 'Rose Gold (Bold Dark)' },
+              { id: 'synthwave', name: 'Synthwave / Retro' },
             ].map((t) => (
               <div
                 key={t.id}
                 className={`theme-bubble ${theme === t.id ? 'active' : ''}`}
                 data-theme-id={t.id}
                 title={t.name}
-                onClick={() => setTheme(t.id)}
+                onClick={(e) => handleThemeClick(e, t.id)}
               />
             ))}
           </div>
