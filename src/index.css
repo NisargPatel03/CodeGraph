@@ -929,6 +929,11 @@ code, pre {
   background: rgba(15, 23, 42, 0.08);
 }
 
+[data-theme="arctic-light"] .hull-watermark {
+  fill: var(--text-primary) !important;
+  fill-opacity: 0.05 !important;
+}
+
 /* --- 600ms Smooth Theme Crossfade Transition --- */
 body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-panel, .cyber-input, .cyber-button, .tab-btn, .glass-panel, .glass-panel-glow {
   transition: background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
@@ -1524,12 +1529,12 @@ input:checked + .slider:before {
   position: absolute;
   z-index: 1000;
   pointer-events: none;
-  background: rgba(10, 10, 15, 0.75);
+  background: var(--panel-bg);
   backdrop-filter: blur(8px);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   padding: 8px 12px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
   font-size: 0.7rem;
   color: var(--text-secondary);
   pointer-events: none;

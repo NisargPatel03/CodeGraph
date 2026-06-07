@@ -41,9 +41,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     folder: string;
     fileCount: number;
     connectionsCount: number;
-    x: number;
-    y: number;
   } | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
@@ -758,7 +757,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .text(([key]) => key.split('/').pop() || key)
       .style('display', viewMode === 'cluster' ? 'block' : 'none');
 
-    const handleHullMouseEnter = (event: any, [folderPath, members]: any) => {
+    const handleHullMouseEnter = (_: any, [folderPath, members]: any) => {
       if (viewMode !== 'cluster') return;
       const memberIds = new Set(members.map((m: any) => m.id));
       let connectionsCount = 0;
@@ -775,14 +774,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         folder: folderPath,
         fileCount: members.length,
         connectionsCount,
-        x: event.clientX,
-        y: event.clientY,
       });
-    };
-
-    const handleHullMouseMove = (event: any) => {
-      if (viewMode !== 'cluster') return;
-      setHoveredCluster(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
     };
 
     const handleHullMouseLeave = () => {
@@ -813,7 +805,6 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 1.0 : 0)
       .on('click', handleHullClick)
       .on('mouseenter', handleHullMouseEnter)
-      .on('mousemove', handleHullMouseMove)
       .on('mouseleave', handleHullMouseLeave);
 
     const hullLabels = hullGroup.selectAll('.hull-label')
@@ -825,7 +816,6 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .style('opacity', (viewMode === 'cluster' || viewMode === 'call') ? 0.6 : 0)
       .on('click', handleHullClick)
       .on('mouseenter', handleHullMouseEnter)
-      .on('mousemove', handleHullMouseMove)
       .on('mouseleave', handleHullMouseLeave);
 
     const updateHulls = () => {
@@ -869,7 +859,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .data(links)
       .enter()
       .append('line')
-      .attr('class', (d: any) => {
+      .attr('class', () => {
         let cls = 'link-element';
         if (viewMode === 'dependency') cls += ' flowing';
         return cls;
@@ -915,8 +905,32 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           );
         }
       })
-      .on('mouseenter', (_, d) => setHoveredNode(d.id))
-      .on('mouseleave', () => setHoveredNode(null))
+      .on('mouseenter', (_, d) => {
+        setHoveredNode(d.id);
+        if (viewMode === 'cluster' && d.folder) {
+          const folderMembers = nodes.filter((n: any) => n.folder === d.folder);
+          const memberIds = new Set(folderMembers.map((m: any) => m.id));
+          let connectionsCount = 0;
+          links.forEach((l: any) => {
+            const sId = typeof l.source === 'object' ? l.source.id : l.source;
+            const tId = typeof l.target === 'object' ? l.target.id : l.target;
+            const sIn = memberIds.has(sId);
+            const tIn = memberIds.has(tId);
+            if ((sIn && !tIn) || (!sIn && tIn)) {
+              connectionsCount++;
+            }
+          });
+          setHoveredCluster({
+            folder: d.folder,
+            fileCount: folderMembers.length,
+            connectionsCount,
+          });
+        }
+      })
+      .on('mouseleave', () => {
+        setHoveredNode(null);
+        setHoveredCluster(null);
+      })
       .call(d3.drag<any, any>().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
         .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
         .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
@@ -987,6 +1001,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const nodesG = svgElement.selectAll('.node-element');
     const linksLine = svgElement.selectAll('.link-element');
     const hullsBoundary = svgElement.selectAll('.hull-boundary');
+    const hullWatermarks = svgElement.selectAll('.hull-watermark');
 
     const getLinkId = (l: any) => ({
       sId: typeof l.source === 'object' ? l.source.id : l.source,
@@ -1049,6 +1064,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       pipelines.style('stroke-opacity', 0.01);
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+      hullWatermarks.style('opacity', 0.01);
     } else if (shortestPath) {
       const pathSet = new Set(shortestPath);
       nodesG.style('opacity', (d: any) => pathSet.has(d.id) ? 1.0 : 0.08);
@@ -1066,6 +1082,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
       pipelines.style('stroke-opacity', 0.01);
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+      hullWatermarks.style('opacity', 0.01);
     } else if (activeId) {
       const neighbors = new Set<string>([activeId]);
       const activeRenderedLinks: any[] = [];
@@ -1108,6 +1125,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         }
       });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+      
+      let activeFolder: string | null = null;
+      nodesG.each((d: any) => {
+        if (d.id === activeId) {
+          activeFolder = d.folder;
+        }
+      });
+      hullWatermarks.style('opacity', (d: any) => {
+        if (activeFolder && d[0] === activeFolder) {
+          return 1.0;
+        }
+        return 0.05;
+      });
     } else if (query) {
       const matches = new Set<string>();
       nodesG.each((d: any) => { if ((d.name && d.name.toLowerCase().includes(query)) || (d.id && d.id.toLowerCase().includes(query))) matches.add(d.id); });
@@ -1132,6 +1162,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         d3.select(this).style('stroke-opacity', isMatch ? 0.6 : 0.01);
       });
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
+      hullWatermarks.style('opacity', 0.05);
     } else {
       nodesG.style('opacity', 1.0);
       nodesG.select('text').style('fill', 'var(--text-secondary)').style('font-weight', '500');
@@ -1152,6 +1183,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         line.style('stroke-opacity', (d: any) => d.isAggregated ? 0.18 : 0.12);
       });
       hullsBoundary.style('fill-opacity', 0.04).style('stroke-opacity', 0.4);
+      hullWatermarks.style('opacity', 1.0);
     }
 
     const transform = d3.zoomTransform(svgRef.current);
@@ -1163,7 +1195,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps]);
 
   return (
-    <div ref={containerRef} className="graph-viewport" onClick={() => setSelectedNode(null)}>
+    <div 
+      ref={containerRef} 
+      className="graph-viewport" 
+      onClick={() => setSelectedNode(null)}
+      onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY })}
+    >
       {/* Floating Control Toolbox */}
       <div className="graph-control-toolbox" onClick={(e) => e.stopPropagation()}>
         <div className="toolbox-header" onClick={() => setIsToolboxCollapsed(!isToolboxCollapsed)}>
@@ -1453,8 +1490,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <div 
           className="cluster-hover-card"
           style={{ 
-            left: `${hoveredCluster.x}px`, 
-            top: `${hoveredCluster.y}px`,
+            left: `${mousePos.x}px`, 
+            top: `${mousePos.y}px`,
             position: 'fixed',
             transform: 'translate(15px, 15px)',
             opacity: 1
