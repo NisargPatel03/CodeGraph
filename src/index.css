@@ -1764,3 +1764,31 @@ input:checked + .slider:before {
   color: #4f46e5;
   border-color: rgba(15, 23, 42, 0.03);
 }
+
+/* --- Keyframe Animations --- */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40%           { transform: scale(1.0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Mermaid Diagram Overrides --- */
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Arctic Light Mermaid overrides */
+[data-theme="arctic-light"] .mermaid svg {
+  background: #f8fafc;
+}

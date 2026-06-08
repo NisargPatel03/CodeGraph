@@ -281,3 +281,64 @@ Error: ${error.message || error}`;
   }
 }
 
+export async function generateMermaidDiagram(
+  filesSummary: { path: string; language: string; size: number }[],
+  links: { source: string; target: string }[],
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    return `graph TD
+  A["📦 src/"] --> B["🧩 components/"]
+  A --> C["🔧 utils/"]
+  B --> D["App.tsx"]
+  B --> E["Inspector.tsx"]
+  B --> F["Reports.tsx"]
+  B --> G["GraphCanvas.tsx"]
+  C --> H["aiHelper.ts"]
+  C --> I["codeAnalyzer.ts"]
+  C --> J["repoParser.ts"]
+  D --> B
+  D --> C`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const topLinks = links.slice(0, 60);
+    const linkLines = topLinks.map(l => `${l.source} --> ${l.target}`).join('\n');
+
+    const folderSet = new Set(filesSummary.map(f => {
+      const parts = f.path.split('/');
+      return parts.length > 1 ? parts[0] : 'root';
+    }));
+
+    const prompt = `You are a Software Architect generating a Mermaid.js diagram.
+
+Based on the repository file structure and dependency links below, produce a clean, readable Mermaid graph TD (top-down) diagram that shows:
+1. The main folders/modules as grouped subgraph blocks (use subgraph for each top-level folder).
+2. Key file-to-file dependency relationships (show the most important 15-25 links only).
+3. Use short, readable node labels. For files, use just the filename. For folders, use the folder name.
+4. Distinguish entry points, utilities, and components clearly through descriptive labels.
+
+Top-level folders: ${Array.from(folderSet).join(', ')}
+
+Key dependency links (source --> target):
+${linkLines}
+
+File list (sample):
+${filesSummary.slice(0, 40).map(f => f.path).join('\n')}
+
+IMPORTANT RULES:
+- Output ONLY the raw Mermaid diagram syntax. Do NOT wrap it in markdown code fences.
+- Start with: graph TD
+- Use safe node IDs (alphanumeric with underscores, no slashes or dots in IDs).
+- Use double quotes for labels with special chars: A["label here"]
+- Keep it readable — 20-35 nodes maximum.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (error: any) {
+    return `graph TD\n  ERR["Diagram generation failed"]`;
+  }
+}

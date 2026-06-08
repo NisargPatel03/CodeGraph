@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import mermaid from 'mermaid';
 import { 
   BookOpen, 
   Milestone, 
@@ -15,11 +16,73 @@ import {
   Download, 
   Sparkles, 
   Gauge,
-  X
+  X,
+  GitBranch,
+  RefreshCw
 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
-import { generateOnboardingGuide, generateArchitectureOverview, refactorCodeSmell } from '../utils/aiHelper';
+import { generateOnboardingGuide, generateArchitectureOverview, refactorCodeSmell, generateMermaidDiagram } from '../utils/aiHelper';
+
+// ── Mermaid renderer component ──────────────────────────────────────────────
+let mermaidInitialized = false;
+
+const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ref.current || !chart) return;
+
+    if (!mermaidInitialized) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+          primaryColor: '#1e1b4b',
+          primaryTextColor: '#e2e8f0',
+          primaryBorderColor: '#4f46e5',
+          lineColor: '#6366f1',
+          secondaryColor: '#0f172a',
+          tertiaryColor: '#1e293b',
+          background: '#0a0a0f',
+          mainBkg: '#0f172a',
+          nodeBorder: '#4f46e5',
+          clusterBkg: '#1e1b4b',
+          titleColor: '#c4b5fd',
+          edgeLabelBackground: '#1e293b',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        },
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true },
+      });
+      mermaidInitialized = true;
+    }
+
+    const id = `mermaid-${Date.now()}`;
+    ref.current.innerHTML = '';
+    setRenderError(null);
+
+    mermaid.render(id, chart)
+      .then(({ svg }) => {
+        if (ref.current) ref.current.innerHTML = svg;
+      })
+      .catch((err) => {
+        console.error('Mermaid render error:', err);
+        setRenderError(err?.message || 'Failed to render diagram');
+      });
+  }, [chart]);
+
+  if (renderError) {
+    return (
+      <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#fca5a5', fontSize: '0.78rem' }}>
+        ⚠️ Diagram render error: {renderError}
+      </div>
+    );
+  }
+
+  return <div ref={ref} style={{ width: '100%', textAlign: 'center', overflowX: 'auto' }} />;
+};
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -82,6 +145,9 @@ export const Reports: React.FC<ReportsProps> = ({
   const [loadingOnboarding, setLoadingOnboarding] = useState(false);
   const [architectureDoc, setArchitectureDoc] = useState('');
   const [loadingArchitecture, setLoadingArchitecture] = useState(false);
+  const [mermaidDiagram, setMermaidDiagram] = useState('');
+  const [loadingMermaid, setLoadingMermaid] = useState(false);
+  const [archView, setArchView] = useState<'text' | 'diagram'>('diagram');
   const [toastMessage, setToastMessage] = useState('');
   const [refactorSmell, setRefactorSmell] = useState<any | null>(null);
   const [refactorResult, setRefactorResult] = useState<string | null>(null);
@@ -128,15 +194,28 @@ export const Reports: React.FC<ReportsProps> = ({
   };
 
   const handleGenerateArchitecture = async () => {
+    const summary = files.map((f) => ({ path: f.path, language: f.language, size: f.size }));
+    const rawLinks = (graphData?.links || []).map(l => ({
+      source: typeof l.source === 'object' ? (l.source as any).id : String(l.source),
+      target: typeof l.target === 'object' ? (l.target as any).id : String(l.target),
+    }));
+
+    // Generate both text report and Mermaid diagram in parallel
     setLoadingArchitecture(true);
+    setLoadingMermaid(true);
+    setArchView('diagram');
     try {
-      const summary = files.map((f) => ({ path: f.path, language: f.language, size: f.size }));
-      const doc = await generateArchitectureOverview(summary, apiKey);
+      const [doc, diagram] = await Promise.all([
+        generateArchitectureOverview(summary, apiKey),
+        generateMermaidDiagram(summary, rawLinks, apiKey),
+      ]);
       setArchitectureDoc(doc);
+      setMermaidDiagram(diagram);
     } catch (err: any) {
       console.error(err);
     } finally {
       setLoadingArchitecture(false);
+      setLoadingMermaid(false);
     }
   };
 
@@ -695,24 +774,93 @@ export const Reports: React.FC<ReportsProps> = ({
 
         {/* TAB 5: ARCHITECTURE OVERVIEW */}
         {activeTab === 'architecture' && (
-          <div>
-            {architectureDoc ? (
-              <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
-                <div dangerouslySetInnerHTML={{
-                  __html: formatMarkdown(architectureDoc)
-                }} />
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {(architectureDoc || mermaidDiagram) ? (
+              <>
+                {/* View Toggle + Regenerate */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      className={`tab-btn ${archView === 'diagram' ? 'active' : ''}`}
+                      style={{ fontSize: '0.75rem', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                      onClick={() => setArchView('diagram')}
+                    >
+                      <GitBranch size={12} />
+                      UML Diagram
+                    </button>
+                    <button
+                      className={`tab-btn ${archView === 'text' ? 'active' : ''}`}
+                      style={{ fontSize: '0.75rem', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                      onClick={() => setArchView('text')}
+                    >
+                      <Layers size={12} />
+                      Text Report
+                    </button>
+                  </div>
+                  <button
+                    className="cyber-button secondary"
+                    style={{ fontSize: '0.72rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                    onClick={handleGenerateArchitecture}
+                    disabled={loadingArchitecture || loadingMermaid}
+                  >
+                    <RefreshCw size={11} style={{ animation: (loadingArchitecture || loadingMermaid) ? 'spin 1s linear infinite' : 'none' }} />
+                    {(loadingArchitecture || loadingMermaid) ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                </div>
+
+                {/* Diagram Panel */}
+                {archView === 'diagram' && (
+                  <div style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid var(--panel-border)', borderRadius: '10px', padding: '20px', minHeight: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {loadingMermaid ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.2s' }} />
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.4s' }} />
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gemini is drawing your architecture diagram...</span>
+                      </div>
+                    ) : mermaidDiagram ? (
+                      <MermaidDiagram chart={mermaidDiagram} />
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Text Report Panel */}
+                {archView === 'text' && (
+                  <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
+                    {loadingArchitecture ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '30px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both' }} />
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.2s' }} />
+                          <div className="bounce-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-primary)', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '0.4s' }} />
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gemini is writing the report...</span>
+                      </div>
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: formatMarkdown(architectureDoc) }} />
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '20px', textAlign: 'center' }}>
-                <Milestone size={32} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '24px', textAlign: 'center' }}>
+                <GitBranch size={36} style={{ color: 'var(--color-primary)', opacity: 0.6 }} />
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>No Architecture Report Generated</h4>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '400px' }}>
-                    Let AI audit your repository framework structures, layering boundaries, and dependencies.
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>No Architecture Diagram Yet</h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', maxWidth: '420px', lineHeight: 1.5 }}>
+                    Generate a live <strong style={{ color: 'var(--color-primary)' }}>Mermaid UML diagram</strong> and a full text architecture report — both powered by Gemini AI.
                   </p>
                 </div>
-                <button className="cyber-button" onClick={handleGenerateArchitecture} disabled={loadingArchitecture} style={{ fontSize: '0.85rem', padding: '8px 16px', marginTop: '4px' }}>
-                  {loadingArchitecture ? 'Analyzing Architecture...' : 'Generate Architecture Overview'}
+                <button
+                  className="cyber-button"
+                  onClick={handleGenerateArchitecture}
+                  disabled={loadingArchitecture}
+                  style={{ fontSize: '0.85rem', padding: '10px 20px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <GitBranch size={15} />
+                  {loadingArchitecture ? 'Analyzing & Drawing...' : 'Generate UML + Architecture Report'}
                 </button>
               </div>
             )}
