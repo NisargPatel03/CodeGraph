@@ -232,3 +232,52 @@ Your response MUST include:
 Error: ${error.message || error}`;
   }
 }
+
+export async function generateTestSuite(
+  filePath: string,
+  fileContent: string,
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    const fileName = filePath.split('/').pop() || '';
+    return `### 🧪 Mock Test Suite for \`${fileName}\` (Offline Mode)
+
+\`\`\`typescript
+import { describe, it, expect, vi } from 'vitest';
+
+describe('${fileName.split('.')[0]}', () => {
+  it('should pass initial sanity checks', () => {
+    expect(true).toBe(true);
+  });
+});
+\`\`\`
+
+*Add your Gemini API Key in the settings panel to generate a fully custom test suite.*`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Senior QA Automation Engineer and Software Developer.
+Analyze the following code file and generate a complete, high-fidelity unit test suite.
+Use Jest, Vitest, or Testing Library as appropriate for the file type, framework (React/TypeScript), and dependencies.
+Cover all exported functions, helper methods, core classes, mock states, and edge cases.
+Include necessary mock imports or setup blocks if needed.
+
+File Path: ${filePath}
+File Content:
+\`\`\`
+${fileContent.substring(0, 15000)}
+\`\`\`
+
+Provide a professional test suite. Explain your choices briefly at the start of your response, then provide the complete test code block.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ Failed to Generate Test Suite
+Error: ${error.message || error}`;
+  }
+}
+

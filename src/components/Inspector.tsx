@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List } from 'lucide-react';
+import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List, FlaskConical } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
-import { getFileExplanation, askQuestionAboutCodebase } from '../utils/aiHelper';
+import { getFileExplanation, askQuestionAboutCodebase, generateTestSuite } from '../utils/aiHelper';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -207,6 +207,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'chat'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
+  const [testSuites, setTestSuites] = useState<Record<string, string>>({});
+  const [loadingTest, setLoadingTest] = useState(false);
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([]);
@@ -327,6 +329,22 @@ export const Inspector: React.FC<InspectorProps> = ({
       console.error(err);
     } finally {
       setLoadingExplanation(false);
+    }
+  };
+
+  const handleGenerateTest = async () => {
+    if (!selectedFile) return;
+    setLoadingTest(true);
+    try {
+      const suite = await generateTestSuite(selectedFile.path, selectedFile.content, apiKey);
+      setTestSuites((prev) => ({
+        ...prev,
+        [selectedFile.path]: suite,
+      }));
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingTest(false);
     }
   };
 
@@ -851,7 +869,7 @@ export const Inspector: React.FC<InspectorProps> = ({
 
                 {/* AI Summary Section */}
                 <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Sparkles size={14} style={{ color: 'var(--color-primary)' }} />
                       AI Code Summary
@@ -880,6 +898,76 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <>
                           <Sparkles size={14} />
                           Explain with Gemini AI
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* AI Test Suite Generator Section */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px', marginTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FlaskConical size={14} style={{ color: 'var(--color-accent)' }} />
+                      AI Test Suite
+                    </h4>
+                  </div>
+
+                  {testSuites[selectedFile.path] ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                        <div dangerouslySetInnerHTML={{ 
+                          __html: formatMarkdown(testSuites[selectedFile.path])
+                        }} />
+                      </div>
+                      <button
+                        className="cyber-button"
+                        onClick={() => {
+                          const testText = testSuites[selectedFile.path];
+                          // Extract code from inside markdown code block if present
+                          const codeMatch = testText.match(/\`\`\`(?:typescript|javascript|js|ts)?([\s\S]*?)\`\`\?/);
+                          const cleanCode = codeMatch ? codeMatch[1].trim() : testText;
+                          
+                          try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                              navigator.clipboard.writeText(cleanCode);
+                            } else {
+                              const textArea = document.createElement("textarea");
+                              textArea.value = cleanCode;
+                              textArea.style.position = "fixed";
+                              document.body.appendChild(textArea);
+                              textArea.focus();
+                              textArea.select();
+                              document.execCommand('copy');
+                              document.body.removeChild(textArea);
+                            }
+                          } catch (e) {
+                            console.warn('Clipboard write failed', e);
+                          }
+                          setToastMessage('Test Suite copied to clipboard!');
+                          setTimeout(() => setToastMessage(null), 2000);
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', fontSize: '0.8rem', background: 'rgba(14, 165, 233, 0.15)', borderColor: 'var(--color-accent)' }}
+                      >
+                        Copy Test Suite Code
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="cyber-button"
+                      style={{ width: '100%', padding: '10px 14px', fontSize: '0.85rem', borderColor: 'var(--color-accent)' }}
+                      onClick={handleGenerateTest}
+                      disabled={loadingTest}
+                    >
+                      {loadingTest ? (
+                        <>
+                          <Terminal size={14} className="dropzone-icon" />
+                          Generating Test Suite...
+                        </>
+                      ) : (
+                        <>
+                          <FlaskConical size={14} />
+                          Generate Test Suite
                         </>
                       )}
                     </button>
