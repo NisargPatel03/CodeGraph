@@ -37,7 +37,7 @@ function formatMarkdown(text: string): string {
     // 4. Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
-    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; color: var(--color-secondary);">$1</code>');
+    .replace(/\`(.*?)\`/g, '<code>$1</code>');
 }
 
 
@@ -859,7 +859,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   </div>
 
                   {fileExplanation ? (
-                    <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                    <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', lineHeight: '1.5' }}>
                       <div dangerouslySetInnerHTML={{ 
                         __html: formatMarkdown(fileExplanation)
                       }} />

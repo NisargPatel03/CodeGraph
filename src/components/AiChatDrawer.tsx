@@ -37,7 +37,7 @@ function formatMarkdown(text: string): string {
     // 4. Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
-    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; color: var(--color-secondary);">$1</code>');
+    .replace(/\`(.*?)\`/g, '<code>$1</code>');
 }
 
 
@@ -303,7 +303,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
                   borderTopLeftRadius: m.role === 'model' ? '2px' : '12px',
                   padding: '8px 12px',
                   fontSize: '0.78rem',
-                  color: 'var(--text-secondary)',
+                  color: 'var(--text-primary)',
                   lineHeight: '1.4',
                   whiteSpace: 'pre-wrap',
                   flex: 1,

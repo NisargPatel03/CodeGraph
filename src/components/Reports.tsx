@@ -55,7 +55,7 @@ function formatMarkdown(text: string): string {
     // 4. Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
-    .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px; color: var(--color-secondary);">$1</code>');
+    .replace(/\`(.*?)\`/g, '<code>$1</code>');
 }
 
 interface ReportsProps {
@@ -670,7 +670,7 @@ export const Reports: React.FC<ReportsProps> = ({
                 </div>
 
                 {/* Content */}
-                <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
+                <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
                   <div dangerouslySetInnerHTML={{
                     __html: formatMarkdown(onboardingDoc)
                   }} />
@@ -697,7 +697,7 @@ export const Reports: React.FC<ReportsProps> = ({
         {activeTab === 'architecture' && (
           <div>
             {architectureDoc ? (
-              <div className="markdown-body" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
+              <div className="markdown-body" style={{ color: 'var(--text-primary)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', maxHeight: '300px', overflowY: 'auto' }}>
                 <div dangerouslySetInnerHTML={{
                   __html: formatMarkdown(architectureDoc)
                 }} />
