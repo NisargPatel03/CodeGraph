@@ -17,19 +17,19 @@ function formatMarkdown(text: string): string {
       const displayLang = lang ? lang.toUpperCase() : 'CODE';
       
       return `
-        <div class="code-block-wrapper" style="border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; margin: 16px 0; overflow: hidden; background: rgba(0,0,0,0.45); box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.05); font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
             <span>${displayLang}</span>
-            <button onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);" style="background: none; border: none; color: inherit; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: all 0.2s; font-family: inherit; font-size: inherit; outline: none;">Copy</button>
+            <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
           </div>
-          <pre style="margin: 0; padding: 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.78rem; color: #e2e8f0; line-height: 1.5; background: transparent;"><code style="color: inherit; background: none; padding: 0;">${escapedCode}</code></pre>
+          <pre class="code-block-pre"><code>${escapedCode}</code></pre>
         </div>
       `;
     })
     // 2. Headings
-    .replace(/^# (.*$)/gim, '<h2 style="color:#fff; font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">$1</h2>')
-    .replace(/^## (.*$)/gim, '<h3 style="color:#fff; font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;">$1</h3>')
-    .replace(/^### (.*$)/gim, '<h4 style="color:#fff; font-weight:600; margin:16px 0 6px 0;">$1</h4>')
+    .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
+    .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
+    .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary); font-weight:600; margin:16px 0 6px 0;">$1</h4>')
     .replace(/^#### (.*$)/gim, '<h5 style="color:var(--text-primary); font-weight:600; margin:12px 0 4px 0;">$1</h5>')
     .replace(/^##### (.*$)/gim, '<h6 style="color:var(--text-primary); font-weight:600; margin:10px 0 4px 0;">$1</h6>')
     // 3. Lists
@@ -305,7 +305,10 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
                   fontSize: '0.78rem',
                   color: 'var(--text-secondary)',
                   lineHeight: '1.4',
-                  whiteSpace: 'pre-wrap'
+                  whiteSpace: 'pre-wrap',
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden'
                 }}
               >
                 <div dangerouslySetInnerHTML={{
