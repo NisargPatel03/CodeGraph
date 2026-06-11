@@ -889,7 +889,7 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
 
   // 6. Circular dependency code smells
   cycles.forEach((cycle, idx) => {
-    cycle.forEach(filePath => {
+    cycle.slice(0, -1).forEach(filePath => {
       codeSmells.push({
         id: `circular-dep-${idx}-${filePath}`,
         file: filePath,

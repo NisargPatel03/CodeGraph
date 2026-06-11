@@ -1031,7 +1031,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .attr('stroke-width', (d: any) => d.isAggregated ? 5 + Math.min(d.weight * 2.5, 18) : 5 + Math.min(d.coupling * 2.0, 14))
       .style('filter', 'drop-shadow(0 0 5px var(--color-secondary))');
 
-    const link = mainGroup.append('g').selectAll('.link-element')
+    const link = mainGroup.append('g').attr('class', 'links-container').selectAll('.link-element')
       .data(links)
       .enter()
       .append('line')
@@ -1050,7 +1050,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       })
       .attr('marker-end', 'url(#arrow-normal)');
 
-    const node = mainGroup.append('g').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
+    const node = mainGroup.append('g').attr('class', 'nodes-container').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
       .on('click', (event, d) => {
         event.stopPropagation();
         setSelectedNode(d.id);
@@ -1365,7 +1365,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const mainGroup = svgElement.select('.main-container');
       let particlesGroup = mainGroup.select('.particles-group');
       if (particlesGroup.empty()) {
-        particlesGroup = mainGroup.insert('g', '.node-element').attr('class', 'particles-group');
+        particlesGroup = mainGroup.insert('g', '.nodes-container').attr('class', 'particles-group');
       }
 
       particleInterval = setInterval(() => {

@@ -735,7 +735,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                       {cycle.map((file, stepIdx) => (
-                        <React.Fragment key={file}>
+                        <React.Fragment key={`${file}-${stepIdx}`}>
                           {stepIdx > 0 && <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
                           <span 
                             onClick={() => onSelectFile(file)}
