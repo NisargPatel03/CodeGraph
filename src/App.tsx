@@ -10,6 +10,8 @@ import { AiChatDrawer } from './components/AiChatDrawer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
 import logoImg from './assets/logo.png';
+import { semanticSearchCodebase } from './utils/aiHelper';
+import type { SemanticSearchResult } from './utils/aiHelper';
 
 // Tree interface for File Explorer
 interface FileTreeItem {
@@ -33,6 +35,9 @@ export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics'>('dependency');
   const [searchQuery, setSearchQuery] = useState('');
+  const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult[] | null>(null);
+  const [isSearchingSemantically, setIsSearchingSemantically] = useState(false);
+  const [semanticSearchError, setSemanticSearchError] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
@@ -86,10 +91,35 @@ export default function App() {
 
   const handleDataLoaded = (data: { files: ParsedFile[]; repoName: string }) => {
     setRepoData(data);
+    setSemanticSearchResults(null);
+    setSemanticSearchError(null);
   };
 
   const handleResetRepo = () => {
     setRepoData(null);
+    setSemanticSearchResults(null);
+    setSemanticSearchError(null);
+    setSearchQuery('');
+  };
+
+  const handleSemanticSearch = async () => {
+    if (!searchQuery.trim() || !repoData) return;
+    setIsSearchingSemantically(true);
+    setSemanticSearchError(null);
+    try {
+      const summary = repoData.files.map(f => ({
+        path: f.path,
+        language: f.language,
+        size: f.size
+      }));
+      const results = await semanticSearchCodebase(searchQuery, summary, apiKey);
+      setSemanticSearchResults(results);
+    } catch (err: any) {
+      console.error(err);
+      setSemanticSearchError(err?.message || 'Failed to complete semantic search.');
+    } finally {
+      setIsSearchingSemantically(false);
+    }
   };
 
   // Get active file object
@@ -314,14 +344,96 @@ export default function App() {
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Filter file structure..."
+                    placeholder="Filter tree or ask AI..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSemanticSearch();
+                      }
+                    }}
                   />
+                  <button
+                    className="search-ai-btn"
+                    title="Semantic AI Search (Enter)"
+                    onClick={handleSemanticSearch}
+                    disabled={!searchQuery.trim() || isSearchingSemantically}
+                  >
+                    {isSearchingSemantically ? (
+                      <div className="search-spinner" />
+                    ) : (
+                      <Sparkles size={13} />
+                    )}
+                  </button>
                 </div>
               </div>
               <div className="file-tree-container">
-                {fileTree && renderTree(fileTree)}
+                {isSearchingSemantically ? (
+                  <div className="semantic-loading" style={{ padding: '24px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                    <div className="search-spinner" style={{ width: '20px', height: '20px' }} />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Gemini is indexing & mapping files...</span>
+                  </div>
+                ) : semanticSearchError ? (
+                  <div className="semantic-results-container">
+                    <div className="semantic-results-header">
+                      <span>⚠️ AI Search Error</span>
+                      <button 
+                        className="semantic-clear-btn" 
+                        onClick={() => {
+                          setSemanticSearchResults(null);
+                          setSemanticSearchError(null);
+                          setSearchQuery('');
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="semantic-error" style={{ margin: '10px 0', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#fca5a5' }}>
+                      {semanticSearchError}
+                    </div>
+                  </div>
+                ) : semanticSearchResults ? (
+                  <div className="semantic-results-container">
+                    <div className="semantic-results-header">
+                      <span>✨ AI Matches ({semanticSearchResults.length})</span>
+                      <button 
+                        className="semantic-clear-btn" 
+                        onClick={() => {
+                          setSemanticSearchResults(null);
+                          setSemanticSearchError(null);
+                          setSearchQuery('');
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {semanticSearchResults.length === 0 ? (
+                      <div className="semantic-empty" style={{ padding: '20px 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
+                        No matches found. Try describing functions or components.
+                      </div>
+                    ) : (
+                      <div className="semantic-results-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>
+                        {semanticSearchResults.map((result) => (
+                          <div 
+                            key={result.filePath}
+                            className={`semantic-result-item ${selectedNodeId === result.filePath ? 'active' : ''}`}
+                            onClick={() => setSelectedNodeId(result.filePath)}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <div className="semantic-result-title-row">
+                              <span className="semantic-result-name">{result.filePath.split('/').pop()}</span>
+                              <span className="relevance-badge">{result.relevanceScore}% Match</span>
+                            </div>
+                            <div className="semantic-result-path">{result.filePath}</div>
+                            <div className="match-reason">{result.reason}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  fileTree && renderTree(fileTree)
+                )}
               </div>
             </aside>
 

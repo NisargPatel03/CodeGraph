@@ -342,3 +342,117 @@ IMPORTANT RULES:
     return `graph TD\n  ERR["Diagram generation failed"]`;
   }
 }
+
+export interface SemanticSearchResult {
+  filePath: string;
+  relevanceScore: number;
+  reason: string;
+}
+
+export async function semanticSearchCodebase(
+  query: string,
+  filesSummary: { path: string; language: string; size: number }[],
+  apiKey: string
+): Promise<SemanticSearchResult[]> {
+  if (!isValidApiKey(apiKey)) {
+    // Local fallback/demo mode based on keywords
+    const normalizedQuery = query.toLowerCase();
+    const results: SemanticSearchResult[] = filesSummary
+      .map(file => {
+        let score = 0;
+        let reason = '';
+        const filename = file.path.split('/').pop()?.toLowerCase() || '';
+        const pathParts = file.path.toLowerCase();
+
+        if (filename.includes(normalizedQuery)) {
+          score = 95;
+          reason = `Filename contains exact match for keyword '${query}'.`;
+        } else if (pathParts.includes(normalizedQuery)) {
+          score = 75;
+          reason = `Folder directory structure matches query '${query}'.`;
+        } else {
+          // Rule-based semantic mapping for demo experience
+          if ((normalizedQuery.includes('api') || normalizedQuery.includes('key') || normalizedQuery.includes('validation')) && 
+              (filename.includes('api') || filename.includes('key') || filename.includes('auth') || filename.includes('helper'))) {
+            score = 90;
+            reason = 'Likely handles credentials, environment configurations, or API keys.';
+          } else if ((normalizedQuery.includes('zoom') || normalizedQuery.includes('canvas') || normalizedQuery.includes('controls')) && 
+                     (filename.includes('canvas') || filename.includes('view') || filename.includes('graph'))) {
+            score = 88;
+            reason = 'Responsible for drawing SVG canvas nodes, zoom transforms, or interactive controls.';
+          } else if ((normalizedQuery.includes('smell') || normalizedQuery.includes('refactor') || normalizedQuery.includes('health')) && 
+                     (filename.includes('analytics') || filename.includes('report') || filename.includes('dashboard') || filename.includes('analyzer'))) {
+            score = 85;
+            reason = 'Contains metrics processing, code smell calculation, or AI refactoring suggestors.';
+          } else if ((normalizedQuery.includes('style') || normalizedQuery.includes('css') || normalizedQuery.includes('theme')) && 
+                     (filename.includes('css') || filename.includes('index') || filename.includes('app'))) {
+            score = 80;
+            reason = 'Defines visual theme configurations, CSS stylesheets, or typography rules.';
+          }
+        }
+
+        return { filePath: file.path, relevanceScore: score, reason };
+      })
+      .filter(item => item.relevanceScore > 0)
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, 5);
+
+    // Default general matches if no keywords matched to keep the UI active
+    if (results.length === 0) {
+      return filesSummary.slice(0, 3).map((f, idx) => ({
+        filePath: f.path,
+        relevanceScore: 70 - idx * 10,
+        reason: `General codebase component matching context: '${query}' (Demo Mode).`
+      }));
+    }
+    return results;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: GEMINI_MODEL,
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+
+    const prompt = `You are a Senior Principal Engineer.
+Perform a semantic natural language search over the following repository files.
+The user is searching for: "${query}"
+
+Return a JSON array of matching files. Each entry in the JSON array MUST have exactly these keys:
+- filePath: (string) matching file path
+- relevanceScore: (number between 0 and 100)
+- reason: (string) short 1-sentence explanation of why this file matches their semantic query
+
+Return only the top 5 most relevant matching files, sorted by relevanceScore in descending order.
+
+Repository files summary:
+${JSON.stringify(filesSummary.slice(0, 150), null, 2)}
+
+Example JSON output structure:
+[
+  {
+    "filePath": "src/components/GraphCanvas.tsx",
+    "relevanceScore": 95,
+    "reason": "Implements canvas rendering, zoom controls, and interactive event handlers."
+  }
+]`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const parsed = JSON.parse(responseText);
+    
+    if (Array.isArray(parsed)) {
+      return parsed.map((item: any) => ({
+        filePath: String(item.filePath || ''),
+        relevanceScore: Number(item.relevanceScore || 0),
+        reason: String(item.reason || '')
+      }));
+    }
+    return [];
+  } catch (error: any) {
+    console.error('Semantic search error:', error);
+    throw error;
+  }
+}
+
