@@ -1497,21 +1497,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           if (!circle.empty()) {
             circle.style('stroke', statusColor)
                   .style('stroke-width', strokeWidth)
-                  .style('stroke-dasharray', dashArray)
+                  .style('stroke-dasharray', dashArray as any)
                   .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
             if (fillVal) circle.style('fill', fillVal);
           }
           if (!folderPath.empty()) {
             folderPath.style('stroke', statusColor)
                       .style('stroke-width', strokeWidth)
-                      .style('stroke-dasharray', dashArray)
+                      .style('stroke-dasharray', dashArray as any)
                       .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
             if (fillVal) folderPath.style('fill', fillVal);
           }
           if (!folderPolygon.empty()) {
             folderPolygon.style('stroke', statusColor)
                          .style('stroke-width', strokeWidth)
-                         .style('stroke-dasharray', dashArray)
+                         .style('stroke-dasharray', dashArray as any)
                          .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
             if (fillVal) folderPolygon.style('fill', fillVal);
           }
@@ -1587,9 +1587,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       // --- Bioluminescent Particle Spawning Code ---
       const mainGroup = svgElement.select('.main-container');
-      let particlesGroup = mainGroup.select('.particles-group');
+      let particlesGroup = mainGroup.select('.particles-group') as any;
       if (particlesGroup.empty()) {
-        particlesGroup = mainGroup.insert('g', '.nodes-container').attr('class', 'particles-group');
+        particlesGroup = mainGroup.insert('g', '.nodes-container').attr('class', 'particles-group') as any;
       }
 
       particleInterval = setInterval(() => {
