@@ -1260,13 +1260,19 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   display: flex;
   gap: 8px;
   align-items: flex-end;
+  min-width: 0;
 }
+
+.mt-2 { margin-top: 8px; }
+
 
 .select-container {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
+  min-width: 0;       /* allow flex shrink */
+  overflow: hidden;
 }
 
 .select-container label {
@@ -1282,16 +1288,24 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   color: var(--text-primary);
   font-size: 0.75rem;
   outline: none;
+  width: 100%;        /* fill container, not option text */
+  min-width: 0;       /* allow shrink below intrinsic size */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cyber-button.text-btn {
-  padding: 4px 8px;
+  padding: 4px 10px;
   font-size: 0.7rem;
   height: 25px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--panel-border);
   color: var(--text-secondary);
+  flex-shrink: 0;     /* never squish the Set button */
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .cyber-button.text-btn:hover {
