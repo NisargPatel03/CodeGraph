@@ -962,3 +962,113 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
     stats,
   };
 }
+
+export interface SimulatedCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  filesAdded: string[];
+  filesModified: string[];
+  filesDeleted: string[];
+}
+
+export function generateGitHistory(files: ParsedFile[]): SimulatedCommit[] {
+  if (!files || files.length === 0) return [];
+
+  // Group files into logical developmental stages
+  const configFiles: string[] = [];
+  const utilFiles: string[] = [];
+  const modelFiles: string[] = [];
+  const componentFiles: string[] = [];
+  const mainFiles: string[] = [];
+  const otherFiles: string[] = [];
+
+  files.forEach(f => {
+    const pathLower = f.path.toLowerCase();
+    if (pathLower.includes('config') || pathLower.includes('json') || pathLower.startsWith('.') || f.path === 'index.html') {
+      configFiles.push(f.path);
+    } else if (pathLower.includes('util') || pathLower.includes('helper') || pathLower.includes('parser') || pathLower.includes('analyzer')) {
+      utilFiles.push(f.path);
+    } else if (pathLower.includes('model') || pathLower.includes('types') || pathLower.includes('schema') || pathLower.includes('state') || pathLower.includes('context')) {
+      modelFiles.push(f.path);
+    } else if (pathLower.includes('component') || pathLower.includes('ui') || pathLower.includes('dialog') || pathLower.includes('drawer') || pathLower.includes('button') || pathLower.includes('panel') || pathLower.includes('canvas')) {
+      componentFiles.push(f.path);
+    } else if (f.path.includes('App.tsx') || f.path.includes('main.tsx') || f.path.includes('index.ts') || f.path.includes('App.jsx') || f.path.includes('main.js')) {
+      mainFiles.push(f.path);
+    } else {
+      otherFiles.push(f.path);
+    }
+  });
+
+  const commitsCount = 10;
+  const commits: SimulatedCommit[] = [];
+  
+  const authors = ['Nisarg Patel', 'Jane Doe', 'Alex Rivera', 'Chen Wei', 'Sarah Jenkins'];
+  const dates = [
+    '2026-05-01', '2026-05-05', '2026-05-10', '2026-05-15', '2026-05-20',
+    '2026-05-24', '2026-05-28', '2026-06-02', '2026-06-06', '2026-06-10'
+  ];
+
+  const shas = ['e93d8b1', 'fa20cc3', '98c76da', 'bc7d90e', '43df5a6', '0123ee0', '8fd7ac2', 'c7d043d', '1165ba0', '7a8626c'];
+
+  const messages = [
+    'Initial commit - setup project structures and environment configs',
+    'feat: add core utility modules and helper functions',
+    'feat: implement schema models and types',
+    'feat: build layout containers and basic components',
+    'refactor: optimize internal loop logic and parsing performance',
+    'feat: integrate workspace sidebars and inspector panel',
+    'feat: add reports manager and analytics dashboard',
+    'test: implement unit tests and mock validation suite',
+    'docs: update readme and release beta milestone',
+    'refactor: resolve console key warnings and optimize layout styling'
+  ];
+
+  for (let i = 0; i < commitsCount; i++) {
+    const filesAdded: string[] = [];
+    const filesModified: string[] = [];
+    const filesDeleted: string[] = [];
+
+    if (i === 0) {
+      filesAdded.push(...configFiles);
+    } else if (i === 1) {
+      filesAdded.push(...utilFiles);
+    } else if (i === 2) {
+      filesAdded.push(...modelFiles);
+    } else if (i === 3) {
+      const half = Math.ceil(componentFiles.length / 2);
+      filesAdded.push(...componentFiles.slice(0, half));
+    } else if (i === 4) {
+      const half = Math.ceil(otherFiles.length / 2);
+      filesAdded.push(...otherFiles.slice(0, half));
+      if (utilFiles.length > 0) filesModified.push(utilFiles[0]);
+    } else if (i === 5) {
+      const half = Math.ceil(componentFiles.length / 2);
+      filesAdded.push(...componentFiles.slice(half));
+    } else if (i === 6) {
+      filesAdded.push(...mainFiles);
+      if (configFiles.length > 0) filesModified.push(configFiles[0]);
+    } else if (i === 7) {
+      const half = Math.ceil(otherFiles.length / 2);
+      filesAdded.push(...otherFiles.slice(half));
+    } else if (i === 8) {
+      if (componentFiles.length > 0) filesModified.push(componentFiles[0]);
+      if (utilFiles.length > 1) filesModified.push(utilFiles[1]);
+    } else if (i === 9) {
+      if (mainFiles.length > 0) filesModified.push(mainFiles[0]);
+    }
+
+    commits.push({
+      sha: shas[i],
+      message: messages[i],
+      author: authors[i % authors.length],
+      date: dates[i],
+      filesAdded,
+      filesModified,
+      filesDeleted
+    });
+  }
+
+  return commits;
+}

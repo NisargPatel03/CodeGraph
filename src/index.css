@@ -406,6 +406,8 @@ code, pre {
   padding: 8px 16px;
   border-bottom: 1px solid var(--panel-border);
   background: var(--tabs-header-bg);
+  gap: 8px;
+  min-width: 0;
 }
 
 .tabs-group {
@@ -415,7 +417,8 @@ code, pre {
   scrollbar-width: none;
   -ms-overflow-style: none;
   flex: 1;
-  margin-right: 12px;
+  min-width: 0;
+  /* Clip internal overflow, don't affect siblings */
 }
 
 .tabs-group::-webkit-scrollbar {
@@ -454,6 +457,21 @@ code, pre {
   color: var(--text-muted);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Right-side controls wrapper: Git Replay button + helper text */
+.tabs-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .tabs-helper-text {
+    display: none;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -2191,5 +2209,357 @@ input:checked + .slider:before {
   to {
     r: 6.5px;
   }
+}
+
+/* --- Codebase Evolution (Git Replay) HUD Styles --- */
+.evolution-player-panel {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, 90%);
+  padding: 16px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), var(--glow-shadow);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+  font-family: var(--font-sans);
+  border-bottom: 3px solid #a855f7; /* Purple bottom accent */
+}
+
+.evolution-player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.evolution-player-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.evolution-player-title-group h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.evolution-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.evolution-close-btn:hover {
+  color: var(--color-alert);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.evolution-pulse-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #a855f7;
+  box-shadow: 0 0 10px #a855f7;
+  animation: evolution-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes evolution-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.evolution-player-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.evolution-commit-details {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commit-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.commit-sha-badge {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  color: #c084fc;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.commit-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.commit-message {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.commit-author-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.commit-author {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.commit-stats {
+  display: flex;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.commit-stats .added-count { color: #10b981; }
+.commit-stats .modified-count { color: #fb923c; }
+.commit-stats .deleted-count { color: #f43f5e; }
+
+.changed-files-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.changed-files-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.changed-files-scroller {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  flex: 1;
+}
+
+.changed-files-scroller::-webkit-scrollbar {
+  height: 2px;
+}
+
+.changed-files-scroller::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+}
+
+.changed-file-tag {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.changed-file-tag.add {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.evolution-controls-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.playback-buttons-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: relative;
+}
+
+.playback-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.playback-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #a855f7;
+  color: #c084fc;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3);
+}
+
+.playback-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.playback-btn.play-pause-btn {
+  width: 38px;
+  height: 38px;
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #c084fc;
+}
+
+.playback-btn.play-pause-btn:hover {
+  background: #a855f7;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+}
+
+.playback-speed-selector {
+  position: absolute;
+  right: 0;
+  display: flex;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+}
+
+.speed-option-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 3px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.speed-option-btn:hover {
+  color: var(--text-primary);
+}
+
+.speed-option-btn.active {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.evolution-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.evolution-timeline-slider {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+  cursor: pointer;
+  accent-color: #a855f7;
+}
+
+.evolution-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.evolution-slider-labels .current-progress {
+  font-weight: 700;
+  color: #c084fc;
+}
+
+/* --- D3 Node Birth/Maturation Animations --- */
+@keyframes evolution-node-birth-pulse {
+  0% {
+    transform: scale(0.3);
+    stroke-opacity: 0.4;
+    filter: drop-shadow(0 0 2px #a855f7);
+  }
+  50% {
+    transform: scale(1.4);
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 16px #a855f7);
+  }
+  100% {
+    transform: scale(1);
+    stroke-opacity: 0.8;
+    filter: drop-shadow(0 0 8px #a855f7);
+  }
+}
+
+.evolution-node-birth {
+  animation: evolution-node-birth-pulse 1.8s infinite alternate ease-in-out;
+  transform-origin: center;
+}
+
+@keyframes evolution-node-modified-pulse {
+  0% {
+    filter: drop-shadow(0 0 2px #fb923c);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px #fb923c);
+  }
+  100% {
+    filter: drop-shadow(0 0 5px #fb923c);
+  }
+}
+
+.evolution-node-modified {
+  animation: evolution-node-modified-pulse 1.8s infinite ease-in-out;
 }
 

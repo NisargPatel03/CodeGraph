@@ -56,6 +56,12 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 | **Call Graph** | Function-to-function call relationships with interactive bioluminescent execution flow simulation |
 | **Component Tree** | React component hierarchy shown as top-down or radial tree layout |
 
+### 📊 Codebase Evolution Timeline (Git Replay)
+- **Chronological Growth Playback** — Simulated 10-step commit history mapping the codebase growth from birth (earliest files) to the present day. Sliding the timeline replays the historical changes of the codebase, showing new node clusters popping up and expanding as the codebase matures.
+- **Bioluminescent Node Animations** — Newly added nodes scale up with glowing purple neon birth pulses (`#a855f7`), and modified files pulse with a warm orange wave (`#fb923c`) to highlight active zones during replay ticks.
+- **Coordinate Caching Engine** — Persists D3 force coordinates across timeline steps via React refs, ensuring smooth growth transitions without visual layout shifting or canvas jumps.
+- **Multi-View Compatibility** — Replays codebase growth seamlessly across Dependency Graph, Module Clusters, Call Graph, and Component Tree view modes.
+
 ### 🗂️ Multi-Branch / Pull-Request Comparison (Diff Graph)
 - **Visual Changeset Map** — Modified, added, or deleted files are highlighted directly on the D3 canvas tree in specific color glows (Yellow/Green/Red), giving code reviewers a visual map of the changes before merging.
 - **PR Diff Inspector HUD** — Select a changed node to open an interactive code review HUD showing status-specific badges and line additions/deletions counts.

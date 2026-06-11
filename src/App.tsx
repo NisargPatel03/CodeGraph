@@ -43,6 +43,8 @@ export default function App() {
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
   const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
+  const [isEvolutionMode, setIsEvolutionMode] = useState(false);
+  const [currentEvolutionStep, setCurrentEvolutionStep] = useState(0);
 
 
   // Sync theme to root element
@@ -86,9 +88,13 @@ export default function App() {
       setGraphData(result);
       setSelectedNodeId(null);
       setDiffData(null);
+      setIsEvolutionMode(false);
+      setCurrentEvolutionStep(0);
     } else {
       setGraphData(null);
       setDiffData(null);
+      setIsEvolutionMode(false);
+      setCurrentEvolutionStep(0);
     }
   }, [repoData]);
 
@@ -97,6 +103,8 @@ export default function App() {
     setSemanticSearchResults(null);
     setSemanticSearchError(null);
     setDiffData(null);
+    setIsEvolutionMode(false);
+    setCurrentEvolutionStep(0);
   };
 
   const handleResetRepo = () => {
@@ -105,6 +113,8 @@ export default function App() {
     setSemanticSearchError(null);
     setSearchQuery('');
     setDiffData(null);
+    setIsEvolutionMode(false);
+    setCurrentEvolutionStep(0);
   };
 
   const handleSemanticSearch = async () => {
@@ -478,8 +488,38 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="tabs-helper-text">
-                  Hover paths are highlighted on active nodes
+                <div className="tabs-right-controls">
+                  {viewMode !== 'analytics' && (
+                    <button
+                      className={`evolution-toggle-btn ${isEvolutionMode ? 'active' : ''}`}
+                      onClick={() => {
+                        setIsEvolutionMode(!isEvolutionMode);
+                        setCurrentEvolutionStep(0);
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '0.75rem',
+                        height: '26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: isEvolutionMode ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                        border: isEvolutionMode ? '1px solid #a855f7' : '1px solid var(--panel-border)',
+                        borderRadius: '4px',
+                        color: isEvolutionMode ? '#c084fc' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        transition: 'all 0.2s ease',
+                        boxShadow: isEvolutionMode ? '0 0 8px rgba(168, 85, 247, 0.3)' : 'none',
+                        flexShrink: 0,
+                      }}
+                      title="Replay historical codebase changes step-by-step"
+                    >
+                      <span>⏱️ Git Replay</span>
+                      {isEvolutionMode && <span className="evolution-pulse-indicator" style={{ margin: 0 }}></span>}
+                    </button>
+                  )}
+
                 </div>
               </div>
 
@@ -515,6 +555,11 @@ export default function App() {
                   diffData={diffData}
                   setDiffData={setDiffData}
                   repoName={repoData.repoName}
+                  files={repoData.files}
+                  isEvolutionMode={isEvolutionMode}
+                  setIsEvolutionMode={setIsEvolutionMode}
+                  currentEvolutionStep={currentEvolutionStep}
+                  setCurrentEvolutionStep={setCurrentEvolutionStep}
                 />
               )}
             </section>

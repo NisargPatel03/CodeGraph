@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
+import { generateGitHistory } from '../utils/codeAnalyzer';
+import { EvolutionPlayer } from './EvolutionPlayer';
 
 interface GraphCanvasProps {
   graphData: CodebaseGraph;
@@ -19,6 +21,11 @@ interface GraphCanvasProps {
   diffData: any | null;
   setDiffData: (data: any | null) => void;
   repoName: string;
+  files: any[];
+  isEvolutionMode: boolean;
+  setIsEvolutionMode: (val: boolean) => void;
+  currentEvolutionStep: number;
+  setCurrentEvolutionStep: (step: number) => void;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -36,6 +43,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   diffData,
   setDiffData,
   repoName,
+  files,
+  isEvolutionMode,
+  setIsEvolutionMode,
+  currentEvolutionStep,
+  setCurrentEvolutionStep,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +55,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const boundsRef = useRef({ minX: -100, maxX: 100, minY: -100, maxY: 100 });
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(1500); // Default to 2x speed (1500ms)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [hoveredCluster, setHoveredCluster] = useState<{
     folder: string;
@@ -469,6 +484,40 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return null;
   }, [pathSource, pathTarget, graphData, viewMode, showNpmPackages]);
 
+  // Generate Simulated Git History from files
+  const gitHistory = useMemo(() => {
+    return generateGitHistory(files || []);
+  }, [files]);
+
+  // Compute files active at the current evolution step
+  const activeEvolutionFiles = useMemo(() => {
+    if (!isEvolutionMode || gitHistory.length === 0) return null;
+    const active = new Set<string>();
+    const step = Math.min(Math.max(0, currentEvolutionStep), gitHistory.length - 1);
+    for (let i = 0; i <= step; i++) {
+      const commit = gitHistory[i];
+      if (commit.filesAdded) commit.filesAdded.forEach(f => active.add(f));
+      if (commit.filesDeleted) commit.filesDeleted.forEach(f => active.delete(f));
+    }
+    return active;
+  }, [isEvolutionMode, gitHistory, currentEvolutionStep]);
+
+  // Automatic Replay Player Interval Runner
+  useEffect(() => {
+    if (!isEvolutionMode || !isReplaying || gitHistory.length === 0) return;
+
+    const interval = setInterval(() => {
+      const next = currentEvolutionStep + 1;
+      if (next >= gitHistory.length) {
+        setIsReplaying(false);
+      } else {
+        setCurrentEvolutionStep(next);
+      }
+    }, replaySpeed);
+
+    return () => clearInterval(interval);
+  }, [isEvolutionMode, isReplaying, gitHistory, replaySpeed, currentEvolutionStep, setCurrentEvolutionStep]);
+
   const getHeatmapColor = (d: any) => {
     if (d.isNpm) return 'var(--color-primary-glow)';
     
@@ -513,11 +562,46 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       let activeLinks: any[] = [];
 
       if (showNpmPackages && viewMode === 'dependency') {
-        activeNodes = [...graphData.nodes.map((n) => ({ ...n })), ...(graphData.npmNodes || []).map((n) => ({ ...n }))];
+        activeNodes = [
+          ...graphData.nodes.map((n) => {
+            const cached = nodePositionsRef.current.get(n.id);
+            return {
+              ...n,
+              x: cached ? cached.x : undefined,
+              y: cached ? cached.y : undefined
+            };
+          }),
+          ...(graphData.npmNodes || []).map((n) => {
+            const cached = nodePositionsRef.current.get(n.id);
+            return {
+              ...n,
+              x: cached ? cached.x : undefined,
+              y: cached ? cached.y : undefined
+            };
+          })
+        ];
         activeLinks = [...graphData.links.map((l) => ({ ...l })), ...(graphData.npmLinks || []).map((l) => ({ ...l }))];
       } else {
-        activeNodes = graphData.nodes.map((n) => ({ ...n }));
+        activeNodes = graphData.nodes.map((n) => {
+          const cached = nodePositionsRef.current.get(n.id);
+          return {
+            ...n,
+            x: cached ? cached.x : undefined,
+            y: cached ? cached.y : undefined
+          };
+        });
         activeLinks = graphData.links.map((l) => ({ ...l }));
+      }
+
+      if (isEvolutionMode && activeEvolutionFiles) {
+        activeNodes = activeNodes.filter(n => n.isNpm || activeEvolutionFiles.has(n.id));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          const sActive = activeEvolutionFiles.has(s) || activeNodes.some(n => n.id === s && n.isNpm);
+          const tActive = activeEvolutionFiles.has(t) || activeNodes.some(n => n.id === t && n.isNpm);
+          return sActive && tActive;
+        });
       }
 
       if (diffData) {
@@ -652,8 +736,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       links = Array.from(aggregatedLinks.values());
     } else if (viewMode === 'call') {
-      let activeNodes = graphData.callNodes.map((n) => ({ ...n }));
+      let activeNodes = graphData.callNodes.map((n) => {
+        const cached = nodePositionsRef.current.get(n.id);
+        return {
+          ...n,
+          x: cached ? cached.x : undefined,
+          y: cached ? cached.y : undefined
+        };
+      });
       let activeLinks = graphData.callLinks.map((l) => ({ ...l }));
+
+      if (isEvolutionMode && activeEvolutionFiles) {
+        activeNodes = activeNodes.filter(n => activeEvolutionFiles.has(n.file));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          const sActive = activeNodes.some(n => n.id === s);
+          const tActive = activeNodes.some(n => n.id === t);
+          return sActive && tActive;
+        });
+      }
 
       // If a depth filter is active and a node is selected, prune the graph
       if (depthFilter !== -1 && selectedNode) {
@@ -701,8 +803,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       nodes = activeNodes;
       links = activeLinks;
     } else if (viewMode === 'hierarchy') {
-      nodes = graphData.classNodes.map((n) => ({ ...n }));
-      links = graphData.classLinks.map((l) => ({ ...l }));
+      let activeNodes = graphData.classNodes.map((n) => {
+        const cached = nodePositionsRef.current.get(n.id);
+        return {
+          ...n,
+          x: cached ? cached.x : undefined,
+          y: cached ? cached.y : undefined
+        };
+      });
+      let activeLinks = graphData.classLinks.map((l) => ({ ...l }));
+
+      if (isEvolutionMode && activeEvolutionFiles) {
+        activeNodes = activeNodes.filter(n => activeEvolutionFiles.has(n.id) || activeEvolutionFiles.has(n.file || ''));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          return activeNodes.some(n => n.id === s) && activeNodes.some(n => n.id === t);
+        });
+      }
+      nodes = activeNodes;
+      links = activeLinks;
     }
 
     if (nodes.length === 0) {
@@ -1401,6 +1521,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
 
     simulation.on('tick', () => {
+      nodes.forEach(n => {
+        if (n.id && n.x !== undefined && n.y !== undefined) {
+          nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
+        }
+      });
       link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
       if (pipeline) {
         pipeline.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
@@ -1419,7 +1544,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles]);
   useEffect(() => {
     if (!svgRef.current) return;
     const activeId = hoveredNode || selectedNode;
@@ -1444,19 +1569,25 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const folderPath = el.select('path.folder-node');
       const text = el.select('text');
 
+      const currentCommit = isEvolutionMode && gitHistory ? gitHistory[currentEvolutionStep] : null;
+      const isNewlyAdded = currentCommit && currentCommit.filesAdded && currentCommit.filesAdded.includes(d.id);
+      const isNewlyModified = currentCommit && currentCommit.filesModified && currentCommit.filesModified.includes(d.id);
+
       if (!circle.empty()) {
-        circle.style('stroke', 'var(--node-stroke)')
-              .style('stroke-width', '1.5px')
+        circle.style('stroke', isNewlyAdded ? '#a855f7' : (isNewlyModified ? '#fb923c' : 'var(--node-stroke)'))
+              .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
               .style('stroke-dasharray', null)
               .style('fill', getHeatmapColor(d))
-              .style('filter', null);
+              .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : null))
+              .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
       }
       if (!polygon.empty()) {
-        polygon.style('stroke', 'var(--node-stroke)')
-               .style('stroke-width', '1.5px')
+        polygon.style('stroke', isNewlyAdded ? '#a855f7' : (isNewlyModified ? '#fb923c' : 'var(--node-stroke)'))
+               .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
                .style('stroke-dasharray', null)
                .style('fill', getHeatmapColor(d))
-               .style('filter', null);
+               .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : null))
+               .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
       }
       if (!folderPath.empty()) {
         folderPath.style('stroke', 'var(--node-stroke)')
@@ -1466,8 +1597,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   .style('filter', null);
       }
       if (!text.empty()) {
-        text.style('fill', 'var(--text-secondary)')
-            .style('font-weight', '500')
+        text.style('fill', isNewlyAdded ? '#c084fc' : (isNewlyModified ? '#fdba74' : 'var(--text-secondary)'))
+            .style('font-weight', (isNewlyAdded || isNewlyModified) ? '700' : '500')
             .style('text-decoration', null)
             .style('opacity', null);
       }
@@ -1799,7 +1930,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory]);
 
   return (
     <div 
@@ -2297,6 +2428,18 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         document.body
       )}
 
+      {isEvolutionMode && (
+        <EvolutionPlayer
+          commits={gitHistory}
+          currentStep={currentEvolutionStep}
+          onChangeStep={setCurrentEvolutionStep}
+          isReplaying={isReplaying}
+          setIsReplaying={setIsReplaying}
+          speed={replaySpeed}
+          onChangeSpeed={setReplaySpeed}
+          onClose={() => setIsEvolutionMode(false)}
+        />
+      )}
 
     </div>
   );

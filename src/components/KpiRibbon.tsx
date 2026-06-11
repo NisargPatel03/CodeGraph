@@ -86,7 +86,7 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
         userSelect: 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0, overflow: 'hidden' }}>
         
         {/* Files Chip */}
         <div style={{ position: 'relative' }}>
@@ -407,11 +407,12 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
           fontWeight: 600,
           background: 'rgba(0, 242, 254, 0.08)',
           border: '1px solid rgba(0, 242, 254, 0.15)',
-          padding: '3px 8px',
+          padding: '3px 10px',
           borderRadius: '4px',
           transition: 'all 0.2s',
           flexShrink: 0,
           whiteSpace: 'nowrap',
+          marginLeft: '8px',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'rgba(0, 242, 254, 0.15)';
