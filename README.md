@@ -53,10 +53,18 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 |---|---|
 | **Dependency Graph** | Force-directed layout showing all file import/export relationships with edge weights |
 | **Module Clusters** | Files grouped by their parent folder, visualizing module boundaries |
-| **Call Graph** | Function-to-function call relationships with animated step tracer |
+| **Call Graph** | Function-to-function call relationships with interactive bioluminescent execution flow simulation |
 | **Component Tree** | React component hierarchy shown as top-down or radial tree layout |
 
+### 🗂️ Multi-Branch / Pull-Request Comparison (Diff Graph)
+- **Visual Changeset Map** — Modified, added, or deleted files are highlighted directly on the D3 canvas tree in specific color glows (Yellow/Green/Red), giving code reviewers a visual map of the changes before merging.
+- **PR Diff Inspector HUD** — Select a changed node to open an interactive code review HUD showing status-specific badges and line additions/deletions counts.
+- **Git Patch Visualizer** — Line-by-line syntax-highlighted git patch renderer showing precise code modifications inside the Inspector.
+- **Virtual Deleted Node Support** — Support for inspecting placeholder nodes of files that have been deleted in the head branch, preventing crashes and offering full deleted patch history.
+- **Dual-View Interface** — Toggle sub-tab interface allowing reviewers to switch between the visual patch changeset and traditional file metrics.
+
 ### 🔍 File Inspector
+- **Code Review Diff / General Metrics Sub-tabs** — Toggle between code review diff patches and general file metrics
 - **Function List** — Auto-parses and lists all functions with scroll-to-line navigation
 - **Cyclomatic Complexity Score** — Per-file complexity metric (Low / Medium / High) with colour coding
 - **Who Calls This File** — Reverse dependency lookup showing all importers
@@ -225,6 +233,7 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 #### Call Graph
 - Parses function calls between files and renders function-to-function edges
 - **Step Tracer** — Animates through the call chain from any selected function, stepping 3 levels deep
+- **Interactive Execution Flow Simulator** — Selecting a function node and clicking **⚡ Simulate Execution Flow** starts a real-time D3-driven animation loop showing synchronous and asynchronous execution paths with glowing bioluminescent pulses travelling along the dependency paths.
 
 #### Component Tree
 - Parses React component hierarchies using JSX pattern detection
@@ -232,17 +241,20 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 
 ---
 
-### 2. File Inspector
+### 2. File Inspector & PR Diff Inspector
 
 **File:** `src/components/Inspector.tsx`
 
-A right-sidebar panel that activates when a file node is selected in the graph or file tree.
+A right-sidebar panel that activates when a file node or folder node is selected in the graph or file tree.
 
-#### Tabs
-- **Info Tab** — All metadata, static analysis, and AI tools for the selected file
-- **Chat Tab** — An AI chat interface restricted to questions about the selected file's context
+#### Branch / PR Diff Mode
+When a branch comparison is active and a modified node is selected, the inspector enters **PR Diff Mode**, showing:
+- **Status Badges** — Indicating `[+] Added` (emerald), `[~] Modified` (orange), or `[-] Deleted` (rose) with additions/deletions counts.
+- **Git Patch Viewer** — A line-by-line syntax-highlighted git diff patch (green for `+`, red for `-`, blue/indigo for hunk markers).
+- **Sub-Tab Navigation** — Toggle buttons to switch between **Code Review Diff** and **General Metrics**.
+- **Virtual Node Support** — Handles deleted file placeholder nodes, rendering the deletion patch without crashing.
 
-#### Info Tab Sections
+#### Info Tab Sections (Metrics View)
 | Section | Description |
 |---|---|
 | **File Metadata** | Path, size, language, complexity score, estimated commit count |
