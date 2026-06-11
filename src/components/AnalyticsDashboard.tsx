@@ -3,23 +3,19 @@ import { createPortal } from 'react-dom';
 import mermaid from 'mermaid';
 import { 
   BookOpen, 
-  Milestone, 
   AlertTriangle, 
   CheckCircle, 
   ChevronRight,
   TrendingUp, 
-  Layers, 
   Folder, 
   Copy, 
   Printer, 
   Download, 
   Sparkles, 
-  Gauge,
   X,
   GitBranch,
   RefreshCw,
   FileText,
-  FileCode,
   Activity,
   FileWarning
 } from 'lucide-react';
@@ -129,7 +125,6 @@ interface AnalyticsDashboardProps {
   graphData: CodebaseGraph;
   apiKey: string;
   onSelectFile: (filePath: string) => void;
-  onSwitchView: (mode: 'dependency' | 'cluster' | 'call' | 'hierarchy') => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
@@ -138,7 +133,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   graphData,
   apiKey,
   onSelectFile,
-  onSwitchView,
 }) => {
   const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding'>('metrics');
   
@@ -665,7 +659,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                       >
                         <td style={{ padding: '10px 12px', color: 'var(--text-primary)', fontWeight: 500 }}>
                           {smell.file.split('/').pop()}
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', block: 'block', marginLeft: '6px' }}>{smell.line ? `Line ${smell.line}` : ''}</span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginLeft: '6px' }}>{smell.line ? `Line ${smell.line}` : ''}</span>
                         </td>
                         <td style={{ padding: '10px 12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
                           {smell.type.replace('_', ' ')}

@@ -381,7 +381,6 @@ export default function App() {
                   graphData={graphData}
                   apiKey={apiKey}
                   onSelectFile={(filePath) => setSelectedNodeId(filePath)}
-                  onSwitchView={(mode) => setViewMode(mode)}
                 />
               ) : (
                 <GraphCanvas
