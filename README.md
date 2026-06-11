@@ -75,12 +75,14 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **AI Test Suite Generator** — Generates a complete Jest/Vitest unit test suite for any file
 
 ### 🤖 AI Code Intelligence Suite
-- **AI Code Summary** — `getFileExplanation` — Explains a file's purpose, responsibilities, and architecture role
-- **AI Refactor** — `refactorCodeSmell` — Analyses a detected code smell and returns a clean, refactored implementation
-- **AI Test Suite Generator** — `generateTestSuite` — Generates a high-fidelity unit test suite covering all exports, edge cases, and mock states
-- **Developer Onboarding Guide** — `generateOnboardingGuide` — Creates a full project overview, reading order, and quickstart guide (exportable as Markdown)
-- **Architecture Overview** — `generateArchitectureOverview` — Produces a layered architecture report identifying patterns, module categories, and refactoring recommendations
-- **AI Chat Assistant** — `askQuestionAboutCodebase` — A floating chat drawer that answers any developer question with full file-system context
+- **Semantic Code Search** — `semanticSearchCodebase` — AI-powered natural language query parser mapping user queries (e.g. "where we validate API keys") to the top matching files with relevance scores and match reasons.
+- **AI Mermaid Diagram Generator** — `generateMermaidDiagram` — Automatically structures top-level folder subgraphs and file dependencies into a beautiful, visual Mermaid.js diagram.
+- **AI Code Summary** — `getFileExplanation` — Explains a file's purpose, responsibilities, and architecture role in plain English.
+- **AI Refactor** — `refactorCodeSmell` — Analyses a detected code smell and returns a clean, refactored implementation.
+- **AI Test Suite Generator** — `generateTestSuite` — Generates a high-fidelity unit test suite covering all exports, edge cases, and mock states.
+- **Developer Onboarding Guide** — `generateOnboardingGuide` — Creates a full project overview, reading order, and quickstart guide (exportable as Markdown).
+- **Architecture Overview** — `generateArchitectureOverview` — Produces a layered architecture report identifying patterns, module categories, and refactoring recommendations.
+- **AI Chat Assistant** — `askQuestionAboutCodebase` — A floating chat drawer that answers any developer question with full file-system context.
 
 ### 📊 Reports & Analytics
 - **Codebase Dashboard** — KPI cards showing total files, functions, lines of code, circular dependencies detected, and dead files
@@ -129,8 +131,10 @@ CodeGraph/
 │   │   └── logo.png                 # Neural Tree brand logo
 │   ├── components/
 │   │   ├── AiChatDrawer.tsx         # Sliding AI chat assistant drawer
+│   │   ├── AnalyticsDashboard.tsx   # Detailed analysis metrics & AI reports dashboard
 │   │   ├── GraphCanvas.tsx          # D3.js multi-mode graph renderer (1929 lines)
 │   │   ├── Inspector.tsx            # File inspector sidebar with AI tools
+│   │   ├── KpiRibbon.tsx            # Sticky canvas KPI summary ribbon
 │   │   ├── Reports.tsx              # Bottom analytics panel & AI reports
 │   │   └── RepoSelector.tsx         # Landing page — GitHub URL / ZIP uploader
 │   ├── utils/
@@ -294,6 +298,12 @@ Prompts Gemini as a *Software Architect* to produce an architecture analysis ide
 #### `askQuestionAboutCodebase(question, currentFile, allFiles, apiKey)`
 Full-context codebase Q&A. Sends the entire file list (up to 80 files) and the currently-selected file's content as context alongside the developer's question.
 
+#### `semanticSearchCodebase(query, filesSummary, apiKey)`
+AI-powered semantic search. Rather than standard keyword filtering, users can type descriptive queries (e.g. "where is the zoom and pan handled"). Gemini analyzes the project layout, mapping the prompt semantically to matching files. Returns top 5 files with custom % relevance scores and rationale statements.
+
+#### `generateMermaidDiagram(filesSummary, links, apiKey)`
+Automatically generates a customized **Mermaid.js** graph diagram showing folder organization/boundaries (as subgraphs) and key dependency connections, representing a live topological architecture map of your project.
+
 ---
 
 ### 4. Reports & Analytics Dashboard
@@ -329,9 +339,13 @@ Lists every detected cycle with the full chain displayed as `File A → File B �
 - Renders output as formatted Markdown with code blocks
 - **Export options:** Download as `.md`, Print as PDF, Copy to Notion
 
+#### Architecture Visualizer Tab
+- Clicking **Generate Architecture Diagram** triggers `generateMermaidDiagram`.
+- Automatically renders an interactive, clean **Mermaid.js** topological diagram representing folder subgraphs and file dependencies.
+
 #### Architecture Overview Tab
 - Generate button triggers `generateArchitectureOverview`
-- Renders a structured architectural analysis report
+- Renders a structured architectural analysis report.
 
 ---
 
