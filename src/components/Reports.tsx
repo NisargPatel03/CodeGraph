@@ -23,6 +23,7 @@ import {
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateOnboardingGuide, generateArchitectureOverview, refactorCodeSmell, generateMermaidDiagram } from '../utils/aiHelper';
+import { AiIcon } from './AiIcon';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
 let mermaidInitialized = false;
@@ -651,7 +652,7 @@ export const Reports: React.FC<ReportsProps> = ({
                             borderColor: 'rgba(139, 92, 246, 0.3)',
                           }}
                         >
-                          <Sparkles size={10} style={{ color: 'var(--color-primary)' }} />
+                          <AiIcon size={12} />
                           AI Refactor
                         </button>
 

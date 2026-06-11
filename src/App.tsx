@@ -9,6 +9,7 @@ import { Inspector } from './components/Inspector';
 import { AiChatDrawer } from './components/AiChatDrawer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
+import { AiIcon } from './components/AiIcon';
 import logoImg from './assets/logo.png';
 import { semanticSearchCodebase } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
@@ -410,7 +411,10 @@ export default function App() {
                 ) : semanticSearchResults ? (
                   <div className="semantic-results-container">
                     <div className="semantic-results-header">
-                      <span>✨ AI Matches ({semanticSearchResults.length})</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AiIcon size={14} />
+                        AI Matches ({semanticSearchResults.length})
+                      </span>
                       <button 
                         className="semantic-clear-btn" 
                         onClick={() => {

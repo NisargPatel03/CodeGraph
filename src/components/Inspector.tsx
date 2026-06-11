@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List, FlaskConical } from 'lucide-react';
+import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List } from 'lucide-react';
+import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase, generateTestSuite } from '../utils/aiHelper';
 
@@ -1018,8 +1019,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                 {/* AI Summary Section */}
                 <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Sparkles size={14} style={{ color: 'var(--color-primary)' }} />
+                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AiIcon size={14} badge />
                       AI Code Summary
                     </h4>
                   </div>
@@ -1044,7 +1045,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                         </>
                       ) : (
                         <>
-                          <Sparkles size={14} />
+                          <AiIcon size={14} />
                           Explain with Gemini AI
                         </>
                       )}
@@ -1055,8 +1056,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                 {/* AI Test Suite Generator Section */}
                 <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px', marginTop: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FlaskConical size={14} style={{ color: 'var(--color-accent)' }} />
+                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AiIcon size={14} badge />
                       AI Test Suite
                     </h4>
                   </div>
@@ -1114,7 +1115,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                         </>
                       ) : (
                         <>
-                          <FlaskConical size={14} />
+                          <AiIcon size={14} />
                           Generate Test Suite
                         </>
                       )}
