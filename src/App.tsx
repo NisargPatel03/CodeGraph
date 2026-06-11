@@ -35,6 +35,7 @@ export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics'>('dependency');
   const [searchQuery, setSearchQuery] = useState('');
+  const [diffData, setDiffData] = useState<any | null>(null);
   const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult[] | null>(null);
   const [isSearchingSemantically, setIsSearchingSemantically] = useState(false);
   const [semanticSearchError, setSemanticSearchError] = useState<string | null>(null);
@@ -84,8 +85,10 @@ export default function App() {
       const result = analyzeCodebase(repoData.files);
       setGraphData(result);
       setSelectedNodeId(null);
+      setDiffData(null);
     } else {
       setGraphData(null);
+      setDiffData(null);
     }
   }, [repoData]);
 
@@ -93,6 +96,7 @@ export default function App() {
     setRepoData(data);
     setSemanticSearchResults(null);
     setSemanticSearchError(null);
+    setDiffData(null);
   };
 
   const handleResetRepo = () => {
@@ -100,6 +104,7 @@ export default function App() {
     setSemanticSearchResults(null);
     setSemanticSearchError(null);
     setSearchQuery('');
+    setDiffData(null);
   };
 
   const handleSemanticSearch = async () => {
@@ -507,6 +512,9 @@ export default function App() {
                   setActiveTraceNodeId={setActiveTraceNodeId}
                   depthFilter={depthFilter}
                   setDepthFilter={setDepthFilter}
+                  diffData={diffData}
+                  setDiffData={setDiffData}
+                  repoName={repoData.repoName}
                 />
               )}
             </section>
@@ -525,6 +533,7 @@ export default function App() {
               setActiveTraceNodeId={setActiveTraceNodeId}
               callNodes={graphData.callNodes || []}
               callLinks={graphData.callLinks || []}
+              diffData={diffData}
             />
           </main>
         )

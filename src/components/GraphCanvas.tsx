@@ -8,7 +8,7 @@ interface GraphCanvasProps {
   graphData: CodebaseGraph;
   selectedNode: string | null;
   setSelectedNode: (id: string | null) => void;
-  viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy';
+  viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics';
   searchQuery: string;
   collapsedFolders: Set<string>;
   setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -16,6 +16,9 @@ interface GraphCanvasProps {
   setActiveTraceNodeId: (id: string | null) => void;
   depthFilter: number;
   setDepthFilter: (depth: number) => void;
+  diffData: any | null;
+  setDiffData: (data: any | null) => void;
+  repoName: string;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -30,6 +33,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   setActiveTraceNodeId,
   depthFilter,
   setDepthFilter,
+  diffData,
+  setDiffData,
+  repoName,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +64,111 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [isMinimapExpanded, setIsMinimapExpanded] = useState(false);
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
 
+  // PR/Branch comparison states
+  const [baseBranch, setBaseBranch] = useState('main');
+  const [headBranch, setHeadBranch] = useState('feature-branch');
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const handleCompareGithub = async () => {
+    if (!repoName || repoName.includes('.zip') || !repoName.includes('/')) {
+      setCompareError('Branch comparison is only supported for GitHub repositories.');
+      return;
+    }
+    setCompareError(null);
+    setIsComparing(true);
+    try {
+      const token = localStorage.getItem('gh_token') || '';
+      const headers: HeadersInit = {
+        'Accept': 'application/vnd.github.v3+json'
+      };
+      if (token) {
+        headers['Authorization'] = `token ${token}`;
+      }
+      const res = await fetch(`https://api.github.com/repos/${repoName}/compare/${baseBranch}...${headBranch}`, { headers });
+      if (!res.ok) {
+        throw new Error(`GitHub API returned status ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      if (!data.files || !Array.isArray(data.files)) {
+        throw new Error('Comparison response did not contain file list.');
+      }
+      const filesMap: Record<string, any> = {};
+      data.files.forEach((f: any) => {
+        const mappedStatus = f.status === 'removed' ? 'deleted' : f.status;
+        filesMap[f.filename] = {
+          status: mappedStatus,
+          additions: f.additions || 0,
+          deletions: f.deletions || 0,
+          patch: f.patch || ''
+        };
+      });
+      setDiffData({
+        base: baseBranch,
+        head: headBranch,
+        files: filesMap
+      });
+    } catch (err: any) {
+      setCompareError(err.message || 'Failed to compare branches.');
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
+  const handleSimulateCompare = () => {
+    setCompareError(null);
+    const nodesList = graphData.nodes.filter(n => !n.isNpm);
+    if (nodesList.length === 0) {
+      setCompareError('No valid files in this repository to perform simulated comparison.');
+      return;
+    }
+    
+    // Pick 1 or 2 files to modify
+    const file1 = nodesList[0].id;
+    const file2 = nodesList.length > 1 ? nodesList[Math.min(1, nodesList.length - 1)].id : null;
+    
+    // Get parent path and extensions for simulated added & deleted nodes
+    const parentFolder = file1.substring(0, file1.lastIndexOf('/')) || 'src';
+    const ext = file1.split('.').pop() || 'tsx';
+    
+    const addedFile = `${parentFolder}/AuthService.${ext}`;
+    const deletedFile = `${parentFolder}/legacyHelper.${ext}`;
+    
+    const simulatedFiles: Record<string, any> = {
+      [file1]: {
+        status: 'modified',
+        additions: 12,
+        deletions: 4,
+        patch: `@@ -8,8 +8,12 @@\n-  const oldConfig = fetchOldSettings();\n-  console.log("Loading deprecations...", oldConfig);\n+  const newConfig = fetchSecureSettings();\n+  console.log("Secure settings loaded successfully.");\n+  validateSettings(newConfig);`
+      },
+      [addedFile]: {
+        status: 'added',
+        additions: 42,
+        deletions: 0,
+        patch: `+ // Authenticated service router\n+ export function validateToken(token: string) {\n+   if (!token) throw new Error("Missing credentials");\n+   return jwt.verify(token, process.env.JWT_SECRET);\n+ }`
+      },
+      [deletedFile]: {
+        status: 'deleted',
+        additions: 0,
+        deletions: 24,
+        patch: `- // Deprecated utilities\n- export function runLegacySync() {\n-   console.warn("Legacy sync has been disabled");\n- }`
+      }
+    };
+    
+    if (file2) {
+      simulatedFiles[file2] = {
+        status: 'modified',
+        additions: 8,
+        deletions: 2,
+        patch: `@@ -42,5 +42,11 @@\n-  return data.map(item => item.id);\n+  if (!data) return [];\n+  const validItems = data.filter(item => item && item.active);\n+  return validItems.map(item => item.id);`
+      };
+    }
+    
+    setDiffData({
+      base: 'main',
+      head: 'feature/auth-upgrade',
+      files: simulatedFiles
+    });
+  };
 
   const traceSteps = useMemo(() => {
     if (!activeTraceNodeId || viewMode !== 'call') return [];
@@ -407,6 +518,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       } else {
         activeNodes = graphData.nodes.map((n) => ({ ...n }));
         activeLinks = graphData.links.map((l) => ({ ...l }));
+      }
+
+      if (diffData) {
+        Object.entries(diffData.files).forEach(([filePath, fileInfo]: [string, any]) => {
+          if (fileInfo.status === 'deleted') {
+            if (!activeNodes.some(n => n.id === filePath)) {
+              activeNodes.push({
+                id: filePath,
+                name: filePath.split('/').pop() || '',
+                path: filePath,
+                isFolder: false,
+                size: 0,
+                language: 'text',
+                incoming: [],
+                outgoing: [],
+                folder: filePath.substring(0, filePath.lastIndexOf('/')) || '',
+                isDeleted: true,
+                status: 'deleted'
+              });
+            }
+          }
+        });
       }
 
       const getCollapsedAncestor = (nodeFolder: string): string | null => {
@@ -1302,21 +1435,112 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       tId: typeof l.target === 'object' ? l.target.id : l.target
     });
 
-    // Update node fills based on heatmap mode
-    nodesG.select('circle').style('fill', (d: any) => getHeatmapColor(d));
-    nodesG.select('polygon').style('fill', (d: any) => getHeatmapColor(d));
-    nodesG.select('path.folder-node').style('fill', (d: any) => {
-      if (heatmapMode !== 'none') {
-        return getHeatmapColor(d);
+    // Reset styles to default state before applying overlays
+    nodesG.style('opacity', 1.0);
+    nodesG.each(function (d: any) {
+      const el = d3.select(this);
+      const circle = el.select('circle');
+      const polygon = el.select('polygon');
+      const folderPath = el.select('path.folder-node');
+      const text = el.select('text');
+
+      if (!circle.empty()) {
+        circle.style('stroke', 'var(--node-stroke)')
+              .style('stroke-width', '1.5px')
+              .style('stroke-dasharray', null)
+              .style('fill', getHeatmapColor(d))
+              .style('filter', null);
       }
-      return 'var(--color-warning)';
+      if (!polygon.empty()) {
+        polygon.style('stroke', 'var(--node-stroke)')
+               .style('stroke-width', '1.5px')
+               .style('stroke-dasharray', null)
+               .style('fill', getHeatmapColor(d))
+               .style('filter', null);
+      }
+      if (!folderPath.empty()) {
+        folderPath.style('stroke', 'var(--node-stroke)')
+                  .style('stroke-width', '1.5px')
+                  .style('stroke-dasharray', null)
+                  .style('fill', heatmapMode !== 'none' ? getHeatmapColor(d) : 'var(--color-warning)')
+                  .style('filter', null);
+      }
+      if (!text.empty()) {
+        text.style('fill', 'var(--text-secondary)')
+            .style('font-weight', '500')
+            .style('text-decoration', null)
+            .style('opacity', null);
+      }
     });
+
     nodesG.classed('hotspot', (d: any) => heatmapMode === 'churn' && d.churn && d.churn >= 45);
 
     const pipelines = svgElement.selectAll('.pipeline-element');
     let particleInterval: any = null;
 
-    if (activeTraceNodeId && traceSteps.length > 0 && viewMode === 'call') {
+    if (diffData) {
+      nodesG.each(function (d: any) {
+        const diffInfo = diffData.files[d.id];
+        const container = d3.select(this);
+        const circle = container.select('circle');
+        const folderPath = container.select('path.folder-node');
+        const folderPolygon = container.select('polygon');
+        const text = container.select('text');
+
+        if (diffInfo) {
+          const statusColor = diffInfo.status === 'added' ? '#10b981' : 
+                              diffInfo.status === 'modified' ? '#fb923c' : '#f43f5e';
+          const strokeWidth = diffInfo.status === 'deleted' ? '2.5px' : '3px';
+          const dashArray = diffInfo.status === 'deleted' ? '3,3' : null;
+          const fillVal = diffInfo.status === 'deleted' ? 'rgba(244, 63, 94, 0.12)' : null;
+
+          if (!circle.empty()) {
+            circle.style('stroke', statusColor)
+                  .style('stroke-width', strokeWidth)
+                  .style('stroke-dasharray', dashArray)
+                  .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
+            if (fillVal) circle.style('fill', fillVal);
+          }
+          if (!folderPath.empty()) {
+            folderPath.style('stroke', statusColor)
+                      .style('stroke-width', strokeWidth)
+                      .style('stroke-dasharray', dashArray)
+                      .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
+            if (fillVal) folderPath.style('fill', fillVal);
+          }
+          if (!folderPolygon.empty()) {
+            folderPolygon.style('stroke', statusColor)
+                         .style('stroke-width', strokeWidth)
+                         .style('stroke-dasharray', dashArray)
+                         .style('filter', `drop-shadow(0 0 10px ${statusColor})`);
+            if (fillVal) folderPolygon.style('fill', fillVal);
+          }
+
+          text.style('fill', statusColor)
+              .style('font-weight', '700')
+              .style('opacity', diffInfo.status === 'deleted' ? 0.7 : 1.0);
+          if (diffInfo.status === 'deleted') {
+            text.style('text-decoration', 'line-through');
+          }
+        } else {
+          container.style('opacity', 0.12);
+        }
+      });
+
+      linksLine.each(function (l: any) {
+        const { sId, tId } = getLinkId(l);
+        const sChanged = !!diffData.files[sId];
+        const tChanged = !!diffData.files[tId];
+        const line = d3.select(this);
+        line.style('stroke-opacity', (sChanged || tChanged) ? 0.7 : 0.01)
+            .style('stroke', (sChanged || tChanged) ? 'var(--color-primary)' : 'var(--link-stroke)');
+      });
+
+      pipelines.style('stroke-opacity', 0.01);
+      hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.15);
+      hullWatermarks.style('opacity', 0.05);
+
+    } else if (activeTraceNodeId && traceSteps.length > 0 && viewMode === 'call') {
       const activeStep = traceSteps[currentTraceStep];
       const traceNodeIds = new Set<string>([activeTraceNodeId]);
       traceSteps.forEach(s => {
@@ -1575,7 +1799,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData]);
 
   return (
     <div 
@@ -1846,6 +2070,97 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Branch Comparison / Diff Graph Section */}
+            {(viewMode === 'dependency' || viewMode === 'cluster') && (
+              <div className="toolbox-section" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
+                <div className="section-header">🗂️ Branch Comparison (Diff)</div>
+                
+                {compareError && (
+                  <div style={{ color: '#ef4444', fontSize: '0.65rem', marginBottom: '8px', padding: '6px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '4px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    ⚠️ {compareError}
+                  </div>
+                )}
+
+                {diffData ? (
+                  <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '4px', fontSize: '0.68rem', marginBottom: '8px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                        Active Diff Mode
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        Comparing: <code>{diffData.base}</code> &rarr; <code>{diffData.head}</code>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '6px', fontSize: '0.65rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>● {Object.values(diffData.files).filter((f: any) => f.status === 'added').length} Added</span>
+                        <span style={{ color: '#fb923c', fontWeight: 600 }}>● {Object.values(diffData.files).filter((f: any) => f.status === 'modified').length} Mod</span>
+                        <span style={{ color: '#f43f5e', fontWeight: 600 }}>● {Object.values(diffData.files).filter((f: any) => f.status === 'deleted').length} Del</span>
+                      </div>
+                    </div>
+                    <button 
+                      className="cyber-button text-btn" 
+                      style={{ width: '100%', padding: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#f43f5e', fontSize: '0.7rem' }}
+                      onClick={() => setDiffData(null)}
+                    >
+                      ⏹️ Exit Diff Mode
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '4px', lineHeight: '1.3' }}>
+                      Compare codebase changes between branches or pull requests.
+                    </div>
+                    {repoName && !repoName.includes('.zip') && repoName.includes('/') ? (
+                      <>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Base</label>
+                            <input 
+                              type="text" 
+                              placeholder="main" 
+                              className="search-input" 
+                              style={{ width: '100%', fontSize: '0.7rem', padding: '4px 8px', height: '26px', background: 'rgba(0,0,0,0.2)' }}
+                              value={baseBranch}
+                              onChange={(e) => setBaseBranch(e.target.value)}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Head</label>
+                            <input 
+                              type="text" 
+                              placeholder="feature" 
+                              className="search-input" 
+                              style={{ width: '100%', fontSize: '0.7rem', padding: '4px 8px', height: '26px', background: 'rgba(0,0,0,0.2)' }}
+                              value={headBranch}
+                              onChange={(e) => setHeadBranch(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <button 
+                          className="cyber-button text-btn" 
+                          style={{ padding: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'rgba(99, 102, 241, 0.05)', border: '1px solid rgba(99, 102, 241, 0.25)' }}
+                          onClick={handleCompareGithub}
+                          disabled={isComparing}
+                        >
+                          {isComparing ? 'Comparing...' : 'Compare GitHub Branches'}
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.6rem', color: 'var(--text-muted)', margin: '2px 0' }}>
+                          <span>or</span>
+                        </div>
+                      </>
+                    ) : null}
+                    <button 
+                      className="cyber-button text-btn" 
+                      style={{ padding: '6px', fontSize: '0.7rem', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)', color: 'var(--text-secondary)' }}
+                      onClick={handleSimulateCompare}
+                    >
+                      ⚡ Simulate Pull Request Diff
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

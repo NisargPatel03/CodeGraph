@@ -188,6 +188,7 @@ interface InspectorProps {
   setActiveTraceNodeId: (id: string | null) => void;
   callNodes: any[];
   callLinks: any[];
+  diffData: any | null;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -203,6 +204,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   setActiveTraceNodeId,
   callNodes,
   callLinks,
+  diffData,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -230,31 +232,97 @@ export const Inspector: React.FC<InspectorProps> = ({
   });
   const codePreviewRef = useRef<HTMLPreElement>(null);
 
+  const renderPatch = (patchText: string) => {
+    if (!patchText) {
+      return (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          No line-level patch details available.
+        </div>
+      );
+    }
+    const lines = patchText.split('\n');
+    return (
+      <div style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.7rem',
+        background: 'rgba(0,0,0,0.3)',
+        border: '1px solid var(--panel-border)',
+        borderRadius: '6px',
+        padding: '8px',
+        overflowX: 'auto',
+        lineHeight: '1.45',
+        maxHeight: '340px',
+        overflowY: 'auto'
+      }}>
+        {lines.map((line, idx) => {
+          let bgColor = 'transparent';
+          let textColor = 'var(--text-secondary)';
+          if (line.startsWith('+')) {
+            bgColor = 'rgba(16, 185, 129, 0.08)';
+            textColor = '#10b981';
+          } else if (line.startsWith('-')) {
+            bgColor = 'rgba(244, 63, 94, 0.08)';
+            textColor = '#f43f5e';
+          } else if (line.startsWith('@@')) {
+            bgColor = 'rgba(99, 102, 241, 0.08)';
+            textColor = '#818cf8';
+          }
+          return (
+            <div key={idx} style={{ backgroundColor: bgColor, color: textColor, whiteSpace: 'pre', padding: '2px 4px', borderRadius: '2px', fontFamily: 'var(--font-mono)' }}>
+              {line}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const [diffSubTab, setDiffSubTab] = useState<'diff' | 'meta'>('diff');
+
+  useEffect(() => {
+    setDiffSubTab('diff');
+  }, [selectedNodeId]);
+
+  const activeInspectorFile = useMemo(() => {
+    if (selectedFile) return selectedFile;
+    if (selectedNodeId && diffData && diffData.files[selectedNodeId]) {
+      return {
+        name: selectedNodeId.split('/').pop() || '',
+        path: selectedNodeId,
+        language: selectedNodeId.split('.').pop() || 'text',
+        size: 0,
+        content: '',
+        commitCount: 0
+      } as ParsedFile;
+    }
+    return null;
+  }, [selectedFile, selectedNodeId, diffData]);
+
   // Memoized metadata values
   const parsedFunctions = useMemo(() => {
-    return selectedFile ? parseFunctions(selectedFile.content, selectedFile.language) : [];
-  }, [selectedFile]);
+    return activeInspectorFile ? parseFunctions(activeInspectorFile.content || '', activeInspectorFile.language) : [];
+  }, [activeInspectorFile]);
 
   const complexityInfo = useMemo(() => {
-    return selectedFile ? calculateComplexity(selectedFile.content) : null;
-  }, [selectedFile]);
+    return activeInspectorFile ? calculateComplexity(activeInspectorFile.content || '') : null;
+  }, [activeInspectorFile]);
 
 
 
   const similarFiles = useMemo(() => {
-    return selectedFile ? getSimilarFiles(selectedFile, allFiles) : [];
-  }, [selectedFile, allFiles]);
+    return activeInspectorFile ? getSimilarFiles(activeInspectorFile, allFiles) : [];
+  }, [activeInspectorFile, allFiles]);
 
   const reverseImports = useMemo(() => {
-    if (!selectedFile) return [];
+    if (!activeInspectorFile) return [];
     return allFiles.filter(f => {
-      if (f.path === selectedFile.path) return false;
-      const pathSnippet = selectedFile.path.split('/').pop()?.split('.')[0] || '';
+      if (f.path === activeInspectorFile.path) return false;
+      const pathSnippet = activeInspectorFile.path.split('/').pop()?.split('.')[0] || '';
       if (!pathSnippet) return false;
       return f.content.toLowerCase().includes(pathSnippet.toLowerCase()) && 
         (f.content.includes('import') || f.content.includes('require'));
     });
-  }, [selectedFile, allFiles]);
+  }, [activeInspectorFile, allFiles]);
 
   const handleCopyPath = () => {
     if (!selectedFile) return;
@@ -378,11 +446,11 @@ export const Inspector: React.FC<InspectorProps> = ({
   };
 
   // Find if current file is part of any circular dependency cycles
-  const currentFileCycles = selectedFile
-    ? cycles.filter((cycle) => cycle.includes(selectedFile.path))
+  const currentFileCycles = activeInspectorFile
+    ? cycles.filter((cycle) => cycle.includes(activeInspectorFile.path))
     : [];
 
-  const fileExplanation = selectedFile ? explanations[selectedFile.path] : '';
+  const fileExplanation = activeInspectorFile ? explanations[activeInspectorFile.path] : '';
 
   const isSelectedNodeFolder = selectedNodeId && selectedNodeId.startsWith('folder:');
   const selectedFolder = isSelectedNodeFolder ? selectedNodeId!.slice(7) : null;
@@ -430,7 +498,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     return folderFiles.reduce((sum, f) => sum + (f.size || 0), 0);
   }, [folderFiles]);
 
-  const fileFolder = selectedFile ? selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/')) : null;
+  const fileFolder = activeInspectorFile ? activeInspectorFile.path.substring(0, activeInspectorFile.path.lastIndexOf('/')) : null;
 
   return (
     <aside className="glass-panel sidebar-right">
@@ -616,7 +684,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   </div>
                 </div>
               </div>
-            ) : !selectedFile ? (
+            ) : !activeInspectorFile ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '12px', textAlign: 'center', padding: '20px' }}>
                 <HelpCircle size={40} style={{ opacity: 0.5 }} />
                 <div>
@@ -628,87 +696,167 @@ export const Inspector: React.FC<InspectorProps> = ({
               <>
                 {/* File Header Details */}
                 <div>
-                  <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', marginBottom: '8px' }}>{selectedFile.name}</h3>
+                  <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', marginBottom: '8px' }}>{activeInspectorFile.name}</h3>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', margin: 0, flex: 1 }}>{selectedFile.path}</p>
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      <button className="cyber-button text-btn" onClick={handleCopyPath} title="Copy Path" style={{ padding: '4px 6px' }}>
-                        <Copy size={12} />
-                      </button>
-                      <button className="cyber-button text-btn" onClick={handleOpenInEditor} title="Open in VS Code" style={{ padding: '4px 6px' }}>
-                        <ExternalLink size={12} />
-                      </button>
-                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all', margin: 0, flex: 1 }}>{activeInspectorFile.path}</p>
+                    {selectedFile && (
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button className="cyber-button text-btn" onClick={handleCopyPath} title="Copy Path" style={{ padding: '4px 6px' }}>
+                          <Copy size={12} />
+                        </button>
+                        <button className="cyber-button text-btn" onClick={handleOpenInEditor} title="Open in VS Code" style={{ padding: '4px 6px' }}>
+                          <ExternalLink size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-                    <span className="logo-badge" style={{ fontSize: '0.7rem' }}>
-                      {selectedFile.language.toUpperCase()}
-                    </span>
-                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
-                      {(selectedFile.size / 1024).toFixed(2)} KB
-                    </span>
-                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Simulated Git Commit Frequency">
-                      🔥 {Math.floor(((selectedFile.size + selectedFile.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 55) + 5)} commits
-                    </span>
-                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }} title="Lines of Code Complexity">
-                      ⏱️ {selectedFile.content.split('\n').length} LOC
-                    </span>
-                  </div>
+                  {diffData && diffData.files[activeInspectorFile.path] ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {diffData.files[activeInspectorFile.path].status === 'added' && (
+                          <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                            [+] Added
+                          </span>
+                        )}
+                        {diffData.files[activeInspectorFile.path].status === 'modified' && (
+                          <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(251, 146, 60, 0.08)', color: '#fb923c', borderColor: 'rgba(251, 146, 60, 0.2)' }}>
+                            [~] Modified
+                          </span>
+                        )}
+                        {diffData.files[activeInspectorFile.path].status === 'deleted' && (
+                          <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(244, 63, 94, 0.08)', color: '#f43f5e', borderColor: 'rgba(244, 63, 94, 0.2)' }}>
+                            [-] Deleted
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>+{diffData.files[activeInspectorFile.path].additions} additions</span>
+                        <span style={{ fontSize: '0.72rem', color: '#f43f5e', fontWeight: 600 }}>-{diffData.files[activeInspectorFile.path].deletions} deletions</span>
+                      </div>
 
-                  {/* Complexity Score HUD */}
-                  {complexityInfo && (
-                    <div style={{
-                      marginTop: '12px',
-                      padding: '10px 12px',
-                      background: 'rgba(255, 255, 255, 0.02)',
-                      border: '1px solid var(--panel-border)',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                          <Activity size={13} style={{ color: complexityInfo.color }} />
-                          Code Complexity Score
-                        </span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: complexityInfo.color }}>
-                          {complexityInfo.score} ({complexityInfo.level})
-                        </span>
-                      </div>
-                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${Math.min(complexityInfo.score * 2.0, 100)}%`,
-                          background: complexityInfo.color,
-                          boxShadow: `0 0 8px ${complexityInfo.color}`,
-                          transition: 'width 0.4s ease'
-                        }} />
-                      </div>
+                      {diffData.files[activeInspectorFile.path].status !== 'deleted' && selectedFile && (
+                        <div style={{ display: 'flex', borderBottom: '1px solid var(--panel-border)', paddingBottom: '2px', gap: '12px', marginTop: '4px' }}>
+                          <button
+                            onClick={() => setDiffSubTab('diff')}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: diffSubTab === 'diff' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                              color: diffSubTab === 'diff' ? 'var(--text-primary)' : 'var(--text-muted)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              padding: '4px 0',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔎 Code Review Diff
+                          </button>
+                          <button
+                            onClick={() => setDiffSubTab('meta')}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              borderBottom: diffSubTab === 'meta' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                              color: diffSubTab === 'meta' ? 'var(--text-primary)' : 'var(--text-muted)',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              padding: '4px 0',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            📄 General Metrics
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ) : null}
 
-                  {fileFolder && (
-                    <button
-                      className="cyber-button text-btn"
-                      onClick={() => {
-                        setCollapsedFolders(prev => {
-                          const next = new Set(prev);
-                          next.add(fileFolder);
-                          return next;
-                        });
-                        setSelectedNodeId(null);
-                      }}
-                      style={{ marginTop: '12px', width: '100%', fontSize: '0.75rem', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                    >
-                      <Folder size={12} />
-                      Collapse Parent Folder ({fileFolder.split('/').pop()})
-                    </button>
-                  )}
+                  {(!diffData || !diffData.files[activeInspectorFile.path] || diffSubTab === 'meta') && selectedFile ? (
+                    <>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                        <span className="logo-badge" style={{ fontSize: '0.7rem' }}>
+                          {activeInspectorFile.language.toUpperCase()}
+                        </span>
+                        <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
+                          {(activeInspectorFile.size / 1024).toFixed(2)} KB
+                        </span>
+                        <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Simulated Git Commit Frequency">
+                          🔥 {Math.floor(((activeInspectorFile.size + activeInspectorFile.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 55) + 5)} commits
+                        </span>
+                        <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }} title="Lines of Code Complexity">
+                          ⏱️ {activeInspectorFile.content ? activeInspectorFile.content.split('\n').length : 0} LOC
+                        </span>
+                      </div>
+
+                      {/* Complexity Score HUD */}
+                      {complexityInfo && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '10px 12px',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid var(--panel-border)',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                              <Activity size={13} style={{ color: complexityInfo.color }} />
+                              Code Complexity Score
+                            </span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: complexityInfo.color }}>
+                              {complexityInfo.score} ({complexityInfo.level})
+                            </span>
+                          </div>
+                          <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%',
+                              width: `${Math.min(complexityInfo.score * 2.0, 100)}%`,
+                              background: complexityInfo.color,
+                              boxShadow: `0 0 8px ${complexityInfo.color}`,
+                              transition: 'width 0.4s ease'
+                            }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {fileFolder && (
+                        <button
+                          className="cyber-button text-btn"
+                          onClick={() => {
+                            setCollapsedFolders(prev => {
+                              const next = new Set(prev);
+                              next.add(fileFolder);
+                              return next;
+                            });
+                            setSelectedNodeId(null);
+                          }}
+                          style={{ marginTop: '12px', width: '100%', fontSize: '0.75rem', padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        >
+                          <Folder size={12} />
+                          Collapse Parent Folder ({fileFolder.split('/').pop()})
+                        </button>
+                      )}
+                    </>
+                  ) : null}
+
+                  {diffData && diffData.files[activeInspectorFile.path] && (diffSubTab === 'diff' || diffData.files[activeInspectorFile.path].status === 'deleted') ? (
+                    <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Git Patch Changeset</div>
+                      {renderPatch(diffData.files[activeInspectorFile.path].patch)}
+                      {diffData.files[activeInspectorFile.path].status === 'deleted' && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <AlertTriangle size={14} style={{ color: 'var(--color-alert)' }} />
+                          Note: This file is not accessible in the current repository state (deleted).
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
-                {/* Circular Dependency Warnings */}
+                {selectedFile && (!diffData || !diffData.files[activeInspectorFile.path] || diffSubTab === 'meta') && (
+                  <>
+                    {/* Circular Dependency Warnings */}
                 {currentFileCycles.length > 0 && (
                   <div style={{ display: 'flex', gap: '8px', background: 'rgba(244, 63, 94, 0.08)', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '12px', borderRadius: '8px', color: 'var(--color-alert)', fontSize: '0.8rem' }}>
                     <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -986,7 +1134,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                 </div>
               </>
             )}
-          </div>
+          </>
+        )}
+      </div>
         ) : (
           <div className="chat-container">
             <div className="chat-messages">
