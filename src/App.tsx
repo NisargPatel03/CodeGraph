@@ -6,8 +6,9 @@ import type { CodebaseGraph } from './utils/codeAnalyzer';
 import { RepoSelector } from './components/RepoSelector';
 import { GraphCanvas } from './components/GraphCanvas';
 import { Inspector } from './components/Inspector';
-import { Reports } from './components/Reports';
 import { AiChatDrawer } from './components/AiChatDrawer';
+import { AnalyticsDashboard } from './components/AnalyticsDashboard';
+import { KpiRibbon } from './components/KpiRibbon';
 import logoImg from './assets/logo.png';
 
 // Tree interface for File Explorer
@@ -30,9 +31,8 @@ export default function App() {
   const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy'>('dependency');
+  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics'>('dependency');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isBottomExpanded, setIsBottomExpanded] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
@@ -301,7 +301,7 @@ export default function App() {
         />
       ) : (
         graphData && (
-          <main className={`workspace-layout ${isBottomExpanded ? 'expanded-bottom' : ''}`}>
+          <main className="workspace-layout">
             {/* Left Sidebar - File Explorer */}
             <aside className="glass-panel sidebar-left">
               <div className="sidebar-header">
@@ -325,7 +325,7 @@ export default function App() {
               </div>
             </aside>
 
-            {/* Center Area - D3 Graph Visualizer */}
+            {/* Center Area - D3 Graph Visualizer or Analytics Dashboard */}
             <section className="glass-panel center-panel" style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="tabs-header" style={{ flexShrink: 0 }}>
                 <div className="tabs-group">
@@ -353,6 +353,12 @@ export default function App() {
                   >
                     Component Tree
                   </button>
+                  <button
+                    className={`tab-btn ${viewMode === 'analytics' ? 'active' : ''}`}
+                    onClick={() => setViewMode('analytics')}
+                  >
+                    📊 Analytics
+                  </button>
                 </div>
 
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -360,20 +366,38 @@ export default function App() {
                 </div>
               </div>
 
-              {/* D3 Canvas Viewport */}
-              <GraphCanvas
+              {/* Sticky KPI Ribbon */}
+              <KpiRibbon
                 graphData={graphData}
-                selectedNode={selectedNodeId}
-                setSelectedNode={setSelectedNodeId}
-                viewMode={viewMode}
-                searchQuery={searchQuery}
-                collapsedFolders={collapsedFolders}
-                setCollapsedFolders={setCollapsedFolders}
-                activeTraceNodeId={activeTraceNodeId}
-                setActiveTraceNodeId={setActiveTraceNodeId}
-                depthFilter={depthFilter}
-                setDepthFilter={setDepthFilter}
+                onOpenAnalytics={() => setViewMode('analytics')}
+                onSelectFile={(filePath) => setSelectedNodeId(filePath)}
               />
+
+              {/* D3 Canvas Viewport or Analytics Dashboard Content */}
+              {viewMode === 'analytics' ? (
+                <AnalyticsDashboard
+                  files={repoData.files}
+                  cycles={graphData.cycles}
+                  graphData={graphData}
+                  apiKey={apiKey}
+                  onSelectFile={(filePath) => setSelectedNodeId(filePath)}
+                  onSwitchView={(mode) => setViewMode(mode)}
+                />
+              ) : (
+                <GraphCanvas
+                  graphData={graphData}
+                  selectedNode={selectedNodeId}
+                  setSelectedNode={setSelectedNodeId}
+                  viewMode={viewMode}
+                  searchQuery={searchQuery}
+                  collapsedFolders={collapsedFolders}
+                  setCollapsedFolders={setCollapsedFolders}
+                  activeTraceNodeId={activeTraceNodeId}
+                  setActiveTraceNodeId={setActiveTraceNodeId}
+                  depthFilter={depthFilter}
+                  setDepthFilter={setDepthFilter}
+                />
+              )}
             </section>
 
             {/* Right Sidebar - Inspector Panel */}
@@ -390,17 +414,6 @@ export default function App() {
               setActiveTraceNodeId={setActiveTraceNodeId}
               callNodes={graphData.callNodes || []}
               callLinks={graphData.callLinks || []}
-            />
-
-            {/* Bottom Panel - Onboarding Guides & Architecture Cycles */}
-            <Reports
-              files={repoData.files}
-              cycles={graphData.cycles}
-              graphData={graphData}
-              apiKey={apiKey}
-              isExpanded={isBottomExpanded}
-              setIsExpanded={setIsBottomExpanded}
-              onSelectFile={(filePath) => setSelectedNodeId(filePath)}
             />
           </main>
         )
