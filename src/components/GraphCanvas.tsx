@@ -1578,7 +1578,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
               .style('stroke-dasharray', null)
               .style('fill', getHeatmapColor(d))
-              .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : null))
+              .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : ''))
               .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
       }
       if (!polygon.empty()) {
@@ -1586,7 +1586,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
                .style('stroke-dasharray', null)
                .style('fill', getHeatmapColor(d))
-               .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : null))
+               .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : ''))
                .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
       }
       if (!folderPath.empty()) {
