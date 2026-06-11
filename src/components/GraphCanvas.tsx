@@ -1287,7 +1287,6 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     return () => { simulation.stop(); };
   }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle]);
-
   useEffect(() => {
     if (!svgRef.current) return;
     const activeId = hoveredNode || selectedNode;
@@ -1315,6 +1314,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     nodesG.classed('hotspot', (d: any) => heatmapMode === 'churn' && d.churn && d.churn >= 45);
 
     const pipelines = svgElement.selectAll('.pipeline-element');
+    let particleInterval: any = null;
 
     if (activeTraceNodeId && traceSteps.length > 0 && viewMode === 'call') {
       const activeStep = traceSteps[currentTraceStep];
@@ -1360,6 +1360,53 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       pipelines.style('stroke-opacity', 0.01);
       hullsBoundary.style('fill-opacity', 0.01).style('stroke-opacity', 0.1);
       hullWatermarks.style('opacity', 0.01);
+
+      // --- Bioluminescent Particle Spawning Code ---
+      const mainGroup = svgElement.select('.main-container');
+      let particlesGroup = mainGroup.select('.particles-group');
+      if (particlesGroup.empty()) {
+        particlesGroup = mainGroup.insert('g', '.node-element').attr('class', 'particles-group');
+      }
+
+      particleInterval = setInterval(() => {
+        linksLine.each(function (l: any) {
+          const { sId, tId } = getLinkId(l);
+          const stepIndex = traceSteps.findIndex(s => s.source === sId && s.target === tId);
+          if (stepIndex === -1) return;
+
+          const isActiveStep = stepIndex === currentTraceStep;
+          const sourceX = l.source?.x;
+          const sourceY = l.source?.y;
+          const targetX = l.target?.x;
+          const targetY = l.target?.y;
+
+          if (sourceX === undefined || sourceY === undefined || targetX === undefined || targetY === undefined) return;
+
+          // Muted steps spawn particles less frequently to avoid screen clutter
+          if (!isActiveStep && Math.random() > 0.35) return;
+
+          const particle = particlesGroup.append('circle')
+            .attr('class', isActiveStep ? 'flow-particle active-particle' : 'flow-particle')
+            .attr('r', isActiveStep ? 4.5 : 3.0)
+            .attr('cx', sourceX)
+            .attr('cy', sourceY)
+            .attr('fill', isActiveStep ? 'var(--color-accent)' : 'var(--color-primary)')
+            .style('opacity', isActiveStep ? 1.0 : 0.6)
+            .style('pointer-events', 'none')
+            .style('filter', isActiveStep 
+              ? 'drop-shadow(0 0 5px var(--color-accent))' 
+              : 'drop-shadow(0 0 3px var(--color-primary))'
+            );
+
+          particle.transition()
+            .duration(1200)
+            .ease(d3.easeLinear)
+            .attr('cx', targetX)
+            .attr('cy', targetY)
+            .remove();
+        });
+      }, 300);
+
     } else if (shortestPath) {
       const pathSet = new Set(shortestPath);
       nodesG.style('opacity', (d: any) => pathSet.has(d.id) ? 1.0 : 0.08);
@@ -1521,6 +1568,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     if (drawMinimapRef.current) {
       drawMinimapRef.current();
     }
+
+    return () => {
+      if (particleInterval) {
+        clearInterval(particleInterval);
+      }
+      svgElement.selectAll('.flow-particle').remove();
+    };
   }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded]);
 
   return (

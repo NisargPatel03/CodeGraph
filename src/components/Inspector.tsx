@@ -549,7 +549,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     }
                   }}
                 >
-                  {activeTraceNodeId === selectedNodeId ? '⏹️ Stop Trace Simulation' : '⚡ Trace Execution Path'}
+                  {activeTraceNodeId === selectedNodeId ? '⏹️ Stop Flow Simulation' : '⚡ Simulate Execution Flow'}
                 </button>
 
                 {/* Callers List */}
