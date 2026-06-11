@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
@@ -1848,7 +1849,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         />
       </div>
       {/* Cluster Hover Card */}
-      {hoveredCluster && (
+      {hoveredCluster && createPortal(
         <div 
           className="cluster-hover-card"
           style={{ 
@@ -1856,7 +1857,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             top: `${mousePos.y}px`,
             position: 'fixed',
             transform: 'translate(15px, 15px)',
-            opacity: 1
+            opacity: 1,
+            zIndex: 99999,
           }}
         >
           <div style={{ fontWeight: 700, color: 'var(--color-primary)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px', marginBottom: '6px', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
@@ -1872,11 +1874,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{hoveredCluster.connectionsCount}</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Component Hover Details Card */}
-      {viewMode === 'hierarchy' && hoveredNode && hoveredNode !== selectedNode && hoveredComponentDetails && hoveredComponentDetails.type === 'component' && (
+      {viewMode === 'hierarchy' && hoveredNode && hoveredNode !== selectedNode && hoveredComponentDetails && hoveredComponentDetails.type === 'component' && createPortal(
         <div 
           className="cluster-hover-card"
           style={{ 
@@ -1886,7 +1889,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             transform: 'translate(15px, 15px)',
             opacity: 1,
             maxWidth: '280px',
-            pointerEvents: 'none'
+            pointerEvents: 'none',
+            zIndex: 99999,
           }}
         >
           <div style={{ fontWeight: 700, color: 'var(--color-primary)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '4px', marginBottom: '6px', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
@@ -1920,8 +1924,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
 
     </div>
   );

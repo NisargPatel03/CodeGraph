@@ -361,7 +361,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <div className="tabs-helper-text">
                   Hover paths are highlighted on active nodes
                 </div>
               </div>
