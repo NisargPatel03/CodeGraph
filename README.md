@@ -278,12 +278,18 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 
 #### DB Schema (ER Visualizer)
 - **Multi-Format Schema Extraction** — Statically parses database definitions across four formats:
-  - **Prisma Schema (`.prisma`)**: Extracts models, attributes, types, primary keys (`@id`), and references.
-  - **SQL DDL (`.sql`)**: Extracts table structures, data types, `PRIMARY KEY` markers, and `FOREIGN KEY REFERENCES`.
-  - **Mongoose Schemas (`.js`/`.ts`)**: Parses MongoDB collection structures, nested field configurations, and model references.
-  - **SQLAlchemy Models (`.py`)**: Detects Python class models, SQLAlchemy columns, and relationship maps.
+  - **Prisma Schema (`.prisma`)**: Extracts models, attributes, types, primary keys (`@id`), and relation constraints (`@relation`).
+  - **SQL DDL (`.sql`)**: Extracts `CREATE TABLE` structures, column definitions, data types, `PRIMARY KEY` markers, and `FOREIGN KEY REFERENCES`.
+  - **Mongoose Schemas (`.js`/`.ts`)**: Parsed using a recursive brace-counting scanner and top-level field parser to handle nested configuration objects (e.g. `{ type: String, required: true }`) without terminating early. Extracts model names, attributes, types, and schema references.
+  - **SQLAlchemy Models (`.py`)**: Detects Python class models, SQLAlchemy columns, primary keys, foreign keys, and relationship links.
 - **Glassmorphic Entity Cards** — Renders rich, interactive card nodes in the D3 canvas using SVG `<foreignObject>`, displaying table name, fields, data types, and primary key (`🔑`)/foreign key (`🔗`) badges.
 - **Relational Connections** — Computes bounding box intersections to draw clean, curved connection lines between referencing fields and target tables, terminating with custom arrowheads.
+- **Custom D3 force simulation** — Engineered a force-directed network using custom `d3.forceSimulation` parameters to keep cards perfectly separated:
+  - **Link Distance**: set to `240` to maintain generous space for table details.
+  - **Charge Strength**: set to `-600` to prevent dense grouping.
+  - **Collision Radius**: calculated dynamically based on card bounding boxes (`Math.max(width, height) / 2 + 40`).
+- **Interactive Hover & Click HUD** — Hovering fades unrelated tables to `35%` opacity, keeping focus on the selected table and its immediate relational paths. Clicking a table card displays a dedicated floating HUD on the right side of the canvas listing fields, primary/foreign constraints, outgoing foreign keys, and incoming references.
+- **Double Click to Focus** — Resets viewport zoom and centers on the targeted table card.
 - **File Inspector Sync** — Click a database table card to highlight the source file and view the raw schema code side-by-side.
 - **Interactive Sandbox Onboarding** — Automatically loads a multi-table e-commerce mock schema (User, Order, OrderItem, Product, Category) if no database files are present, allowing immediate visual exploration.
 
