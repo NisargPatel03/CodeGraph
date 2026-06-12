@@ -574,7 +574,7 @@ export default function App() {
                 </div>
 
                 <div className="tabs-right-controls">
-                  {viewMode !== 'analytics' && (
+                  {viewMode !== 'analytics' && viewMode !== 'docs' && (
                     <button
                       className={`evolution-toggle-btn ${isEvolutionMode ? 'active' : ''}`}
                       onClick={() => {
@@ -609,11 +609,13 @@ export default function App() {
               </div>
 
               {/* Sticky KPI Ribbon */}
-              <KpiRibbon
-                graphData={graphData}
-                onOpenAnalytics={() => setViewMode('analytics')}
-                onSelectFile={(filePath) => setSelectedNodeId(filePath)}
-              />
+              {viewMode !== 'analytics' && viewMode !== 'docs' && (
+                <KpiRibbon
+                  graphData={graphData}
+                  onOpenAnalytics={() => setViewMode('analytics')}
+                  onSelectFile={(filePath) => setSelectedNodeId(filePath)}
+                />
+              )}
 
               {/* D3 Canvas Viewport, Analytics Dashboard or API Docs Portal Content */}
               {viewMode === 'analytics' ? (

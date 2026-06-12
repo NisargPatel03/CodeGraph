@@ -429,15 +429,15 @@ code, pre {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  padding: 8px 16px;
-  font-size: 0.85rem;
+  padding: 6px 12px;
+  font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
   border-radius: 6px;
   transition: var(--transition-smooth);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 
