@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import type { ParsedFile } from './repoParser';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 
@@ -453,6 +454,153 @@ Example JSON output structure:
   } catch (error: any) {
     console.error('Semantic search error:', error);
     throw error;
+  }
+}
+
+export interface LinterViolation {
+  violatingNodes: string[];
+  violatingLinks: { source: string; target: string }[];
+  explanation: string;
+}
+
+export async function lintCodebaseRules(
+  rule: string,
+  files: ParsedFile[],
+  links: { source: any; target: any }[],
+  apiKey: string
+): Promise<LinterViolation> {
+  if (!isValidApiKey(apiKey)) {
+    const ruleLower = rule.toLowerCase();
+    const violatingNodes = new Set<string>();
+    const violatingLinks: { source: string; target: string }[] = [];
+    
+    const pathsInRule = rule.match(/(?:src\/[a-zA-Z0-9_\-\/]+|[a-zA-Z0-9_\-\/]+)/g) || [];
+    const folders = ['components', 'utils', 'helpers', 'services', 'hooks', 'pages', 'api', 'context'];
+    const detectedFolders = folders.filter(f => ruleLower.includes(f));
+    
+    let sourcePattern = '';
+    let targetPattern = '';
+    
+    if (pathsInRule && pathsInRule.length >= 2) {
+      sourcePattern = (pathsInRule[0] || '').toLowerCase();
+      targetPattern = (pathsInRule[1] || '').toLowerCase();
+    } else if (detectedFolders.length >= 2) {
+      sourcePattern = detectedFolders[0];
+      targetPattern = detectedFolders[1];
+    } else if (detectedFolders.length === 1) {
+      sourcePattern = detectedFolders[0];
+    }
+    
+    let explanation = `### 🛡️ AI Architectural Linter (Offline Demo Mode)\nEvaluating rule: *"_ ${rule} _"*\n\n`;
+    
+    if (sourcePattern || targetPattern) {
+      links.forEach(l => {
+        const sId = typeof l.source === 'object' ? l.source.id : String(l.source);
+        const tId = typeof l.target === 'object' ? l.target.id : String(l.target);
+        
+        let isViolation = false;
+        if (sourcePattern && targetPattern) {
+          if (sId.toLowerCase().includes(sourcePattern) && tId.toLowerCase().includes(targetPattern)) {
+            isViolation = true;
+          }
+        } else if (sourcePattern) {
+          if (sId.toLowerCase().includes(sourcePattern) && ruleLower.includes('import') && tId.toLowerCase().includes('helper')) {
+            isViolation = true;
+          }
+        }
+        
+        if (isViolation) {
+          violatingNodes.add(sId);
+          violatingNodes.add(tId);
+          violatingLinks.push({ source: sId, target: tId });
+        }
+      });
+    }
+    
+    if (violatingNodes.size > 0) {
+      explanation += `⚠️ **Found ${violatingLinks.length} violations in offline simulation mode.**\n\nDetected boundary violation: files in **${sourcePattern}** are importing from **${targetPattern}**:\n\n` +
+        Array.from(violatingNodes).slice(0, 5).map(n => `- \`${n}\` violates the architectural boundary.`).join('\n') +
+        (violatingNodes.size > 5 ? `\n- and ${violatingNodes.size - 5} more files...` : '');
+    } else {
+      if (files.length > 1 && links.length > 0) {
+        const sampleLink = links[0];
+        const s = typeof sampleLink.source === 'object' ? sampleLink.source.id : String(sampleLink.source);
+        const t = typeof sampleLink.target === 'object' ? sampleLink.target.id : String(sampleLink.target);
+        
+        violatingNodes.add(s);
+        violatingNodes.add(t);
+        violatingLinks.push({ source: s, target: t });
+        explanation += `ℹ️ **Offline Demo Mode: No exact matches found for paths in rule.**\n\nShowing a sample highlight between \`${s}\` and \`${t}\` to demonstrate the warning orange flashing visualization. Enter a rule containing keywords like 'components' and 'utils' to simulate specific checks.`;
+      } else {
+        explanation += `✅ No architectural violations detected for this rule in your codebase structure.`;
+      }
+    }
+    
+    return {
+      violatingNodes: Array.from(violatingNodes),
+      violatingLinks,
+      explanation
+    };
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: GEMINI_MODEL,
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+
+    const codebaseStructure = {
+      files: files.map(f => f.path),
+      imports: links.map(l => ({
+        source: typeof l.source === 'object' ? l.source.id : String(l.source),
+        target: typeof l.target === 'object' ? l.target.id : String(l.target)
+      }))
+    };
+
+    const prompt = `You are a strict Software Architect. You are auditing a codebase dependency structure.
+Auditing rule:
+"${rule}"
+
+Codebase Structure JSON:
+${JSON.stringify(codebaseStructure, null, 2)}
+
+Task:
+Analyze the codebase structure against the auditing rule. Identify any files (nodes) or import dependencies (links) that violate this rule.
+Return a JSON object containing exactly these fields:
+- violatingNodes: (array of strings) The exact paths of violating files.
+- violatingLinks: (array of objects with "source" and "target" string properties) The exact import paths violating the rule.
+- explanation: (string) A concise, bulleted description of why these files/links are in violation. Support markdown styling.
+
+Note:
+- If a rule says "A should never import B", any file matching path pattern A that imports a file matching path pattern B is a violation. Both the importing file and the imported file are violating nodes.
+- Make sure the file paths in violatingNodes and violatingLinks match the keys in Codebase Structure exactly.
+- If there are no violations, return empty arrays.
+
+Example Output structure:
+{
+  "violatingNodes": ["src/components/MyButton.tsx", "src/utils/helper.ts"],
+  "violatingLinks": [
+    { "source": "src/components/MyButton.tsx", "target": "src/utils/helper.ts" }
+  ],
+  "explanation": "### Architectural Violations\n- \`src/components/MyButton.tsx\` imports \`src/utils/helper.ts\` directly, violating the rule: 'Components should not import helpers directly'."
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const parsed = JSON.parse(text);
+
+    return {
+      violatingNodes: Array.isArray(parsed.violatingNodes) ? parsed.violatingNodes.map(String) : [],
+      violatingLinks: Array.isArray(parsed.violatingLinks) ? parsed.violatingLinks.map((l: any) => ({
+        source: String(l.source || ''),
+        target: String(l.target || '')
+      })) : [],
+      explanation: String(parsed.explanation || 'No explanation provided.')
+    };
+  } catch (error: any) {
+    console.error('Linter API Error:', error);
+    throw new Error(`Failed to evaluate architecture rule: ${error.message || error}`);
   }
 }
 

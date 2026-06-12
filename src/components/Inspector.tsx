@@ -3,6 +3,7 @@ import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertT
 import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase, generateTestSuite } from '../utils/aiHelper';
+import type { LinterViolation } from '../utils/aiHelper';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -190,6 +191,13 @@ interface InspectorProps {
   callNodes: any[];
   callLinks: any[];
   diffData: any | null;
+  linterViolations: LinterViolation | null;
+  setLinterViolations: (violations: LinterViolation | null) => void;
+  linterRule: string;
+  setLinterRule: (rule: string) => void;
+  isLinting: boolean;
+  linterError: string | null;
+  onRunLinter: (rule: string) => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -206,8 +214,15 @@ export const Inspector: React.FC<InspectorProps> = ({
   callNodes,
   callLinks,
   diffData,
+  linterViolations,
+  setLinterViolations,
+  linterRule,
+  setLinterRule,
+  isLinting,
+  linterError,
+  onRunLinter,
 }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'chat'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [testSuites, setTestSuites] = useState<Record<string, string>>({});
@@ -518,10 +533,17 @@ export const Inspector: React.FC<InspectorProps> = ({
           <Sparkles size={14} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle' }} />
           Ask CodeBase AI
         </button>
+        <button
+          className={`inspector-tab ${activeTab === 'linter' ? 'active' : ''}`}
+          onClick={() => setActiveTab('linter')}
+        >
+          <AlertTriangle size={14} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle', color: '#f97316' }} />
+          AI Rules Linter
+        </button>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {activeTab === 'info' ? (
+        {activeTab === 'info' && (
           <div className="inspector-content">
             {selectedFolder ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
@@ -1138,7 +1160,9 @@ export const Inspector: React.FC<InspectorProps> = ({
           </>
         )}
       </div>
-        ) : (
+        )}
+
+        {activeTab === 'chat' && (
           <div className="chat-container">
             <div className="chat-messages">
               {chatMessages.length === 0 && (
@@ -1188,6 +1212,210 @@ export const Inspector: React.FC<InspectorProps> = ({
                 <Send size={16} />
               </button>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'linter' && (
+          <div className="inspector-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f97316', marginBottom: '4px' }}>
+              <AlertTriangle size={20} />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Architectural Rules Linter</h3>
+            </div>
+            
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+              Write dependency constraints in plain English. Gemini will evaluate the codebase graph, highlight files in warning orange, and dashed connections that break the rules.
+            </p>
+
+            {!apiKey && (
+              <div className="glass-panel" style={{
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                background: 'rgba(245, 158, 11, 0.05)',
+                borderRadius: '8px',
+                padding: '12px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                fontSize: '0.75rem',
+                color: '#f59e0b',
+                marginTop: '4px'
+              }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '2px' }}>Offline Demo Mode</strong>
+                  API Key is missing. CodeGraph will use dynamic heuristic simulation to analyze rules. Configure an API key in the top header settings to use live Gemini analysis.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Plain-English Rule
+              </label>
+              <textarea
+                className="cyber-input"
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '10px',
+                  fontSize: '0.85rem',
+                  resize: 'vertical',
+                  lineHeight: '1.4',
+                  background: 'rgba(0,0,0,0.2)'
+                }}
+                placeholder="e.g., Components in src/components/ should never import anything from src/utils/aiHelper.ts directly."
+                value={linterRule}
+                onChange={(e) => setLinterRule(e.target.value)}
+                disabled={isLinting}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                className="cyber-button"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+                onClick={() => onRunLinter(linterRule)}
+                disabled={isLinting || !linterRule.trim()}
+              >
+                {isLinting ? (
+                  <>
+                    <span className="spinner" style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '4px' }} />
+                    <span>Analyzing codebase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Activity size={14} />
+                    <span>Run Linter</span>
+                  </>
+                )}
+              </button>
+              {linterViolations && (
+                <button
+                  className="cyber-button secondary"
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: '0.85rem',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--panel-border)',
+                    color: 'var(--text-secondary)'
+                  }}
+                  onClick={() => {
+                    setLinterViolations(null);
+                    setLinterRule('');
+                  }}
+                  disabled={isLinting}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {linterError && (
+              <div style={{
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.05)',
+                borderRadius: '8px',
+                padding: '12px',
+                color: '#ef4444',
+                fontSize: '0.8rem',
+                display: 'flex',
+                gap: '8px',
+                marginTop: '8px'
+              }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '2px' }}>Analysis Failed</strong>
+                  {linterError}
+                </div>
+              </div>
+            )}
+
+            {linterViolations && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: linterViolations.violatingNodes.length > 0 ? '#f97316' : '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {linterViolations.violatingNodes.length > 0 ? (
+                      <>
+                        <AlertTriangle size={16} />
+                        <span>{linterViolations.violatingNodes.length} Violations Found</span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ color: '#10b981' }}>✓ Codebase Compliant</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {linterViolations.explanation && (
+                  <div 
+                    className="linter-explanation-box" 
+                    style={{
+                      fontSize: '0.8rem',
+                      color: 'var(--text-secondary)',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      border: '1px solid var(--panel-border)',
+                      borderRadius: '6px',
+                      padding: '10px',
+                      lineHeight: '1.45'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: formatMarkdown(linterViolations.explanation) }}
+                  />
+                )}
+
+                {linterViolations.violatingNodes.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Violating Files
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                      {linterViolations.violatingNodes.map((nodeId) => {
+                        const fileObj = allFiles.find(f => f.path === nodeId);
+                        return (
+                          <div 
+                            key={nodeId}
+                            className="violating-file-card"
+                            style={{
+                              background: 'rgba(249, 115, 22, 0.03)',
+                              border: '1px solid rgba(249, 115, 22, 0.15)',
+                              borderRadius: '6px',
+                              padding: '8px 10px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(249, 115, 22, 0.08)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(249, 115, 22, 0.03)'}
+                            onClick={() => {
+                              setSelectedNodeId(nodeId);
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#fb923c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {fileObj ? fileObj.name : nodeId.split('/').pop()}
+                              </span>
+                              <ExternalLink size={12} style={{ color: 'var(--text-muted)' }} />
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                              {nodeId}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

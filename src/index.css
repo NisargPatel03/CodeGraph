@@ -2577,3 +2577,43 @@ input:checked + .slider:before {
   animation: evolution-node-modified-pulse 1.8s infinite ease-in-out;
 }
 
+/* --- AI Architectural Rules Linter Styles --- */
+@keyframes warning-halo-pulse {
+  0% {
+    r: var(--base-r, 12px);
+    opacity: 0.95;
+    stroke: #fb923c;
+  }
+  50% {
+    stroke: #f97316;
+  }
+  100% {
+    r: calc(var(--base-r, 12px) + 22px);
+    opacity: 0;
+    stroke: #ef4444;
+  }
+}
+
+.warning-halo {
+  fill: none;
+  stroke: #f97316;
+  stroke-width: 2px;
+  pointer-events: none;
+  animation: warning-halo-pulse 1.6s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.linter-violating-node circle {
+  stroke: #f97316 !important;
+  stroke-width: 2.5px !important;
+  filter: drop-shadow(0 0 10px #f97316) !important;
+  transition: all 0.3s ease;
+}
+
+.linter-violating-link {
+  stroke: #f97316 !important;
+  stroke-opacity: 0.95 !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: 6 3;
+  animation: dash 1s infinite linear;
+}
+

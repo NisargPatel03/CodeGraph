@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, CheckCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X } from 'lucide-react';
 import type { ParsedFile } from './utils/repoParser';
 import { analyzeCodebase } from './utils/codeAnalyzer';
 import type { CodebaseGraph } from './utils/codeAnalyzer';
@@ -11,7 +11,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
 import { AiIcon } from './components/AiIcon';
 import logoImg from './assets/logo.png';
-import { semanticSearchCodebase } from './utils/aiHelper';
+import { semanticSearchCodebase, lintCodebaseRules } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
 // Tree interface for File Explorer
@@ -29,7 +29,9 @@ export default function App() {
     if (saved && validThemes.includes(saved)) return saved;
     return 'cyberpunk';
   });
-  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  const [apiKey, setApiKey] = useState(() => {
+    return localStorage.getItem('gemini_api_key') || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  });
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [repoData, setRepoData] = useState<{ 
     files: ParsedFile[]; 
@@ -50,6 +52,29 @@ export default function App() {
   const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
   const [isEvolutionMode, setIsEvolutionMode] = useState(false);
   const [currentEvolutionStep, setCurrentEvolutionStep] = useState(0);
+
+  // AI Architectural Linter States
+  const [linterViolations, setLinterViolations] = useState<import('./utils/aiHelper').LinterViolation | null>(null);
+  const [linterRule, setLinterRule] = useState('');
+  const [isLinting, setIsLinting] = useState(false);
+  const [linterError, setLinterError] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const handleRunLinter = async (rule: string) => {
+    if (!repoData || !graphData) return;
+    setIsLinting(true);
+    setLinterError(null);
+    setLinterRule(rule);
+    try {
+      const result = await lintCodebaseRules(rule, repoData.files, graphData.links, apiKey);
+      setLinterViolations(result);
+    } catch (err: any) {
+      console.error(err);
+      setLinterError(err.message || 'An error occurred during rule evaluation.');
+    } finally {
+      setIsLinting(false);
+    }
+  };
 
 
   // Sync theme to root element
@@ -339,10 +364,23 @@ export default function App() {
           </div>
 
           {/* Settings API Key Toggle indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid var(--panel-border)', paddingLeft: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: apiKey ? 'var(--color-accent)' : 'var(--text-muted)' }}>
-              <CheckCircle size={14} style={{ color: apiKey ? 'var(--color-accent)' : 'var(--text-muted)' }} />
-              {apiKey ? 'AI Key Verified' : 'AI Offline Mode'}
+          <div 
+            onClick={() => setIsSettingsOpen(true)}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              borderLeft: '1px solid var(--panel-border)', 
+              paddingLeft: '12px',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+            title="Configure Gemini API Key Settings"
+            className="api-indicator-btn"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: apiKey ? 'var(--color-secondary)' : '#f59e0b' }}>
+              <Key size={14} style={{ color: apiKey ? 'var(--color-secondary)' : '#f59e0b' }} />
+              <span style={{ fontWeight: 500 }}>{apiKey ? 'AI Key Verified' : 'AI Offline Mode'}</span>
             </div>
           </div>
         </div>
@@ -573,6 +611,7 @@ export default function App() {
                   currentEvolutionStep={currentEvolutionStep}
                   setCurrentEvolutionStep={setCurrentEvolutionStep}
                   commits={repoData.commits}
+                  linterViolations={linterViolations}
                 />
               )}
             </section>
@@ -592,6 +631,13 @@ export default function App() {
               callNodes={graphData.callNodes || []}
               callLinks={graphData.callLinks || []}
               diffData={diffData}
+              linterViolations={linterViolations}
+              setLinterViolations={setLinterViolations}
+              linterRule={linterRule}
+              setLinterRule={setLinterRule}
+              isLinting={isLinting}
+              linterError={linterError}
+              onRunLinter={handleRunLinter}
             />
           </main>
         )
@@ -643,6 +689,55 @@ export default function App() {
           allFiles={repoData.files}
           apiKey={apiKey}
         />
+      )}
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="settings-overlay" onClick={() => setIsSettingsOpen(false)}>
+          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
+                <Key size={18} />
+                AI Linter & Assistant Settings
+              </h3>
+              <button 
+                onClick={() => setIsSettingsOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Gemini API Key</label>
+              <input
+                type="password"
+                className="cyber-input"
+                placeholder="Enter your VITE_GEMINI_API_KEY..."
+                value={apiKey}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setApiKey(val);
+                  localStorage.setItem('gemini_api_key', val);
+                }}
+                style={{ padding: '10px 14px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }}
+              />
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                Your API key is stored securely in your browser's local storage and is only used to connect to Google Generative AI (Gemini) services directly.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+              <button 
+                className="cyber-button"
+                style={{ padding: '8px 20px', fontSize: '0.85rem' }}
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

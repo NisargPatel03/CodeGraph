@@ -27,6 +27,7 @@ interface GraphCanvasProps {
   currentEvolutionStep: number;
   setCurrentEvolutionStep: (step: number) => void;
   commits?: import('../utils/repoParser').GitHubCommitInfo[];
+  linterViolations?: import('../utils/aiHelper').LinterViolation | null;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -50,6 +51,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   currentEvolutionStep,
   setCurrentEvolutionStep,
   commits,
+  linterViolations,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1156,7 +1158,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         { id: 'arrow-normal', color: 'rgba(255, 255, 255, 0.15)' },
         { id: 'arrow-highlight', color: 'var(--color-primary)' },
         { id: 'arrow-highlight-incoming', color: 'var(--color-secondary)' },
-        { id: 'arrow-cycle', color: 'var(--color-alert)' }
+        { id: 'arrow-cycle', color: 'var(--color-alert)' },
+        { id: 'arrow-violating', color: '#f97316' }
       ])
       .enter().append('marker')
       .attr('id', (d) => d.id)
@@ -1293,10 +1296,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .data(links)
       .enter()
       .append('line')
-      .attr('class', () => {
+      .attr('class', (d: any) => {
         let cls = 'link-element';
         if (viewMode === 'dependency') cls += ' flowing';
         if (viewMode === 'hierarchy') cls += ' props-flow';
+        
+        const sId = typeof d.source === 'object' ? d.source.id : d.source;
+        const tId = typeof d.target === 'object' ? d.target.id : d.target;
+        const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
+          const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
+          const vlTarget = typeof vl.target === 'object' ? vl.target.id : vl.target;
+          return vlSource === sId && vlTarget === tId;
+        });
+        if (isViolating) cls += ' linter-violating-link';
         return cls;
       })
       .attr('stroke', 'var(--link-stroke)')
@@ -1306,9 +1318,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         }
         return d.isAggregated ? 1.5 + Math.min(d.weight * 0.4, 4) : 1.5;
       })
-      .attr('marker-end', 'url(#arrow-normal)');
+      .attr('marker-end', (d: any) => {
+        const sId = typeof d.source === 'object' ? d.source.id : d.source;
+        const tId = typeof d.target === 'object' ? d.target.id : d.target;
+        const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
+          const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
+          const vlTarget = typeof vl.target === 'object' ? vl.target.id : vl.target;
+          return vlSource === sId && vlTarget === tId;
+        });
+        return isViolating ? 'url(#arrow-violating)' : 'url(#arrow-normal)';
+      });
 
-    const node = mainGroup.append('g').attr('class', 'nodes-container').selectAll('.node-element').data(nodes).enter().append('g').attr('class', 'node-element')
+    const node = mainGroup.append('g').attr('class', 'nodes-container').selectAll('.node-element').data(nodes).enter().append('g')
+      .attr('class', (d: any) => {
+        let cls = 'node-element';
+        const isViolating = linterViolations?.violatingNodes.includes(d.id);
+        if (isViolating) cls += ' linter-violating-node';
+        return cls;
+      })
       .on('click', (event, d) => {
         event.stopPropagation();
         setSelectedNode(d.id);
@@ -1376,6 +1403,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     node.each(function (d: any) {
       const element = d3.select(this);
+      
+      const isViolating = linterViolations?.violatingNodes.includes(d.id);
+      if (isViolating && !d.isFolder && !d.isNpm) {
+        const baseRadius = viewMode === 'call' 
+          ? 8 + Math.min(d.callCount * 1.5, 20)
+          : (viewMode === 'dependency' 
+              ? 8 + Math.min((inDegreeMap.get(d.id) || 0) * 2.0, 24)
+              : (viewMode === 'hierarchy' ? 9 : 8) + Math.min(Math.sqrt(d.size || 0) * 0.04, 30));
+
+        element.append('circle')
+          .attr('class', 'warning-halo')
+          .style('--base-r', `${baseRadius}px`);
+      }
+
       if (d.isFolder) {
         element.append('path')
           .attr('d', 'M-12,-8 H-4 L-1,-5 H12 V8 H-12 Z')
@@ -1549,7 +1590,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations]);
   useEffect(() => {
     if (!svgRef.current) return;
     const activeId = hoveredNode || selectedNode;
@@ -1578,13 +1619,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const isNewlyAdded = currentCommit && currentCommit.filesAdded && currentCommit.filesAdded.includes(d.id);
       const isNewlyModified = currentCommit && currentCommit.filesModified && currentCommit.filesModified.includes(d.id);
 
+      const isViolating = linterViolations?.violatingNodes.includes(d.id);
+
       if (!circle.empty()) {
-        circle.style('stroke', isNewlyAdded ? '#a855f7' : (isNewlyModified ? '#fb923c' : 'var(--node-stroke)'))
-              .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
-              .style('stroke-dasharray', null)
-              .style('fill', getHeatmapColor(d))
-              .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : ''))
-              .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
+        if (isViolating) {
+          circle.style('stroke', '#f97316')
+                .style('stroke-width', '2.5px')
+                .style('stroke-dasharray', null)
+                .style('fill', getHeatmapColor(d))
+                .style('filter', 'drop-shadow(0 0 10px #f97316)')
+                .attr('class', null);
+        } else {
+          circle.style('stroke', isNewlyAdded ? '#a855f7' : (isNewlyModified ? '#fb923c' : 'var(--node-stroke)'))
+                .style('stroke-width', isNewlyAdded ? '3.5px' : (isNewlyModified ? '2.5px' : '1.5px'))
+                .style('stroke-dasharray', null)
+                .style('fill', getHeatmapColor(d))
+                .style('filter', isNewlyAdded ? 'drop-shadow(0 0 10px #a855f7)' : (isNewlyModified ? 'drop-shadow(0 0 6px #fb923c)' : ''))
+                .attr('class', isNewlyAdded ? 'evolution-node-birth' : (isNewlyModified ? 'evolution-node-modified' : null));
+        }
       }
       if (!polygon.empty()) {
         polygon.style('stroke', isNewlyAdded ? '#a855f7' : (isNewlyModified ? '#fb923c' : 'var(--node-stroke)'))
@@ -1811,10 +1863,22 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         } else if (tId === activeId) {
           line.attr('class', cls + ' flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
         } else {
-          line.attr('class', isCyclic ? 'link-element flow-cycle' : (isFlowing ? cls : 'link-element'))
-            .style('stroke-opacity', isCyclic ? 0.25 : 0.03)
-            .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
-            .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+          const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
+            const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
+            const vlTarget = typeof vl.target === 'object' ? vl.target.id : vl.target;
+            return vlSource === sId && vlTarget === tId;
+          });
+          if (isViolating) {
+            line.attr('class', cls + ' linter-violating-link')
+                .style('stroke-opacity', 0.45)
+                .style('stroke', '#f97316')
+                .attr('marker-end', 'url(#arrow-violating)');
+          } else {
+            line.attr('class', isCyclic ? 'link-element flow-cycle' : (isFlowing ? cls : 'link-element'))
+              .style('stroke-opacity', isCyclic ? 0.25 : 0.03)
+              .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
+              .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+          }
         }
       });
       pipelines.each(function (l: any) {
@@ -1906,13 +1970,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         const { sId, tId } = getLinkId(l);
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isFlowing = viewMode === 'dependency';
-        const cls = isFlowing ? 'link-element flowing' : 'link-element';
+        let cls = isFlowing ? 'link-element flowing' : 'link-element';
         
+        const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
+          const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
+          const vlTarget = typeof vl.target === 'object' ? vl.target.id : vl.target;
+          return vlSource === sId && vlTarget === tId;
+        });
+        if (isViolating) cls += ' linter-violating-link';
+
         d3.select(this)
-          .attr('class', isCyclic ? 'link-element flow-cycle' : cls)
-          .style('stroke-opacity', isCyclic ? 0.6 : (isFlowing ? 0.75 : 0.2))
-          .style('stroke', isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)')
-          .attr('marker-end', isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)');
+          .attr('class', isViolating ? cls : (isCyclic ? 'link-element flow-cycle' : cls))
+          .style('stroke-opacity', isViolating ? 0.95 : (isCyclic ? 0.6 : (isFlowing ? 0.75 : 0.2)))
+          .style('stroke', isViolating ? '#f97316' : (isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)'))
+          .attr('marker-end', isViolating ? 'url(#arrow-violating)' : (isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)'));
       });
       pipelines.each(function () {
         const line = d3.select(this);
@@ -1935,7 +2006,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations]);
 
   return (
     <div 
