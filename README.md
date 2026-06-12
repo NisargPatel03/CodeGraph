@@ -32,7 +32,10 @@
   - [File Inspector](#2-file-inspector)
   - [AI Code Intelligence Suite](#3-ai-code-intelligence-suite)
   - [Reports & Analytics Dashboard](#4-reports--analytics-dashboard)
-  - [Theme System](#5-theme-system)
+  - [API Documentation Portal](#5-api-documentation-portal)
+  - [KPI Ribbon](#6-kpi-ribbon)
+  - [Theme System](#7-theme-system)
+  - [Static Analysis Engine](#8-static-analysis-engine)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -89,13 +92,31 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Developer Onboarding Guide** — `generateOnboardingGuide` — Creates a full project overview, reading order, and quickstart guide (exportable as Markdown).
 - **Architecture Overview** — `generateArchitectureOverview` — Produces a layered architecture report identifying patterns, module categories, and refactoring recommendations.
 - **AI Chat Assistant** — `askQuestionAboutCodebase` — A floating chat drawer that answers any developer question with full file-system context.
+- **AI Architectural Linter** — `lintCodebaseRules` — Define custom architectural boundary rules in natural language (e.g. "components should never import from utils directly"). Gemini evaluates the dependency graph against the rule and returns violating nodes/links, which are highlighted with orange warning flashes on the D3 canvas.
+- **Dependency Risk Auditor** — `runDependencyAudit` — Computes afferent coupling (fan-in), efferent coupling (fan-out), and instability index for every file. Identifies Single Points of Failure (SPOFs) and generates a letter-graded Coupling Health Report with actionable refactoring recommendations.
+- **AI REST API Extractor** — `aiExtractEndpoints` — Scans codebase files for REST route registrations (Express, NestJS, Flask, FastAPI, Django, Spring) and generates a full interactive API documentation portal with endpoint specs, parameter forms, and response schemas.
+
+### 📖 REST API Documentation Portal
+- **Auto-Detection** — Statically parses route definitions across 6+ frameworks (Express, NestJS, Flask, FastAPI, Django, Spring Boot) with regex-based pattern matching, enhanced by Gemini AI for deep extraction
+- **Interactive Endpoint Directory** — Searchable sidebar listing all detected endpoints grouped by source file, with colour-coded HTTP method badges (GET/POST/PUT/DELETE/PATCH)
+- **Live Request Tester** — Built-in HTTP client with configurable server URL, dynamic path/query parameter forms, custom headers editor, and JSON body payload editor
+- **cURL Generator** — Real-time cURL command compiler that updates as you modify parameters, with one-click copy
+- **Response Console** — Terminal-style output panel showing status codes, response headers, and formatted JSON response bodies
 
 ### 📊 Reports & Analytics
-- **Codebase Dashboard** — KPI cards showing total files, functions, lines of code, circular dependencies detected, and dead files
+- **Codebase Dashboard** — KPI cards showing total files, functions, lines of code, complexity score, and dead files
 - **Code Smell Detector** — Scans for Long Files, Long Functions, Nested Imports, and Unused Exports with per-smell severity (`critical`, `major`, `minor`) and an ✨ AI Refactor action
 - **Circular Dependency Cycles** — Lists all detected cycles with the full chain of files
+- **Duplicate Function Detector** — Identifies functions with identical names across multiple files, flagging potential copy-paste code
+- **Dead Code Finder** — Lists files with zero incoming imports (not entry points), indicating unused/orphaned modules
+- **Highly Active Files (Churn)** — Ranks files by estimated commit frequency to identify hotspots
 - **Onboarding Guide** — AI-generated Markdown exportable as `.md`, PDF (via browser print), or copied in Notion-compatible format
 - **Architecture Overview** — AI-generated architectural analysis with module-level breakdown
+
+### 📌 KPI Ribbon
+- **Sticky Summary Bar** — A compact, always-visible ribbon below the graph tabs showing key metrics at a glance: total files, functions, lines of code, circular dependency count, and dead file count
+- **Interactive Chips** — Each KPI chip is clickable, navigating to the relevant analytics section or file
+- **Complexity Dropdown** — Expandable panel showing the top 5 most complex files ranked by line count
 
 ### 🎨 Theme System
 Six built-in visual themes, switchable with an animated ripple effect:
@@ -118,6 +139,7 @@ Six built-in visual themes, switchable with an animated ripple effect:
 | **Framework** | React 19 with TypeScript 6 |
 | **Build Tool** | Vite 8 |
 | **Visualization** | D3.js v7 (force-directed, tree layouts, zoom/pan) |
+| **Diagramming** | Mermaid.js v11 (UML architecture diagrams, exportable as SVG/PNG) |
 | **AI Provider** | Google Gemini AI (`gemini-3.5-flash`) via `@google/generative-ai` |
 | **ZIP Parsing** | JSZip 3 |
 | **Icons** | Lucide React |
@@ -137,19 +159,22 @@ CodeGraph/
 │   │   └── logo.png                 # Neural Tree brand logo
 │   ├── components/
 │   │   ├── AiChatDrawer.tsx         # Sliding AI chat assistant drawer
+│   │   ├── AiIcon.tsx               # Reusable animated AI sparkle icon component
 │   │   ├── AnalyticsDashboard.tsx   # Detailed analysis metrics & AI reports dashboard
-│   │   ├── GraphCanvas.tsx          # D3.js multi-mode graph renderer (1929 lines)
+│   │   ├── ApiDocsPortal.tsx        # REST API documentation portal with live tester
+│   │   ├── EvolutionPlayer.tsx      # Git timeline replay slider & commit controls
+│   │   ├── GraphCanvas.tsx          # D3.js multi-mode graph renderer
 │   │   ├── Inspector.tsx            # File inspector sidebar with AI tools
 │   │   ├── KpiRibbon.tsx            # Sticky canvas KPI summary ribbon
 │   │   ├── Reports.tsx              # Bottom analytics panel & AI reports
 │   │   └── RepoSelector.tsx         # Landing page — GitHub URL / ZIP uploader
 │   ├── utils/
-│   │   ├── aiHelper.ts              # All Gemini AI API helpers
-│   │   ├── codeAnalyzer.ts          # Static analysis engine (965 lines)
+│   │   ├── aiHelper.ts              # All Gemini AI API helpers (1099 lines)
+│   │   ├── codeAnalyzer.ts          # Static analysis engine (1161 lines)
 │   │   └── repoParser.ts            # GitHub API & ZIP file parser
 │   ├── App.tsx                      # Root layout, routing, theme controller
 │   ├── App.css                      # Layout overrides
-│   ├── index.css                    # Global design system & theme tokens
+│   ├── index.css                    # Global design system & theme tokens (2842 lines)
 │   └── main.tsx                     # React DOM entry point
 ├── index.html
 ├── package.json
@@ -310,6 +335,15 @@ AI-powered semantic search. Rather than standard keyword filtering, users can ty
 #### `generateMermaidDiagram(filesSummary, links, apiKey)`
 Automatically generates a customized **Mermaid.js** graph diagram showing folder organization/boundaries (as subgraphs) and key dependency connections, representing a live topological architecture map of your project.
 
+#### `lintCodebaseRules(rule, files, links, apiKey)`
+Accepts a natural-language architectural constraint (e.g. *"components should never import from utils"*). Gemini evaluates the full dependency graph against the rule and returns a `LinterViolation` object containing `violatingNodes`, `violatingLinks`, and a Markdown `explanation`. Violations are rendered as orange warning flashes on the D3 canvas. Includes a smart offline fallback that parses folder keywords from the rule to simulate boundary checks.
+
+#### `runDependencyAudit(files, links, apiKey)`
+Computes **Afferent Coupling** (Ca / fan-in), **Efferent Coupling** (Ce / fan-out), and **Instability Index** (Ce / (Ca + Ce)) for every file. Files with a risk score ≥ 6.0 are flagged. Gemini produces a letter-graded (A–F) Coupling Health Report identifying SPOFs and recommending Dependency Inversion, event-driven decoupling, or module splitting. Falls back to a fully static audit with the same metrics when offline.
+
+#### `aiExtractEndpoints(files, apiKey)` / `extractEndpointsFromCodebase(files)`
+Two-tier REST API route extractor. The static parser (`extractEndpointsFromCodebase`) uses regex patterns to detect route registrations across **Express/Node.js**, **NestJS**, **Flask**, **FastAPI**, **Django**, and **Spring Boot**. The AI-enhanced version (`aiExtractEndpoints`) sends routing file contents to Gemini for deep extraction with full parameter schemas, response specs, and an architectural summary. Returns an `ApiDocsReport` with typed `ApiEndpoint[]` objects.
+
 ---
 
 ### 4. Reports & Analytics Dashboard
@@ -319,17 +353,19 @@ Automatically generates a customized **Mermaid.js** graph diagram showing folder
 A collapsible bottom panel with five tabs:
 
 #### Dashboard Tab
-- **KPI Cards** — Total Files, Total Functions, Lines of Code, Circular Dependency count, Dead Files
-- **Top Folders by Complexity** — Bar chart of aggregate complexity per folder
+- **KPI Cards** — Total Files, Total Functions, Lines of Code, Complexity Score, and Dead Files
+- **Complexity Score Per Module** — Gradient bar chart of aggregate line complexity per folder
 - **Most Imported Files** — Ranking by in-degree (how many files import them)
-- **Most Changed Files** — Ranking by churn score
+- **Dead Code Detection** — Files with 0 incoming imports (excluding entry points) flagged as unused
+- **Duplicate Function Detector** — Functions with identical names found in multiple files, with clickable file:line locations
+- **Highly Active Files (Churn)** — Ranking by estimated commit frequency
 
 #### Code Smell Detector Tab
 Scans all files using the static analysis engine and presents findings categorized by severity:
 
 | Smell Type | Trigger Condition |
 |---|---|
-| `file_length` | File exceeds 300 lines |
+| `file_length` | File exceeds 500 lines |
 | `func_length` | Function exceeds 50 lines |
 | `nested_import` | Deep or circular nested import patterns |
 | `unused_export` | Exported symbol with no detected importer |
@@ -355,7 +391,41 @@ Lists every detected cycle with the full chain displayed as `File A → File B �
 
 ---
 
-### 5. Theme System
+### 5. API Documentation Portal
+
+**File:** `src/components/ApiDocsPortal.tsx`
+
+A full-featured, interactive REST API documentation explorer accessible from the **📖 API Docs** tab in the workspace.
+
+#### Endpoint Detection
+- **Multi-Framework Static Parser** — Regex-based detection for Express (`router.get`), NestJS (`@Get()`), Flask (`@app.route`), FastAPI (`@router.get`), Django (`path()`), and Spring Boot (`@GetMapping`) route patterns
+- **AI-Enhanced Extraction** — When a Gemini API key is configured, routing files are sent to Gemini for deep extraction of parameter schemas, response specifications, and controller mappings
+
+#### Interactive Workspace
+| Panel | Description |
+|---|---|
+| **Endpoint Directory** | Searchable left sidebar grouping endpoints by source file with colour-coded method badges |
+| **Documentation Pane** | Endpoint heading, description, file/line reference, handler name, and response schema specs |
+| **Parameter Forms** | Dynamic input fields for path, query, header, and JSON body parameters |
+| **Server URL Config** | Configurable base URL (default `http://localhost:3000`) for live testing |
+| **cURL Generator** | Real-time cURL command that updates as you modify parameters, with copy button |
+| **Interactive Console** | Send Request button, response status display, and formatted JSON response body output |
+
+---
+
+### 6. KPI Ribbon
+
+**File:** `src/components/KpiRibbon.tsx`
+
+A compact, sticky summary bar rendered directly below the graph tabs (visible in all graph view modes, hidden in Analytics and API Docs views).
+
+- **Metric Chips** — Displays Total Files, Total Functions, Lines of Code, Circular Dependencies, and Dead Files as clickable chips
+- **Complexity Dropdown** — An expandable section showing the top 5 most complex files ranked by line count, with clickable entries that select the file in the graph
+- **Open Analytics** — Quick-access button to switch to the full Analytics Dashboard view
+
+---
+
+### 7. Theme System
 
 Themes are controlled by a `data-theme` attribute on `<html>` and a set of CSS custom properties:
 
@@ -375,6 +445,37 @@ Theme selection persists in `localStorage`. Switching themes triggers a CSS-anim
 
 ---
 
+### 8. Static Analysis Engine
+
+**File:** `src/utils/codeAnalyzer.ts`
+
+A fully client-side, zero-dependency static analysis engine that parses source files and produces a complete `CodebaseGraph` object.
+
+#### Multi-Language Import Resolution
+| Language | Pattern Detection |
+|---|---|
+| **JavaScript / TypeScript** | ES6 `import/export`, dynamic `import()`, CommonJS `require()`, `@/` alias resolution |
+| **Python** | `import module`, `from module import name` |
+| **Rust** | `use crate::module`, `mod module` |
+| **C / C++** | `#include "header.h"` |
+| **Go** | `func` declarations and file-level parsing |
+
+#### Analysis Pipeline
+1. **Dependency Graph Construction** — Resolves all imports with extension inference (`.ts`, `.tsx`, `.js`, `.jsx`, `/index.*`) and builds weighted edges based on symbol count
+2. **Circular Dependency Detection** — DFS-based cycle finder with deduplication via sorted path hashing
+3. **Call Graph Extraction** — Parses function declarations and scans for cross-file invocations to build function-to-function edges
+4. **React Component Hierarchy** — Detects functional components (PascalCase functions in `.tsx`/`.jsx`) and JSX parent-child relationships (`<ComponentName />`), extracting props, state variables, and hooks
+5. **Code Smell Detection** — Flags file length (>500 lines), function length (>50 lines), deeply nested imports (4+ levels), unused exports, circular dependency participation, and dead code files
+6. **Duplicate Function Analysis** — Identifies function names that appear in multiple files across the codebase
+7. **Dead Code Detection** — Files with zero incoming imports (excluding entry points like `main.tsx`, `App.tsx`, `index.html`, `*.config.*`)
+8. **NPM Dependency Mapping** — Tracks external package imports and builds separate npm dependency nodes
+
+#### Git History Simulation
+- `generateGitHistory()` — Creates a simulated 10-step commit timeline by categorizing files into logical development stages (config → utils → models → components → main)
+- `mapFilesToRealCommits()` — Maps real GitHub API commit data to files using commit message keyword matching and proportional distribution
+
+---
+
 ## Architecture
 
 ```
@@ -389,6 +490,7 @@ Theme selection persists in `localStorage`. Switching themes triggers a CSS-anim
 │                     codeAnalyzer.ts                          │
 │  parseImports → resolveImportPath → buildDependencyGraph     │
 │  detectCodeSmells → detectCycles (DFS) → extractCallGraph    │
+│  extractClassHierarchy → generateGitHistory                  │
 │  → CodebaseGraph { nodes, links, cycles, smells, stats }     │
 └────────┬──────────────────────┬───────────────────────────────┘
          │                      │
@@ -396,32 +498,39 @@ Theme selection persists in `localStorage`. Switching themes triggers a CSS-anim
 ┌────────────────┐   ┌──────────────────────────────────────────┐
 │  GraphCanvas   │   │                Inspector                  │
 │  (D3.js SVG)   │   │  File metadata │ AI Summary │ Test Suite  │
-│  4 view modes  │   │  Functions     │ Who Calls  │ Code Preview│
-└────────────────┘   └──────────────────────────────────────────┘
-                                │
-                                ▼
-                    ┌───────────────────────┐
-                    │      aiHelper.ts      │
-                    │  Google Gemini AI     │
-                    │  gemini-3.5-flash     │
-                    └───────────────────────┘
-                                │
-              ┌─────────────────┴──────────────────┐
-              ▼                                     ▼
-    ┌──────────────────┐                ┌───────────────────┐
-    │  AiChatDrawer    │                │      Reports      │
-    │  (Q&A Drawer)    │                │  Dashboard │ AI   │
-    └──────────────────┘                │  Smells │ Cycles  │
-                                        └───────────────────┘
+│  4 view modes  │   │  Linter │ Audit │ Who Calls │ Code Preview│
+│  + KpiRibbon   │   └──────────────────────────────────────────┘
+│  + Evolution   │                  │
+└────────────────┘                  ▼
+         │               ┌───────────────────────┐
+         │               │      aiHelper.ts      │
+         │               │  Google Gemini AI     │
+         │               │  gemini-3.5-flash     │
+         │               └───────────────────────┘
+         │                          │
+         │        ┌─────────────────┼──────────────────┐
+         │        ▼                 ▼                   ▼
+         │  ┌──────────────┐ ┌───────────────┐ ┌───────────────┐
+         │  │ AiChatDrawer │ │    Reports    │ │ ApiDocsPortal │
+         │  │ (Q&A Drawer) │ │ Dashboard│AI │ │ REST API Docs │
+         │  └──────────────┘ │ Smells│Cycles │ │ Live Tester   │
+         │                   └───────────────┘ └───────────────┘
+         ▼
+┌────────────────────────────────┐
+│     AnalyticsDashboard        │
+│  Code Smells │ Architecture   │
+│  Onboarding  │ Mermaid UML    │
+└────────────────────────────────┘
 ```
 
 ### Data Flow
 1. **Ingestion** — `RepoSelector` loads a GitHub repo or ZIP archive via `repoParser.ts`, producing a flat `ParsedFile[]` array
-2. **Analysis** — `App.tsx` passes files to `codeAnalyzer.ts` which performs static analysis and returns a `CodebaseGraph`
-3. **Visualization** — `GraphCanvas` receives the graph data and renders it via D3.js
-4. **Inspection** — Clicking a node opens it in `Inspector` where per-file metadata and AI tools are available
-5. **AI Augmentation** — Any AI action calls `aiHelper.ts` which talks to Gemini and returns Markdown
-6. **Rendering** — All AI responses are rendered by a shared `formatMarkdown()` utility that produces syntax-highlighted code blocks with copy buttons
+2. **Analysis** — `App.tsx` passes files to `codeAnalyzer.ts` which performs static analysis and returns a `CodebaseGraph` containing nodes, links, cycles, call graphs, class hierarchies, code smells, duplicate functions, and dead files
+3. **Visualization** — `GraphCanvas` receives the graph data and renders it via D3.js across 4 view modes. `KpiRibbon` displays sticky metric summaries. `EvolutionPlayer` drives the Git Replay timeline.
+4. **Inspection** — Clicking a node opens it in `Inspector` where per-file metadata, AI tools, the Architectural Linter, and Dependency Auditor are available
+5. **AI Augmentation** — Any AI action calls `aiHelper.ts` which talks to Gemini and returns Markdown. This includes file explanations, test suites, refactoring, semantic search, architecture linting, dependency auditing, and API route extraction.
+6. **API Documentation** — `ApiDocsPortal` uses `aiExtractEndpoints` to scan for REST routes and presents an interactive documentation workspace with live request testing
+7. **Rendering** — All AI responses are rendered by a shared `formatMarkdown()` utility that produces syntax-highlighted code blocks with copy buttons
 
 ---
 
