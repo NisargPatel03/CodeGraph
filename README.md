@@ -58,6 +58,7 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 | **Module Clusters** | Files grouped by their parent folder, visualizing module boundaries |
 | **Call Graph** | Function-to-function call relationships with interactive bioluminescent execution flow simulation |
 | **Component Tree** | React component hierarchy shown as top-down or radial tree layout |
+| **DB Schema** | Interactive Entity-Relationship (ER) database schema map parsing definitions (Prisma, SQL DDL, Mongoose, SQLAlchemy) |
 
 ### 📊 Codebase Evolution Timeline (Git Replay)
 - **Chronological Growth Playback** — Simulated 10-step commit history mapping the codebase growth from birth (earliest files) to the present day. Sliding the timeline replays the historical changes of the codebase, showing new node clusters popping up and expanding as the codebase matures.
@@ -171,7 +172,8 @@ CodeGraph/
 │   ├── utils/
 │   │   ├── aiHelper.ts              # All Gemini AI API helpers (1099 lines)
 │   │   ├── codeAnalyzer.ts          # Static analysis engine (1161 lines)
-│   │   └── repoParser.ts            # GitHub API & ZIP file parser
+│   │   ├── repoParser.ts            # GitHub API & ZIP file parser
+│   │   └── schemaParser.ts          # Database schema parsing engine (Prisma, SQL DDL, Mongoose, SQLAlchemy)
 │   ├── App.tsx                      # Root layout, routing, theme controller
 │   ├── App.css                      # Layout overrides
 │   ├── index.css                    # Global design system & theme tokens (2842 lines)
@@ -273,6 +275,17 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 #### Component Tree
 - Parses React component hierarchies using JSX pattern detection
 - Renders as a **top-down** or **radial** D3 tree layout
+
+#### DB Schema (ER Visualizer)
+- **Multi-Format Schema Extraction** — Statically parses database definitions across four formats:
+  - **Prisma Schema (`.prisma`)**: Extracts models, attributes, types, primary keys (`@id`), and references.
+  - **SQL DDL (`.sql`)**: Extracts table structures, data types, `PRIMARY KEY` markers, and `FOREIGN KEY REFERENCES`.
+  - **Mongoose Schemas (`.js`/`.ts`)**: Parses MongoDB collection structures, nested field configurations, and model references.
+  - **SQLAlchemy Models (`.py`)**: Detects Python class models, SQLAlchemy columns, and relationship maps.
+- **Glassmorphic Entity Cards** — Renders rich, interactive card nodes in the D3 canvas using SVG `<foreignObject>`, displaying table name, fields, data types, and primary key (`🔑`)/foreign key (`🔗`) badges.
+- **Relational Connections** — Computes bounding box intersections to draw clean, curved connection lines between referencing fields and target tables, terminating with custom arrowheads.
+- **File Inspector Sync** — Click a database table card to highlight the source file and view the raw schema code side-by-side.
+- **Interactive Sandbox Onboarding** — Automatically loads a multi-table e-commerce mock schema (User, Order, OrderItem, Product, Category) if no database files are present, allowing immediate visual exploration.
 
 ---
 
