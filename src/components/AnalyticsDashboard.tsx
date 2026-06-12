@@ -29,7 +29,92 @@ let mermaidInitialized = false;
 const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const downloadSvg = () => {
+    try {
+      if (!ref.current) return;
+      const svgEl = ref.current.querySelector('svg');
+      if (!svgEl) return;
 
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'codebase-architecture.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download SVG failed:', e);
+    }
+  };
+
+  const downloadPng = () => {
+    try {
+      if (!ref.current) return;
+      const svgEl = ref.current.querySelector('svg');
+      if (!svgEl) return;
+
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      const width = Math.ceil(svgClone.viewBox?.baseVal?.width || svgEl.clientWidth || 800);
+      const height = Math.ceil(svgClone.viewBox?.baseVal?.height || svgEl.clientHeight || 600);
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const scale = 2;
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+
+          const context = canvas.getContext('2d');
+          if (context) {
+            context.fillStyle = '#0a0a0f';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.scale(scale, scale);
+            context.drawImage(image, 0, 0, width, height);
+
+            const pngUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download = 'codebase-architecture.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+        } catch (err) {
+          console.error('PNG canvas export failed:', err);
+        }
+      };
+      image.onerror = (err) => {
+        console.error('Image load failed for PNG export:', err);
+      };
+      image.src = svgDataUrl;
+    } catch (e) {
+      console.error('Download PNG failed:', e);
+    }
+  };
   useEffect(() => {
     if (!ref.current || !chart) return;
 
@@ -80,7 +165,31 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
     );
   }
 
-  return <div ref={ref} style={{ width: '100%', textAlign: 'center', overflowX: 'auto' }} />;
+  return (
+    <div style={{ width: '100%', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '8px' }}>
+        <button
+          className="cyber-button secondary"
+          style={{ fontSize: '0.68rem', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={downloadSvg}
+          title="Download as SVG (Scalable Vector Graphics)"
+        >
+          <Download size={11} />
+          Export SVG
+        </button>
+        <button
+          className="cyber-button secondary"
+          style={{ fontSize: '0.68rem', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={downloadPng}
+          title="Download as PNG (High-resolution raster image)"
+        >
+          <Download size={11} />
+          Export PNG
+        </button>
+      </div>
+      <div ref={ref} style={{ width: '100%', textAlign: 'center', overflowX: 'auto' }} />
+    </div>
+  );
 };
 
 function formatMarkdown(text: string): string {
