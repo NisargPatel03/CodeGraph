@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Play, Copy, Check, Code, Sparkles, Terminal, BookOpen, Search, AlertTriangle, Server, RefreshCw } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { aiExtractEndpoints } from '../utils/aiHelper';
@@ -21,6 +22,9 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [bodyValue, setBodyValue] = useState('');
   const [customHeaders, setCustomHeaders] = useState('Content-Type: application/json');
+  const [useCorsProxy, setUseCorsProxy] = useState(false);
+  const [corsProxyPrefix, setCorsProxyPrefix] = useState('https://api.allorigins.win/raw?url=');
+  const [showCorsHelp, setShowCorsHelp] = useState(false);
   
   // Response states
   const [executing, setExecuting] = useState(false);
@@ -131,7 +135,16 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
       url += `?${queries.join('&')}`;
     }
 
-    let curl = `curl -X ${selectedEndpoint.method} "${url}"`;
+    let finalUrl = url;
+    if (useCorsProxy && corsProxyPrefix) {
+      if (corsProxyPrefix.endsWith('=') || corsProxyPrefix.endsWith('?')) {
+        finalUrl = `${corsProxyPrefix}${encodeURIComponent(url)}`;
+      } else {
+        finalUrl = `${corsProxyPrefix}${url}`;
+      }
+    }
+
+    let curl = `curl -X ${selectedEndpoint.method} "${finalUrl}"`;
 
     // Append custom headers
     customHeaders.split('\n').forEach(h => {
@@ -146,7 +159,7 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
     }
 
     return curl;
-  }, [selectedEndpoint, serverUrl, paramValues, bodyValue, customHeaders]);
+  }, [selectedEndpoint, serverUrl, paramValues, bodyValue, customHeaders, useCorsProxy, corsProxyPrefix]);
 
   const copyCurlToClipboard = () => {
     navigator.clipboard.writeText(compiledCurl);
@@ -180,6 +193,15 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
       url += `?${queries.join('&')}`;
     }
 
+    let finalUrl = url;
+    if (useCorsProxy && corsProxyPrefix) {
+      if (corsProxyPrefix.endsWith('=') || corsProxyPrefix.endsWith('?')) {
+        finalUrl = `${corsProxyPrefix}${encodeURIComponent(url)}`;
+      } else {
+        finalUrl = `${corsProxyPrefix}${url}`;
+      }
+    }
+
     const headers: Record<string, string> = {};
     customHeaders.split('\n').forEach(h => {
       const parts = h.split(':');
@@ -206,7 +228,7 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
     }
 
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(finalUrl, options);
       const text = await res.text();
       const resHeaders: Record<string, string> = {};
       res.headers.forEach((v, k) => {
@@ -398,11 +420,33 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
               </div>
 
               {/* Server URL Configure */}
-              <div className="glass-panel" style={{ padding: '16px', border: '1px solid var(--panel-border)', borderRadius: '8px', marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Server size={13} />
-                  API SERVER URL CONFIG
-                </label>
+              <div className="glass-panel" style={{ padding: '16px', border: '1px solid var(--panel-border)', borderRadius: '8px', marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Server size={13} />
+                    API SERVER URL CONFIG
+                  </label>
+                  <button
+                    onClick={() => setShowCorsHelp(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--color-secondary)',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: 0,
+                      fontWeight: 600
+                    }}
+                    title="How to handle local CORS issues"
+                  >
+                    <AlertTriangle size={12} style={{ color: 'var(--color-warning)' }} />
+                    CORS Guide
+                  </button>
+                </div>
+                
                 <input
                   type="text"
                   className="cyber-input"
@@ -410,6 +454,35 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
                   value={serverUrl}
                   onChange={e => setServerUrl(e.target.value)}
                 />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--panel-border)', paddingTop: '10px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="use-cors-proxy-checkbox"
+                      checked={useCorsProxy}
+                      onChange={e => setUseCorsProxy(e.target.checked)}
+                      style={{ cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+                    />
+                    <label htmlFor="use-cors-proxy-checkbox" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500 }}>
+                      Route via CORS Proxy client (Bypass local/remote CORS blocks)
+                    </label>
+                  </div>
+
+                  {useCorsProxy && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginLeft: '22px' }}>
+                      <label style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>CORS Proxy Prefix URL</label>
+                      <input
+                        type="text"
+                        className="cyber-input"
+                        placeholder="e.g. https://api.allorigins.win/raw?url="
+                        value={corsProxyPrefix}
+                        onChange={e => setCorsProxyPrefix(e.target.value)}
+                        style={{ padding: '4px 8px', fontSize: '0.72rem' }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Dynamic Path/Query parameters list */}
@@ -585,11 +658,30 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
                       Awaiting response from {serverUrl}...
                     </div>
                   ) : testError ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', color: '#f87171', overflowY: 'auto' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', color: '#f87171', overflowY: 'auto' }}>
                       <span style={{ fontWeight: 700 }}>⚠️ Request Failed</span>
                       <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: '0.7rem', color: '#ef4444' }}>
                         {testError}
                       </pre>
+                      {(testError.includes('CORS') || testError.toLowerCase().includes('network') || testError.toLowerCase().includes('fetch')) && (
+                        <button
+                          onClick={() => setShowCorsHelp(true)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            background: 'rgba(244, 63, 94, 0.1)',
+                            border: '1px solid rgba(244, 63, 94, 0.2)',
+                            color: '#fb7185',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            marginTop: '4px',
+                            fontWeight: 600
+                          }}
+                        >
+                          Troubleshoot CORS / Connection Errors
+                        </button>
+                      )}
                     </div>
                   ) : testResponse ? (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -705,6 +797,116 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
           </div>
         )}
       </main>
+
+      {showCorsHelp && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 7, 15, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '650px',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            background: 'var(--panel-bg)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '12px',
+            boxShadow: '0 0 30px rgba(99, 102, 241, 0.2)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header */}
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} style={{ color: 'var(--color-warning)' }} />
+                CORS Troubleshooting Guide
+              </span>
+              <button
+                onClick={() => setShowCorsHelp(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--panel-border)',
+                  color: 'var(--text-secondary)',
+                  borderRadius: '4px',
+                  padding: '4px 10px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '20px 20px 32px 20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', fontSize: '0.82rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+              
+              <div>
+                <h4 style={{ color: 'var(--text-primary)', margin: '0 0 6px 0', fontSize: '0.9rem', fontWeight: 600 }}>Why do CORS errors happen?</h4>
+                <p style={{ margin: 0 }}>
+                  Browsers enforce the <strong>Same-Origin Policy</strong>. Because CodeGraph runs on port <code>5173</code> (or via a public web origin), the browser blocks direct requests to your local backend (e.g., port <code>3000</code>) unless the backend explicitly responds with headers authorizing this origin.
+                </p>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', margin: '0 0 8px 0', fontSize: '0.9rem', fontWeight: 600 }}>Option A: Enable CORS in your Backend (Recommended)</h4>
+                <p style={{ margin: '0 0 10px 0' }}>
+                  Inject CORS headers into your server response middleware. Examples:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-secondary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>Node.js / Express:</span>
+                    <pre style={{ margin: '4px 0 0 0', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {`const cors = require('cors');\napp.use(cors()); // Allow all origins`}
+                    </pre>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-secondary)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>Python / Flask:</span>
+                    <pre style={{ margin: '4px 0 0 0', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {`from flask_cors import CORS\nCORS(app) # Enable CORS for all routes`}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', margin: '0 0 8px 0', fontSize: '0.9rem', fontWeight: 600 }}>Option B: Run a Local CORS Proxy</h4>
+                <p style={{ margin: '0 0 8px 0' }}>
+                  You can spin up a local proxy server that intercepts requests and automatically appends CORS headers:
+                </p>
+                <pre style={{ margin: '0 0 8px 0', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', fontSize: '0.7rem', color: 'var(--color-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  npx local-cors-proxy --proxyUrl http://localhost:3000
+                </pre>
+                <p style={{ margin: 0 }}>
+                  This launches a proxy at <code>http://localhost:8010</code>. Point the <strong>API Server URL Config</strong> in the docs panel to <code>http://localhost:8010</code>.
+                </p>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                <h4 style={{ color: 'var(--text-primary)', margin: '0 0 8px 0', fontSize: '0.9rem', fontWeight: 600 }}>Option C: Use a Public CORS Proxy (Remote APIs Only)</h4>
+                <p style={{ margin: 0 }}>
+                  Enable the <strong>Route via CORS Proxy client</strong> toggle in the Server URL configuration panel. This routes your request through a web-based CORS helper (like <code>allorigins</code>).
+                  <br />
+                  <span style={{ color: 'var(--color-warning)', fontSize: '0.75rem', display: 'inline-block', marginTop: '6px' }}>
+                    ⚠️ Note: Public web proxies cannot access your local loopback address (<code>localhost</code> / <code>127.0.0.1</code>). Use Option A or B for local dev servers.
+                  </span>
+                </p>
+              </div>
+
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       
     </div>
   );
