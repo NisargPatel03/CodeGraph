@@ -422,6 +422,7 @@ code, pre {
   -ms-overflow-style: none;
   flex: 1;
   min-width: 0;
+  margin-right: 12px;
 }
 
 .tabs-group::-webkit-scrollbar {
@@ -432,8 +433,8 @@ code, pre {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  padding: 5px 8px;
-  font-size: 0.76rem;
+  padding: 4px 6px;
+  font-size: 0.74rem;
   font-weight: 500;
   cursor: pointer;
   border-radius: 6px;
@@ -442,6 +443,7 @@ code, pre {
   align-items: center;
   gap: 4px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn:hover {
