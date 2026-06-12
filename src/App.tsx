@@ -9,6 +9,7 @@ import { Inspector } from './components/Inspector';
 import { AiChatDrawer } from './components/AiChatDrawer';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
+import { ApiDocsPortal } from './components/ApiDocsPortal';
 import { AiIcon } from './components/AiIcon';
 import logoImg from './assets/logo.png';
 import { semanticSearchCodebase, lintCodebaseRules, runDependencyAudit } from './utils/aiHelper';
@@ -40,7 +41,7 @@ export default function App() {
   } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics'>('dependency');
+  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'docs'>('dependency');
   const [searchQuery, setSearchQuery] = useState('');
   const [diffData, setDiffData] = useState<any | null>(null);
   const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult[] | null>(null);
@@ -564,6 +565,12 @@ export default function App() {
                   >
                     📊 Analytics
                   </button>
+                  <button
+                    className={`tab-btn ${viewMode === 'docs' ? 'active' : ''}`}
+                    onClick={() => setViewMode('docs')}
+                  >
+                    📖 API Docs
+                  </button>
                 </div>
 
                 <div className="tabs-right-controls">
@@ -608,7 +615,7 @@ export default function App() {
                 onSelectFile={(filePath) => setSelectedNodeId(filePath)}
               />
 
-              {/* D3 Canvas Viewport or Analytics Dashboard Content */}
+              {/* D3 Canvas Viewport, Analytics Dashboard or API Docs Portal Content */}
               {viewMode === 'analytics' ? (
                 <AnalyticsDashboard
                   files={repoData.files}
@@ -616,6 +623,11 @@ export default function App() {
                   graphData={graphData}
                   apiKey={apiKey}
                   onSelectFile={(filePath) => setSelectedNodeId(filePath)}
+                />
+              ) : viewMode === 'docs' ? (
+                <ApiDocsPortal
+                  files={repoData.files}
+                  apiKey={apiKey}
                 />
               ) : (
                 <GraphCanvas

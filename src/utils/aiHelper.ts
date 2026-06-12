@@ -764,3 +764,335 @@ Format your output in clean Markdown. Be precise, highly professional, and direc
   };
 }
 
+/* --- REST API Route Documentation Portal Types & Extractor --- */
+
+export interface ApiEndpoint {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
+  path: string;
+  filePath: string;
+  line: number;
+  description: string;
+  controllerName?: string;
+  parameters?: {
+    name: string;
+    in: 'path' | 'query' | 'header' | 'body';
+    required: boolean;
+    type: string;
+    description?: string;
+    schema?: any; // For request bodies
+  }[];
+  responses?: {
+    status: number;
+    description: string;
+    schema?: any;
+  }[];
+}
+
+export interface ApiDocsReport {
+  endpoints: ApiEndpoint[];
+  summary: string;
+}
+
+// Local offline static endpoint parser
+export function extractEndpointsFromCodebase(files: ParsedFile[]): ApiEndpoint[] {
+  const endpoints: ApiEndpoint[] = [];
+
+  const relevantFiles = files.filter(f => {
+    const p = f.path.toLowerCase();
+    if (p.includes('node_modules/') || p.includes('test') || p.includes('spec') || p.includes('.d.ts')) {
+      return false;
+    }
+    return /\.(js|ts|jsx|tsx|py|go|java|rb|php|rs)$/i.test(p);
+  });
+
+  relevantFiles.forEach(file => {
+    const lines = file.content.split('\n');
+    
+    const nodeRouteRegex = /(?:router|app|route)\.(get|post|put|delete|patch|options|head)\(\s*['"`]([^'"`]+)['"`]/i;
+    const nestRouteRegex = /@(Get|Post|Put|Delete|Patch|Options|Head)\(\s*['"`]?([^'"`]*)['"`]?\)/i;
+    const flaskRouteRegex = /@(?:app|bp|blueprint)\.route\(\s*['"`]([^'"`]+)['"`](?:\s*,\s*methods\s*=\s*\[([^\]]+)\])?/i;
+    const fastApiRouteRegex = /@(?:router|app)\.(get|post|put|delete|patch)\(\s*['"`]([^'"`]+)['"`]/i;
+    const djangoRouteRegex = /path\(\s*['"`]([^'"`]*)['"`]/i;
+    const springRouteRegex = /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\(\s*['"`]?([^'"`]*)['"`]?\)/i;
+
+    lines.forEach((lineText, lineIdx) => {
+      const lineNum = lineIdx + 1;
+      let matched = false;
+      let method: string = 'GET';
+      let path: string = '';
+      let controllerName: string = '';
+
+      const nodeMatch = nodeRouteRegex.exec(lineText);
+      if (nodeMatch) {
+        method = nodeMatch[1].toUpperCase();
+        path = nodeMatch[2];
+        matched = true;
+      }
+
+      if (!matched) {
+        const nestMatch = nestRouteRegex.exec(lineText);
+        if (nestMatch) {
+          method = nestMatch[1].toUpperCase();
+          path = nestMatch[2] || '/';
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        const fastApiMatch = fastApiRouteRegex.exec(lineText);
+        if (fastApiMatch) {
+          method = fastApiMatch[1].toUpperCase();
+          path = fastApiMatch[2];
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        const flaskMatch = flaskRouteRegex.exec(lineText);
+        if (flaskMatch) {
+          path = flaskMatch[1];
+          const methodsStr = flaskMatch[2];
+          if (methodsStr) {
+            if (methodsStr.includes('POST')) method = 'POST';
+            else if (methodsStr.includes('PUT')) method = 'PUT';
+            else if (methodsStr.includes('DELETE')) method = 'DELETE';
+            else if (methodsStr.includes('PATCH')) method = 'PATCH';
+          } else {
+            method = 'GET';
+          }
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        const djangoMatch = djangoRouteRegex.exec(lineText);
+        if (djangoMatch) {
+          method = 'GET';
+          path = djangoMatch[1];
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        const springMatch = springRouteRegex.exec(lineText);
+        if (springMatch) {
+          const mapping = springMatch[1];
+          if (mapping.startsWith('Post')) method = 'POST';
+          else if (mapping.startsWith('Put')) method = 'PUT';
+          else if (mapping.startsWith('Delete')) method = 'DELETE';
+          else if (mapping.startsWith('Patch')) method = 'PATCH';
+          else method = 'GET';
+          path = springMatch[2] || '/';
+          matched = true;
+        }
+      }
+
+      if (matched) {
+        if (!path.startsWith('/')) {
+          path = '/' + path;
+        }
+        path = path.replace(/<[a-zA-Z_:]*?([a-zA-Z_]+)>/g, ':$1');
+
+        const nextLines = lines.slice(lineIdx, lineIdx + 4).join(' ');
+        const funcMatch = /(?:const|function|async|def|public|void|class)\s+([a-zA-Z0-9_]+)/.exec(nextLines);
+        if (funcMatch) {
+          controllerName = funcMatch[1];
+        }
+
+        const parameters: ApiEndpoint['parameters'] = [];
+        const paramRegex = /(?::([a-zA-Z0-9_]+))|(?:{([a-zA-Z0-9_]+)})/g;
+        let paramMatch;
+        while ((paramMatch = paramRegex.exec(path)) !== null) {
+          const paramName = paramMatch[1] || paramMatch[2];
+          parameters.push({
+            name: paramName,
+            in: 'path',
+            required: true,
+            type: 'string',
+            description: `Path parameter: ${paramName}`
+          });
+        }
+
+        if (method === 'GET' && (path.includes('list') || path.includes('search') || path.includes('filter'))) {
+          parameters.push({
+            name: 'query',
+            in: 'query',
+            required: false,
+            type: 'string',
+            description: 'Search filter term'
+          });
+          parameters.push({
+            name: 'limit',
+            in: 'query',
+            required: false,
+            type: 'number',
+            description: 'Pagination limit count'
+          });
+        }
+
+        if (['POST', 'PUT', 'PATCH'].includes(method)) {
+          parameters.push({
+            name: 'body',
+            in: 'body',
+            required: true,
+            type: 'object',
+            description: 'Request payload body',
+            schema: {
+              name: 'New Item',
+              description: 'Item description content',
+              status: 'pending'
+            }
+          });
+        }
+
+        const responses: ApiEndpoint['responses'] = [
+          {
+            status: 200,
+            description: 'Success Response',
+            schema: method === 'GET' && !path.includes(':') 
+              ? [{ id: 1, name: 'Item 1' }, { id: 2, name: 'Item 2' }] 
+              : { id: 1, success: true, message: 'Resource processed successfully' }
+          },
+          {
+            status: 400,
+            description: 'Bad Request',
+            schema: { error: 'Validation constraints failed' }
+          },
+          {
+            status: 401,
+            description: 'Unauthorized access',
+            schema: { error: 'Invalid API key or bearer token' }
+          }
+        ];
+
+        let description = '';
+        const pathParts = path.split('/').filter(Boolean);
+        const resource = pathParts[pathParts.length - 1] || 'resource';
+        if (method === 'GET') {
+          description = path.includes(':') ? `Retrieve details of specific ${resource}.` : `List all active ${resource} items.`;
+        } else if (method === 'POST') {
+          description = `Create or submit a new ${resource} object.`;
+        } else if (method === 'PUT') {
+          description = `Replace the existing ${resource} entirely.`;
+        } else if (method === 'PATCH') {
+          description = `Modify fields of ${resource} selectively.`;
+        } else if (method === 'DELETE') {
+          description = `Delete target ${resource} from storage.`;
+        } else {
+          description = `Perform HTTP ${method} on endpoint.`;
+        }
+
+        endpoints.push({
+          method: method as ApiEndpoint['method'],
+          path,
+          filePath: file.path,
+          line: lineNum,
+          description,
+          controllerName,
+          parameters,
+          responses
+        });
+      }
+    });
+  });
+
+  return endpoints;
+}
+
+// AI Gemini route extraction runner
+export async function aiExtractEndpoints(files: ParsedFile[], apiKey: string): Promise<ApiDocsReport> {
+  const staticEndpoints = extractEndpointsFromCodebase(files);
+
+  if (!isValidApiKey(apiKey)) {
+    return {
+      endpoints: staticEndpoints,
+      summary: `## 📖 API Documentation (Static Extraction Overview)
+We scanned the codebase and statically identified **${staticEndpoints.length} REST endpoints**.
+Add a Gemini API key in the settings panel to enable deep endpoint request/response extraction and architectural reviews.`
+    };
+  }
+
+  // Find the files that actually contain routing
+  const uniqueRoutingPaths = Array.from(new Set(staticEndpoints.map(e => e.filePath)));
+  if (uniqueRoutingPaths.length === 0) {
+    return {
+      endpoints: [],
+      summary: 'No REST API endpoints or routing files detected in the codebase.'
+    };
+  }
+
+  // Get content of these files, limiting sizes to avoid overloading prompt limits
+  const routingFilesContext = files
+    .filter(f => uniqueRoutingPaths.includes(f.path))
+    .map(f => {
+      const contentTruncated = f.content.length > 8000 ? f.content.substring(0, 8000) + '\n// ... truncated ...' : f.content;
+      return `### File: ${f.path}\n\`\`\`\n${contentTruncated}\n\`\`\``;
+    })
+    .join('\n\n');
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Principal Backend Engineer and REST API Architect.
+Scan the following code files which contain routing and controller registrations:
+${routingFilesContext}
+
+Extract all REST API endpoints defined in these files.
+Format your output as a single valid JSON object of type ApiDocsReport conforming to these typescript definitions:
+
+interface ApiEndpoint {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'OPTIONS' | 'HEAD';
+  path: string;
+  filePath: string;
+  line: number;
+  description: string;
+  controllerName?: string;
+  parameters?: {
+    name: string;
+    in: 'path' | 'query' | 'header' | 'body';
+    required: boolean;
+    type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    description?: string;
+    schema?: any; // Prepopulate query/body schema with sample JSON values
+  }[];
+  responses?: {
+    status: number;
+    description: string;
+    schema?: any; // Prepopulate responses schema with sample JSON values
+  }[];
+}
+
+interface ApiDocsReport {
+  endpoints: ApiEndpoint[];
+  summary: string; // Markdown summary review of the API architecture, security mechanisms (CORS, tokens), design flaws, and refactoring tips
+}
+
+Wrap your JSON output in a single \`\`\`json block. Do not write any conversational text outside the markdown JSON block. Ensure the JSON is valid and fully escaped.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    
+    const jsonMatch = /```json\s*([\s\S]*?)\s*```/.exec(text);
+    const jsonString = jsonMatch ? jsonMatch[1] : text;
+    
+    const parsedReport = JSON.parse(jsonString.trim()) as ApiDocsReport;
+    if (parsedReport && Array.isArray(parsedReport.endpoints)) {
+      return parsedReport;
+    }
+    throw new Error('Parsed result does not conform to ApiDocsReport structure.');
+  } catch (err: any) {
+    console.warn('Gemini route extraction failed, falling back to static parser:', err);
+    return {
+      endpoints: staticEndpoints,
+      summary: `## 📖 API Documentation (Static Extractor Fallback)
+**Scan result:** Detected **${staticEndpoints.length} endpoints**.
+*Warning: The Gemini extraction failed or timed out (${err?.message || 'JSON Parse error'}). We fell back to local regex extraction.*
+
+### API Design Recommendations
+1. **Consistency**: Ensure path patterns use a unified casing scheme (e.g., camelCase or kebab-case).
+2. **Framework Compliance**: Always return descriptive status codes (e.g., 201 for POST creations) and include validation middleware to intercept malformed body payloads before reaching controller Handlers.`
+    };
+  }
+}
+
