@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
-import { generateGitHistory } from '../utils/codeAnalyzer';
+import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
 
 interface GraphCanvasProps {
@@ -26,6 +26,7 @@ interface GraphCanvasProps {
   setIsEvolutionMode: (val: boolean) => void;
   currentEvolutionStep: number;
   setCurrentEvolutionStep: (step: number) => void;
+  commits?: import('../utils/repoParser').GitHubCommitInfo[];
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -48,6 +49,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   setIsEvolutionMode,
   currentEvolutionStep,
   setCurrentEvolutionStep,
+  commits,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -484,10 +486,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return null;
   }, [pathSource, pathTarget, graphData, viewMode, showNpmPackages]);
 
-  // Generate Simulated Git History from files
+  // Generate Git History (real or simulated) from files
   const gitHistory = useMemo(() => {
+    if (commits && commits.length > 0) {
+      return mapFilesToRealCommits(files || [], commits);
+    }
     return generateGitHistory(files || []);
-  }, [files]);
+  }, [files, commits]);
 
   // Compute files active at the current evolution step
   const activeEvolutionFiles = useMemo(() => {

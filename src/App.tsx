@@ -31,7 +31,11 @@ export default function App() {
   });
   const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [repoData, setRepoData] = useState<{ files: ParsedFile[]; repoName: string } | null>(null);
+  const [repoData, setRepoData] = useState<{ 
+    files: ParsedFile[]; 
+    repoName: string; 
+    commits?: import('./utils/repoParser').GitHubCommitInfo[];
+  } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics'>('dependency');
@@ -99,7 +103,11 @@ export default function App() {
     }
   }, [repoData]);
 
-  const handleDataLoaded = (data: { files: ParsedFile[]; repoName: string }) => {
+  const handleDataLoaded = (data: { 
+    files: ParsedFile[]; 
+    repoName: string; 
+    commits?: import('./utils/repoParser').GitHubCommitInfo[];
+  }) => {
     setRepoData(data);
     setSemanticSearchResults(null);
     setSemanticSearchError(null);
@@ -564,6 +572,7 @@ export default function App() {
                   setIsEvolutionMode={setIsEvolutionMode}
                   currentEvolutionStep={currentEvolutionStep}
                   setCurrentEvolutionStep={setCurrentEvolutionStep}
+                  commits={repoData.commits}
                 />
               )}
             </section>

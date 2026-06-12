@@ -195,7 +195,11 @@ async function fetchViaTreesApi(owner: string, repo: string, defaultBranch: stri
   return parsedFiles;
 }
 
-export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<{ files: ParsedFile[]; repoName: string }> {
+export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<{ 
+  files: ParsedFile[]; 
+  repoName: string;
+  commits?: GitHubCommitInfo[];
+}> {
   // Parse repoUrl: e.g. "https://github.com/facebook/react" or "facebook/react"
   let cleanUrl = repoUrl.trim().replace(/\/$/, '');
   if (cleanUrl.startsWith('git@github.com:')) {
@@ -282,5 +286,31 @@ export async function fetchGitHubRepo(repoUrl: string, token?: string): Promise<
     throw new Error('No readable code files found in the repository.');
   }
 
-  return { files, repoName };
+  // 3. Fetch real commit logs from GitHub
+  let commits: GitHubCommitInfo[] = [];
+  try {
+    const commitsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`, { headers });
+    if (commitsRes.ok) {
+      const commitsData = await commitsRes.json();
+      if (Array.isArray(commitsData)) {
+        commits = commitsData.map((item: any) => ({
+          sha: item.sha ? item.sha.substring(0, 7) : 'unknown',
+          message: item.commit?.message || 'No commit message',
+          author: item.commit?.author?.name || item.author?.login || 'Anonymous',
+          date: item.commit?.author?.date ? item.commit.author.date.split('T')[0] : 'unknown',
+        }));
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch commit history from GitHub:', err);
+  }
+
+  return { files, repoName, commits };
+}
+
+export interface GitHubCommitInfo {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
 }

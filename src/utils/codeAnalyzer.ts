@@ -1072,3 +1072,89 @@ export function generateGitHistory(files: ParsedFile[]): SimulatedCommit[] {
 
   return commits;
 }
+
+export function mapFilesToRealCommits(
+  files: ParsedFile[],
+  apiCommits: { sha: string; message: string; author: string; date: string }[]
+): SimulatedCommit[] {
+  if (!apiCommits || apiCommits.length === 0) return [];
+
+  // Sort apiCommits chronologically (oldest commit first)
+  const sortedCommits = [...apiCommits].reverse();
+
+  const commits: SimulatedCommit[] = sortedCommits.map(c => ({
+    sha: c.sha,
+    message: c.message,
+    author: c.author,
+    date: c.date,
+    filesAdded: [],
+    filesModified: [],
+    filesDeleted: []
+  }));
+
+  // Match files to commits based on keywords in the commit message
+  const addedFiles = new Set<string>();
+
+  files.forEach(file => {
+    const fileName = file.name.toLowerCase();
+    const fileBase = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+    
+    // Find if any commit message references this file name
+    let matchedCommitIndex = -1;
+    for (let i = 0; i < commits.length; i++) {
+      const msg = commits[i].message.toLowerCase();
+      if (msg.includes(fileName) || (fileBase.length > 3 && msg.includes(fileBase))) {
+        matchedCommitIndex = i;
+        break;
+      }
+    }
+
+    if (matchedCommitIndex !== -1) {
+      commits[matchedCommitIndex].filesAdded.push(file.path);
+      addedFiles.add(file.path);
+    }
+  });
+
+  // Distribute the remaining files across the commits chronologically
+  const unmatchedFiles = files.filter(f => !addedFiles.has(f.path));
+  
+  unmatchedFiles.forEach((file, index) => {
+    let targetCommitIndex = 0;
+    if (commits.length > 1) {
+      const pathLower = file.path.toLowerCase();
+      if (pathLower.includes('config') || pathLower.includes('json') || pathLower.startsWith('.') || file.name === 'index.html') {
+        targetCommitIndex = 0; // Configs in the first commit
+      } else if (pathLower.includes('util') || pathLower.includes('helper')) {
+        targetCommitIndex = Math.min(1, commits.length - 1);
+      } else {
+        // Distribute rest proportionally
+        targetCommitIndex = Math.min(
+          Math.floor((index / unmatchedFiles.length) * (commits.length - 1)) + 1,
+          commits.length - 1
+        );
+      }
+    }
+    
+    commits[targetCommitIndex].filesAdded.push(file.path);
+    addedFiles.add(file.path);
+  });
+
+  // Ensure every commit has at least 1 changed file
+  commits.forEach((commit, idx) => {
+    if (commit.filesAdded.length === 0 && commit.filesModified.length === 0) {
+      const filesAvailable: string[] = [];
+      for (let j = 0; j <= idx; j++) {
+        filesAvailable.push(...commits[j].filesAdded);
+      }
+      
+      if (filesAvailable.length > 0) {
+        const randomFile = filesAvailable[Math.floor(Math.random() * filesAvailable.length)];
+        commit.filesModified.push(randomFile);
+      } else if (files.length > 0) {
+        commit.filesModified.push(files[0].path);
+      }
+    }
+  });
+
+  return commits;
+}
