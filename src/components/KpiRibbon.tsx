@@ -405,8 +405,8 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
           alignItems: 'center',
           gap: '4px',
           fontWeight: 600,
-          background: 'rgba(0, 242, 254, 0.08)',
-          border: '1px solid rgba(0, 242, 254, 0.15)',
+          background: 'var(--color-secondary-glow)',
+          border: '1px solid var(--color-secondary)',
           padding: '3px 10px',
           borderRadius: '4px',
           transition: 'all 0.2s',
@@ -415,11 +415,11 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
           marginLeft: '8px',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'rgba(0, 242, 254, 0.15)';
-          e.currentTarget.style.boxShadow = '0 0 8px rgba(0, 242, 254, 0.2)';
+          e.currentTarget.style.background = 'var(--color-secondary-glow)';
+          e.currentTarget.style.boxShadow = '0 0 8px var(--color-secondary-glow)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'rgba(0, 242, 254, 0.08)';
+          e.currentTarget.style.background = 'var(--color-secondary-glow)';
           e.currentTarget.style.boxShadow = 'none';
         }}
       >
