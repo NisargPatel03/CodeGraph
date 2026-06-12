@@ -28,6 +28,148 @@ export interface DbSchemaReport {
   relationships: DbRelationship[];
 }
 
+function stripComments(code: string): string {
+  // Strip block comments
+  let clean = code.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Strip line comments
+  clean = clean.split('\n').map(line => {
+    const idx = line.indexOf('//');
+    if (idx !== -1) {
+      return line.substring(0, idx);
+    }
+    return line;
+  }).join('\n');
+  return clean;
+}
+
+function getOuterObject(content: string, startIndex: number): { body: string; endIndex: number } | null {
+  let openBraces = 0;
+  let inString = false;
+  let stringChar = '';
+  let i = startIndex;
+
+  // Find the first '{'
+  while (i < content.length && content[i] !== '{') {
+    i++;
+  }
+  if (i >= content.length) return null;
+
+  const startBraceIndex = i;
+  
+  for (; i < content.length; i++) {
+    const char = content[i];
+    
+    // Handle string literals to avoid counting braces inside strings
+    if ((char === "'" || char === '"' || char === '`') && content[i - 1] !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+      }
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        openBraces++;
+      } else if (char === '}') {
+        openBraces--;
+        if (openBraces === 0) {
+          return {
+            body: content.substring(startBraceIndex + 1, i),
+            endIndex: i
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+interface RawField {
+  name: string;
+  definition: string;
+}
+
+function parseTopLevelFields(body: string): RawField[] {
+  const fields: RawField[] = [];
+  let currentKey = '';
+  let inKey = true;
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let stringChar = '';
+  let currentDef = '';
+  
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    
+    // Handle string literals
+    if ((char === "'" || char === '"' || char === '`') && body[i - 1] !== '\\') {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+      }
+    }
+    
+    if (inString) {
+      if (inKey) {
+        currentKey += char;
+      } else {
+        currentDef += char;
+      }
+      continue;
+    }
+    
+    if (char === '{') openBraces++;
+    else if (char === '}') openBraces--;
+    else if (char === '[') openBrackets++;
+    else if (char === ']') openBrackets--;
+    
+    if (openBraces === 0 && openBrackets === 0) {
+      if (inKey) {
+        if (char === ':') {
+          inKey = false;
+          currentKey = currentKey.trim().replace(/['"`]/g, ''); // Clean quotes
+        } else {
+          currentKey += char;
+        }
+      } else {
+        if (char === ',') {
+          // End of field definition
+          if (currentKey.trim()) {
+            fields.push({
+              name: currentKey.trim(),
+              definition: currentDef.trim()
+            });
+          }
+          currentKey = '';
+          currentDef = '';
+          inKey = true;
+        } else {
+          currentDef += char;
+        }
+      }
+    } else {
+      if (!inKey) {
+        currentDef += char;
+      }
+    }
+  }
+  
+  // Add the last field if any
+  if (currentKey.trim() && !inKey) {
+    fields.push({
+      name: currentKey.trim(),
+      definition: currentDef.trim()
+    });
+  }
+  
+  return fields;
+}
+
 /**
  * Parses files in the repository to extract database schemas.
  */
@@ -218,59 +360,76 @@ export function parseDatabaseSchemas(files: ParsedFile[]): DbSchemaReport {
     }
 
     // 3. Mongoose Schema Parsing (.js/.ts)
-    else if (['js', 'ts'].includes(extension || '') && (content.includes('mongoose.Schema') || content.includes('new Schema'))) {
-      const schemaRegex = /(?:const|let|var)\s+(\w+Schema)\s*=\s*new\s+(?:mongoose\.)?Schema\s*\(\s*\{([\s\S]*?)\}/g;
+    else if (['js', 'ts'].includes(extension || '') && (content.includes('mongoose.Schema') || content.includes('new Schema') || content.includes('Schema('))) {
+      const schemaInstantiationRegex = /(?:const|let|var)\s+(\w+)\s*=\s*new\s+(?:mongoose\.)?Schema\s*\(/g;
       let match;
-      while ((match = schemaRegex.exec(content)) !== null) {
-        const schemaName = match[1];
-        const schemaBody = match[2];
-        const tableName = schemaName.replace('Schema', ''); // Model name guess
-        const fields: DbField[] = [];
-
-        const bodyText = schemaBody;
+      
+      while ((match = schemaInstantiationRegex.exec(content)) !== null) {
+        const schemaVarName = match[1];
+        const searchStartIndex = schemaInstantiationRegex.lastIndex;
         
-        // Match simple attributes: name: { type: String, ... } or name: String
-        const fieldLines = bodyText.split('\n');
-        for (let line of fieldLines) {
-          line = line.trim();
-          if (!line || line.startsWith('//')) continue;
-
-          // Match fieldName: type or fieldName: { type: ... }
-          const matchField = line.match(/^(\w+)\s*:\s*(?:{\s*type\s*:\s*([^,}]+)|([^,{}]+))/i);
-          if (matchField) {
-            const fieldName = matchField[1];
-            let rawType = (matchField[2] || matchField[3]).trim();
-            // strip braces
-            rawType = rawType.replace(/[{}\[\]]/g, '').trim();
-
-            const isPrimaryKey = fieldName === '_id' || fieldName === 'id';
-            
-            // Check for Schema.Types.ObjectId, ref: 'User'
-            let isForeignKey = false;
-            let refTable: string | undefined;
-            if (line.includes('ref:')) {
-              const refMatch = line.match(/ref\s*:\s*['"`](\w+)['"`]/);
-              if (refMatch) {
-                isForeignKey = true;
-                refTable = refMatch[1];
-                addRelationship(tableName, refTable, fieldName, '_id');
-              }
-            }
-
-            fields.push({
-              name: fieldName,
-              type: rawType,
-              isPrimaryKey,
-              isForeignKey,
-              refTable,
-              refField: isForeignKey ? '_id' : undefined
-            });
+        // Find matching outer object braces
+        const objectResult = getOuterObject(content, searchStartIndex);
+        if (!objectResult) continue;
+        
+        const cleanBodyText = stripComments(objectResult.body);
+        const rawFields = parseTopLevelFields(cleanBodyText);
+        const fields: DbField[] = [];
+        
+        // Find registered model name if any (e.g. mongoose.model('User', userSchema))
+        const modelReg = new RegExp(`model\\s*\\(\\s*['"\`](\\w+)['"\`]\\s*,\\s*${schemaVarName}\\b`, 'i');
+        const modelMatch = content.match(modelReg);
+        const tableName = modelMatch ? modelMatch[1] : (schemaVarName.replace(/Schema$/i, '').replace(/Model$/i, ''));
+        // Capitalize table name to match standard model naming convention
+        const capitalizedTableName = tableName.charAt(0).toUpperCase() + tableName.slice(1);
+        
+        for (const rawField of rawFields) {
+          const fieldName = rawField.name;
+          const definition = rawField.definition;
+          
+          if (!fieldName || !definition) continue;
+          
+          // Determine type from definition
+          let rawType = 'unknown';
+          const typeMatch = definition.match(/type\s*:\s*([^,}]+)/i);
+          if (typeMatch) {
+            rawType = typeMatch[1].trim();
+          } else {
+            rawType = definition.trim();
           }
+          // strip braces/brackets/quotes
+          rawType = rawType.replace(/[{}\[\]'"`]/g, '').trim();
+          
+          const isPrimaryKey = fieldName === '_id' || fieldName === 'id';
+          
+          // Check for relationship ref
+          let isForeignKey = false;
+          let refTable: string | undefined;
+          
+          if (definition.includes('ref:')) {
+            const refMatch = definition.match(/ref\s*:\s*['"`](\w+)['"`]/i);
+            if (refMatch) {
+              isForeignKey = true;
+              refTable = refMatch[1];
+              // Normalize refTable (capitalize)
+              const capitalizedRefTable = refTable.charAt(0).toUpperCase() + refTable.slice(1);
+              addRelationship(capitalizedTableName, capitalizedRefTable, fieldName, '_id');
+            }
+          }
+          
+          fields.push({
+            name: fieldName,
+            type: rawType || 'unknown',
+            isPrimaryKey,
+            isForeignKey,
+            refTable: refTable ? (refTable.charAt(0).toUpperCase() + refTable.slice(1)) : undefined,
+            refField: isForeignKey ? '_id' : undefined
+          });
         }
-
+        
         if (fields.length > 0) {
-          tableMap.set(tableName, {
-            id: tableName,
+          tableMap.set(capitalizedTableName, {
+            id: capitalizedTableName,
             sourceFile: file.path,
             fields
           });
