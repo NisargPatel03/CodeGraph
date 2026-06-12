@@ -407,22 +407,21 @@ code, pre {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--panel-border);
   background: var(--tabs-header-bg);
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .tabs-group {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
   flex: 1;
   min-width: 0;
-  /* Clip internal overflow, don't affect siblings */
 }
 
 .tabs-group::-webkit-scrollbar {
@@ -431,10 +430,10 @@ code, pre {
 
 .tab-btn {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-secondary);
-  padding: 6px 12px;
-  font-size: 0.82rem;
+  padding: 5px 8px;
+  font-size: 0.76rem;
   font-weight: 500;
   cursor: pointer;
   border-radius: 6px;

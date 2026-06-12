@@ -634,7 +634,7 @@ export default function App() {
                 </div>
 
                 <div className="tabs-right-controls">
-                  {viewMode !== 'analytics' && viewMode !== 'docs' && (
+                  {viewMode !== 'analytics' && viewMode !== 'docs' && viewMode !== 'dbSchema' && (
                     <button
                       className={`evolution-toggle-btn ${isEvolutionMode ? 'active' : ''}`}
                       onClick={() => {
