@@ -203,6 +203,7 @@ interface InspectorProps {
   isAuditing: boolean;
   auditError: string | null;
   onRunAudit: () => void;
+  onUpdateFileContent?: (filePath: string, newContent: string) => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -231,6 +232,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   isAuditing,
   auditError,
   onRunAudit,
+  onUpdateFileContent,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter' | 'audit'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -257,6 +259,18 @@ export const Inspector: React.FC<InspectorProps> = ({
     similar: false
   });
   const codePreviewRef = useRef<HTMLPreElement>(null);
+
+  // Writable Workspace Editor States
+  const [isEditingCode, setIsEditingCode] = useState(false);
+  const [editedCode, setEditedCode] = useState('');
+
+  // Sync editedCode when selectedFile changes
+  useEffect(() => {
+    if (selectedFile) {
+      setEditedCode(selectedFile.content);
+    }
+    setIsEditingCode(false);
+  }, [selectedFile]);
 
   const renderPatch = (patchText: string) => {
     if (!patchText) {
@@ -1164,13 +1178,77 @@ export const Inspector: React.FC<InspectorProps> = ({
 
                 {/* Raw Code Preview */}
                 <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
-                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Code size={14} />
-                    Code Preview
-                  </h4>
-                  <pre ref={codePreviewRef} style={{ margin: 0, padding: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--panel-border)', borderRadius: '6px', overflowX: 'auto', maxHeight: '250px', fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                    {selectedFile.content}
-                  </pre>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                      <Code size={14} />
+                      Code Preview
+                    </h4>
+                    {onUpdateFileContent && (
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        {!isEditingCode ? (
+                          <button
+                            className="cyber-button"
+                            onClick={() => {
+                              setEditedCode(selectedFile.content);
+                              setIsEditingCode(true);
+                            }}
+                            style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                          >
+                            Edit Code
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className="cyber-button"
+                              onClick={() => {
+                                onUpdateFileContent(selectedFile.path, editedCode);
+                                setIsEditingCode(false);
+                                setToastMessage('File saved successfully!');
+                                setTimeout(() => setToastMessage(null), 2000);
+                              }}
+                              style={{ padding: '3px 8px', fontSize: '0.7rem', background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="cyber-button secondary"
+                              onClick={() => {
+                                setIsEditingCode(false);
+                                setEditedCode(selectedFile.content);
+                              }}
+                              style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {isEditingCode ? (
+                    <textarea
+                      className="cyber-input"
+                      value={editedCode}
+                      onChange={(e) => setEditedCode(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: '250px',
+                        padding: '12px',
+                        background: 'rgba(0,0,0,0.5)',
+                        border: '1px solid var(--color-primary)',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                        resize: 'vertical',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  ) : (
+                    <pre ref={codePreviewRef} style={{ margin: 0, padding: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--panel-border)', borderRadius: '6px', overflowX: 'auto', maxHeight: '250px', fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                      {selectedFile.content}
+                    </pre>
+                  )}
                 </div>
               </>
             )}

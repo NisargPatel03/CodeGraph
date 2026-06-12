@@ -238,6 +238,7 @@ interface ReportsProps {
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
   onSelectFile: (filePath: string) => void;
+  onUpdateFileContent?: (filePath: string, newContent: string) => void;
 }
 
 export const Reports: React.FC<ReportsProps> = ({
@@ -248,6 +249,7 @@ export const Reports: React.FC<ReportsProps> = ({
   isExpanded,
   setIsExpanded,
   onSelectFile,
+  onUpdateFileContent,
 }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'smells' | 'cycles' | 'onboarding' | 'architecture'>('dashboard');
   const [onboardingDoc, setOnboardingDoc] = useState('');
@@ -1126,6 +1128,22 @@ export const Reports: React.FC<ReportsProps> = ({
                 >
                   <Copy size={12} />
                   Copy Code block
+                </button>
+              )}
+              {refactorResult && !refactoringLoading && onUpdateFileContent && (
+                <button
+                  className="cyber-button"
+                  onClick={() => {
+                    const preMatch = refactorResult.match(/\`\`\`(?:[a-zA-Z]+)?\n([\s\S]*?)\n\`\`\`/);
+                    const cleanCode = preMatch ? preMatch[1].trim() : refactorResult;
+                    onUpdateFileContent(refactorSmell.file, cleanCode);
+                    showToast('Refactoring applied successfully!');
+                    setRefactorSmell(null);
+                  }}
+                  style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                >
+                  <Sparkles size={12} />
+                  Apply Refactor
                 </button>
               )}
               <button

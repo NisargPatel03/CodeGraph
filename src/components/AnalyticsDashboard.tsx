@@ -234,6 +234,7 @@ interface AnalyticsDashboardProps {
   graphData: CodebaseGraph;
   apiKey: string;
   onSelectFile: (filePath: string) => void;
+  onUpdateFileContent?: (filePath: string, newContent: string) => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
@@ -242,6 +243,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   graphData,
   apiKey,
   onSelectFile,
+  onUpdateFileContent,
 }) => {
   const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding'>('metrics');
   
@@ -1195,6 +1197,22 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                   <Copy size={12} />
                   Copy Code block
+                </button>
+              )}
+              {refactorResult && !refactoringLoading && onUpdateFileContent && (
+                <button
+                  className="cyber-button"
+                  onClick={() => {
+                    const preMatch = refactorResult.match(/\`\`\`(?:[a-zA-Z]+)?\n([\s\S]*?)\n\`\`\`/);
+                    const cleanCode = preMatch ? preMatch[1].trim() : refactorResult;
+                    onUpdateFileContent(refactorSmell.file, cleanCode);
+                    showToast('Refactoring applied successfully!');
+                    setRefactorSmell(null);
+                  }}
+                  style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                >
+                  <Sparkles size={12} />
+                  Apply Refactor
                 </button>
               )}
               <button

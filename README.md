@@ -282,6 +282,10 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 
 A right-sidebar panel that activates when a file node or folder node is selected in the graph or file tree.
 
+#### Writable Workspace & Inline Code Editor
+- **Inline Code Editor** — Switch from read-only mode to full editor mode in the **Code Preview** section. Edit file content directly in the browser and click **Save** to update.
+- **Live Graph Updates** — Saving code updates the repository state in the parent workspace, which automatically re-runs the static analysis pipeline, updating dependency edges, function listings, and quality metrics instantly.
+
 #### Branch / PR Diff Mode
 When a branch comparison is active and a modified node is selected, the inspector enters **PR Diff Mode**, showing:
 - **Status Badges** — Indicating `[+] Added` (emerald), `[~] Modified` (orange), or `[-] Deleted` (rose) with additions/deletions counts.
@@ -301,7 +305,7 @@ When a branch comparison is active and a modified node is selected, the inspecto
 | **Imports** | List of all resolved import paths from this file |
 | **AI Code Summary** | Gemini-powered plain-English explanation of the file |
 | **AI Test Suite** | Gemini-generated complete Jest/Vitest unit test file |
-| **Code Preview** | Scrollable raw code block with line navigation |
+| **Code Preview & Editor** | Scrollable raw code block with inline text editor support |
 
 ---
 
@@ -318,7 +322,7 @@ Prompts Gemini as a *Senior Principal Engineer* to explain the file's purpose, r
 Prompts Gemini as a *Senior QA Automation Engineer* to generate a complete unit test suite using **Jest**, **Vitest**, or **Testing Library** — covering all exported functions, mock states, and edge cases. Up to 15,000 characters of file content are submitted.
 
 #### `refactorCodeSmell(filePath, fileContent, smellMessage, smellDetails, apiKey)`
-Prompts Gemini as a *Software Architect* to analyse a specific code smell, explain why it's a problem, and return a clean refactored implementation.
+Prompts Gemini as a *Software Architect* to analyse a specific code smell, explain why it's a problem, and return a clean refactored implementation. In the Code Smells report, developers can click **Apply Refactor** to instantly inject the AI-generated code block back into the active workspace.
 
 #### `generateOnboardingGuide(filesSummary, apiKey)`
 Prompts Gemini as a *Technical Lead* to write a step-by-step developer onboarding guide — project purpose, entry points, reading order, and key commands — based on the repository file list.

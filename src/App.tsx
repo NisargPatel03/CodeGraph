@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download } from 'lucide-react';
+import JSZip from 'jszip';
 import type { ParsedFile } from './utils/repoParser';
 import { analyzeCodebase } from './utils/codeAnalyzer';
 import type { CodebaseGraph } from './utils/codeAnalyzer';
@@ -132,18 +133,24 @@ export default function App() {
 
 
 
+  const lastRepoNameRef = useRef<string | null>(null);
+
   // Run analysis when files are loaded
   useEffect(() => {
     if (repoData) {
       const result = analyzeCodebase(repoData.files);
       setGraphData(result);
-      setSelectedNodeId(null);
-      setDiffData(null);
-      setIsEvolutionMode(false);
-      setCurrentEvolutionStep(0);
-      setLinterViolations(null);
-      setAuditReport(null);
+      if (lastRepoNameRef.current !== repoData.repoName) {
+        lastRepoNameRef.current = repoData.repoName;
+        setSelectedNodeId(null);
+        setDiffData(null);
+        setIsEvolutionMode(false);
+        setCurrentEvolutionStep(0);
+        setLinterViolations(null);
+        setAuditReport(null);
+      }
     } else {
+      lastRepoNameRef.current = null;
       setGraphData(null);
       setDiffData(null);
       setIsEvolutionMode(false);
@@ -152,6 +159,45 @@ export default function App() {
       setAuditReport(null);
     }
   }, [repoData]);
+
+  const handleUpdateFileContent = (filePath: string, newContent: string) => {
+    if (!repoData) return;
+    const updatedFiles = repoData.files.map((f) => {
+      if (f.path === filePath) {
+        return {
+          ...f,
+          content: newContent,
+          size: newContent.length,
+        };
+      }
+      return f;
+    });
+    setRepoData({
+      ...repoData,
+      files: updatedFiles,
+    });
+  };
+
+  const handleDownloadZip = async () => {
+    if (!repoData) return;
+    try {
+      const zip = new JSZip();
+      repoData.files.forEach((file) => {
+        zip.file(file.path, file.content);
+      });
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${repoData.repoName.replace(/\//g, '_')}-updated.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate ZIP archive:', err);
+    }
+  };
 
   const handleDataLoaded = (data: { 
     files: ParsedFile[]; 
@@ -366,10 +412,16 @@ export default function App() {
 
         <div className="header-actions">
           {repoData && (
-            <button className="cyber-button secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={handleResetRepo}>
-              <ArrowLeft size={14} style={{ marginRight: '6px' }} />
-              Reset Workspace
-            </button>
+            <>
+              <button className="cyber-button" style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={handleDownloadZip}>
+                <Download size={14} />
+                Export ZIP
+              </button>
+              <button className="cyber-button secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={handleResetRepo}>
+                <ArrowLeft size={14} style={{ marginRight: '6px' }} />
+                Reset Workspace
+              </button>
+            </>
           )}
 
           {/* Theme Selector Bubbles */}
@@ -627,6 +679,7 @@ export default function App() {
                   graphData={graphData}
                   apiKey={apiKey}
                   onSelectFile={(filePath) => setSelectedNodeId(filePath)}
+                  onUpdateFileContent={handleUpdateFileContent}
                 />
               ) : viewMode === 'docs' ? (
                 <ApiDocsPortal
@@ -689,6 +742,7 @@ export default function App() {
                 isAuditing={isAuditing}
                 auditError={auditError}
                 onRunAudit={handleRunDependencyAudit}
+                onUpdateFileContent={handleUpdateFileContent}
               />
             )}
           </main>
