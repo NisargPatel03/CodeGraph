@@ -2617,3 +2617,52 @@ input:checked + .slider:before {
   animation: dash 1s infinite linear;
 }
 
+/* --- AI Dependency Risk Auditor Styles --- */
+@keyframes risk-halo-pulse {
+  0% {
+    r: var(--base-r, 12px);
+    opacity: 0.95;
+    stroke: #ef4444;
+  }
+  50% {
+    stroke: #f43f5e;
+  }
+  100% {
+    r: calc(var(--base-r, 12px) + 24px);
+    opacity: 0;
+    stroke: #b91c1c;
+  }
+}
+
+.risk-halo {
+  fill: none;
+  stroke: #ef4444;
+  stroke-width: 2.5px;
+  pointer-events: none;
+  animation: risk-halo-pulse 1.8s infinite cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.risk-violating-node circle {
+  stroke: #ef4444 !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 12px #ef4444) !important;
+  transition: all 0.3s ease;
+}
+
+.risk-badge {
+  pointer-events: none;
+  user-select: none;
+  animation: risk-badge-pulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes risk-badge-pulse {
+  0% {
+    filter: drop-shadow(0 0 2px #ef4444);
+    opacity: 0.9;
+  }
+  100% {
+    filter: drop-shadow(0 0 6px #ef4444);
+    opacity: 1;
+  }
+}
+

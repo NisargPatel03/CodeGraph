@@ -11,7 +11,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
 import { AiIcon } from './components/AiIcon';
 import logoImg from './assets/logo.png';
-import { semanticSearchCodebase, lintCodebaseRules } from './utils/aiHelper';
+import { semanticSearchCodebase, lintCodebaseRules, runDependencyAudit } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
 // Tree interface for File Explorer
@@ -76,6 +76,26 @@ export default function App() {
     }
   };
 
+  // AI Dependency Risk Auditor States
+  const [auditReport, setAuditReport] = useState<import('./utils/aiHelper').AuditReport | null>(null);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  const handleRunDependencyAudit = async () => {
+    if (!repoData || !graphData) return;
+    setIsAuditing(true);
+    setAuditError(null);
+    try {
+      const report = await runDependencyAudit(repoData.files, graphData.links, apiKey);
+      setAuditReport(report);
+    } catch (err: any) {
+      console.error(err);
+      setAuditError(err.message || 'An error occurred during dependency risk audit.');
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
 
   // Sync theme to root element
   useEffect(() => {
@@ -120,11 +140,15 @@ export default function App() {
       setDiffData(null);
       setIsEvolutionMode(false);
       setCurrentEvolutionStep(0);
+      setLinterViolations(null);
+      setAuditReport(null);
     } else {
       setGraphData(null);
       setDiffData(null);
       setIsEvolutionMode(false);
       setCurrentEvolutionStep(0);
+      setLinterViolations(null);
+      setAuditReport(null);
     }
   }, [repoData]);
 
@@ -139,6 +163,8 @@ export default function App() {
     setDiffData(null);
     setIsEvolutionMode(false);
     setCurrentEvolutionStep(0);
+    setLinterViolations(null);
+    setAuditReport(null);
   };
 
   const handleResetRepo = () => {
@@ -149,6 +175,8 @@ export default function App() {
     setDiffData(null);
     setIsEvolutionMode(false);
     setCurrentEvolutionStep(0);
+    setLinterViolations(null);
+    setAuditReport(null);
   };
 
   const handleSemanticSearch = async () => {
@@ -612,6 +640,7 @@ export default function App() {
                   setCurrentEvolutionStep={setCurrentEvolutionStep}
                   commits={repoData.commits}
                   linterViolations={linterViolations}
+                  auditReport={auditReport}
                 />
               )}
             </section>
@@ -638,6 +667,11 @@ export default function App() {
               isLinting={isLinting}
               linterError={linterError}
               onRunLinter={handleRunLinter}
+              auditReport={auditReport}
+              setAuditReport={setAuditReport}
+              isAuditing={isAuditing}
+              auditError={auditError}
+              onRunAudit={handleRunDependencyAudit}
             />
           </main>
         )

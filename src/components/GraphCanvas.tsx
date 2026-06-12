@@ -28,6 +28,7 @@ interface GraphCanvasProps {
   setCurrentEvolutionStep: (step: number) => void;
   commits?: import('../utils/repoParser').GitHubCommitInfo[];
   linterViolations?: import('../utils/aiHelper').LinterViolation | null;
+  auditReport?: import('../utils/aiHelper').AuditReport | null;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -52,6 +53,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   setCurrentEvolutionStep,
   commits,
   linterViolations,
+  auditReport,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1334,6 +1336,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         let cls = 'node-element';
         const isViolating = linterViolations?.violatingNodes.includes(d.id);
         if (isViolating) cls += ' linter-violating-node';
+        const isAtRisk = auditReport?.risks.some(r => r.filePath === d.id);
+        if (isAtRisk) cls += ' risk-violating-node';
         return cls;
       })
       .on('click', (event, d) => {
@@ -1404,17 +1408,43 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     node.each(function (d: any) {
       const element = d3.select(this);
       
+      const baseRadius = viewMode === 'call' 
+        ? 8 + Math.min(d.callCount * 1.5, 20)
+        : (viewMode === 'dependency' 
+            ? 8 + Math.min((inDegreeMap.get(d.id) || 0) * 2.0, 24)
+            : (viewMode === 'hierarchy' ? 9 : 8) + Math.min(Math.sqrt(d.size || 0) * 0.04, 30));
+
       const isViolating = linterViolations?.violatingNodes.includes(d.id);
       if (isViolating && !d.isFolder && !d.isNpm) {
-        const baseRadius = viewMode === 'call' 
-          ? 8 + Math.min(d.callCount * 1.5, 20)
-          : (viewMode === 'dependency' 
-              ? 8 + Math.min((inDegreeMap.get(d.id) || 0) * 2.0, 24)
-              : (viewMode === 'hierarchy' ? 9 : 8) + Math.min(Math.sqrt(d.size || 0) * 0.04, 30));
-
         element.append('circle')
           .attr('class', 'warning-halo')
           .style('--base-r', `${baseRadius}px`);
+      }
+
+      const isAtRisk = auditReport?.risks.some(r => r.filePath === d.id);
+      if (isAtRisk && !d.isFolder && !d.isNpm) {
+        element.append('circle')
+          .attr('class', 'risk-halo')
+          .style('--base-r', `${baseRadius}px`);
+
+        const badgeG = element.append('g')
+          .attr('class', 'risk-badge')
+          .attr('transform', `translate(${baseRadius * 0.75}, -${baseRadius * 0.75})`);
+        
+        badgeG.append('circle')
+          .attr('r', 6)
+          .attr('fill', '#ef4444')
+          .attr('stroke', '#ffffff')
+          .attr('stroke-width', 1.0);
+          
+        badgeG.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '2.5px')
+          .style('fill', '#ffffff')
+          .style('font-size', '8px')
+          .style('font-weight', '900')
+          .style('font-family', 'var(--font-sans)')
+          .text('!');
       }
 
       if (d.isFolder) {
@@ -2006,7 +2036,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport]);
 
   return (
     <div 

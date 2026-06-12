@@ -3,7 +3,7 @@ import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertT
 import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebase, generateTestSuite } from '../utils/aiHelper';
-import type { LinterViolation } from '../utils/aiHelper';
+import type { LinterViolation, AuditReport } from '../utils/aiHelper';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -198,6 +198,11 @@ interface InspectorProps {
   isLinting: boolean;
   linterError: string | null;
   onRunLinter: (rule: string) => void;
+  auditReport: AuditReport | null;
+  setAuditReport: (report: AuditReport | null) => void;
+  isAuditing: boolean;
+  auditError: string | null;
+  onRunAudit: () => void;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -221,8 +226,13 @@ export const Inspector: React.FC<InspectorProps> = ({
   isLinting,
   linterError,
   onRunLinter,
+  auditReport,
+  setAuditReport,
+  isAuditing,
+  auditError,
+  onRunAudit,
 }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter' | 'audit'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [testSuites, setTestSuites] = useState<Record<string, string>>({});
@@ -539,6 +549,13 @@ export const Inspector: React.FC<InspectorProps> = ({
         >
           <AlertTriangle size={14} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle', color: '#f97316' }} />
           AI Rules Linter
+        </button>
+        <button
+          className={`inspector-tab ${activeTab === 'audit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('audit')}
+        >
+          <Activity size={14} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle', color: '#ef4444' }} />
+          Risk Auditor
         </button>
       </div>
 
@@ -1416,6 +1433,253 @@ export const Inspector: React.FC<InspectorProps> = ({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'audit' && (
+          <div className="inspector-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', marginBottom: '4px' }}>
+              <Activity size={20} />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Dependency Risk Auditor</h3>
+            </div>
+            
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+              Scan codebase imports to audit coupling. Identify unstable Single Points of Failure (SPOF) and visualize risk hot spots directly on the graph canvas.
+            </p>
+
+            {!apiKey && (
+              <div className="glass-panel" style={{
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                background: 'rgba(239, 68, 68, 0.04)',
+                borderRadius: '8px',
+                padding: '12px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                fontSize: '0.75rem',
+                color: '#f87171',
+                marginTop: '4px'
+              }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '2px' }}>Offline Analysis Mode</strong>
+                  API Key is missing. CodeGraph will run high-fidelity static graph calculations ($Ca$/$Ce$/Instability) to analyze codebase risks.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                className="cyber-button"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  borderColor: '#ef4444',
+                  boxShadow: '0 0 10px rgba(239, 68, 68, 0.15)'
+                }}
+                onClick={onRunAudit}
+                disabled={isAuditing}
+              >
+                {isAuditing ? (
+                  <>
+                    <span className="spinner" style={{ display: 'inline-block', width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#ef4444', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '4px' }} />
+                    <span>Auditing codebase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Activity size={14} />
+                    <span>Scan Codebase Health</span>
+                  </>
+                )}
+              </button>
+              {auditReport && (
+                <button
+                  className="cyber-button secondary"
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: '0.85rem',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--panel-border)',
+                    color: 'var(--text-secondary)'
+                  }}
+                  onClick={() => {
+                    setAuditReport(null);
+                  }}
+                  disabled={isAuditing}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {auditError && (
+              <div style={{
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.05)',
+                borderRadius: '8px',
+                padding: '12px',
+                color: '#ef4444',
+                fontSize: '0.8rem',
+                display: 'flex',
+                gap: '8px',
+                marginTop: '8px'
+              }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong style={{ display: 'block', marginBottom: '2px' }}>Audit Failed</strong>
+                  {auditError}
+                </div>
+              </div>
+            )}
+
+            {auditReport && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+                
+                {/* Visual Modularity Grade HUD */}
+                <div className="glass-panel" style={{
+                  padding: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  background: 'rgba(255,255,255,0.01)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '2px solid #ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.4rem',
+                    fontWeight: 800,
+                    color: '#f87171',
+                    textShadow: '0 0 10px rgba(239, 68, 68, 0.5)',
+                    flexShrink: 0
+                  }}>
+                    {auditReport.risks.length === 0 ? 'A' : (auditReport.risks.length <= 2 ? 'B' : (auditReport.risks.length <= 5 ? 'C' : 'D'))}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: '0 0 2px 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Modularity Report</h4>
+                    <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>
+                      {auditReport.risks.length === 0 
+                        ? 'Zero critical Single Points of Failure found. Codebase has high modularity!'
+                        : `${auditReport.risks.length} file(s) identified with high coupling or risk score.`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Highly Coupled Files List */}
+                {auditReport.risks.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Vulnerable SPOF Files ({auditReport.risks.length})
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+                      {auditReport.risks.map((risk) => {
+                        const fileObj = allFiles.find(f => f.path === risk.filePath);
+                        return (
+                          <div 
+                            key={risk.filePath}
+                            className="violating-file-card"
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.02)',
+                              border: '1px solid rgba(239, 68, 68, 0.12)',
+                              borderRadius: '6px',
+                              padding: '10px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.02)'}
+                            onClick={() => {
+                              setSelectedNodeId(risk.filePath);
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#f87171', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {fileObj ? fileObj.name : risk.filePath.split('/').pop()}
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                  Risk: {risk.riskScore}
+                                </span>
+                                <ExternalLink size={12} style={{ color: 'var(--text-muted)' }} />
+                              </div>
+                            </div>
+                            
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                              {risk.filePath}
+                            </div>
+
+                            {/* Mini Coupling Metrics Table */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', background: 'rgba(0,0,0,0.15)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.65rem' }}>
+                              <div>
+                                <span style={{ color: 'var(--text-muted)' }}>Fan-in ($Ca$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ca}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-muted)' }}>Fan-out ($Ce$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ce}</strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-muted)' }}>Instability ($I$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.instability}</strong>
+                              </div>
+                            </div>
+
+                            {/* Alert bullet list */}
+                            {risk.reasons.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                                {risk.reasons.map((r, i) => (
+                                  <div key={i} style={{ display: 'flex', gap: '4px', fontSize: '0.65rem', color: 'var(--text-secondary)', alignItems: 'flex-start' }}>
+                                    <span style={{ color: '#ef4444' }}>•</span>
+                                    <span>{r}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit recommendations markdown detail */}
+                {auditReport.summary && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Detailed Recommendation Report
+                    </span>
+                    <div 
+                      className="linter-explanation-box" 
+                      style={{
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        border: '1px solid var(--panel-border)',
+                        borderRadius: '6px',
+                        padding: '10px',
+                        lineHeight: '1.45'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: formatMarkdown(auditReport.summary) }}
+                    />
+                  </div>
+                )}
+
+              </div>
+            )}
+
           </div>
         )}
       </div>

@@ -604,3 +604,163 @@ Example Output structure:
   }
 }
 
+export interface DependencyRisk {
+  filePath: string;
+  riskScore: number;
+  ca: number; // Afferent Coupling (dependents)
+  ce: number; // Efferent Coupling (dependencies)
+  instability: number; // ce / (ca + ce)
+  reasons: string[];
+}
+
+export interface AuditReport {
+  risks: DependencyRisk[];
+  summary: string;
+}
+
+export async function runDependencyAudit(
+  files: ParsedFile[],
+  links: { source: any; target: any }[],
+  apiKey: string
+): Promise<AuditReport> {
+  const inDegreeMap = new Map<string, number>();
+  const outDegreeMap = new Map<string, number>();
+
+  // Initialize all files with 0 coupling
+  files.forEach(f => {
+    inDegreeMap.set(f.path, 0);
+    outDegreeMap.set(f.path, 0);
+  });
+
+  // Count couplings
+  links.forEach(l => {
+    const sId = typeof l.source === 'object' ? l.source.id : String(l.source);
+    const tId = typeof l.target === 'object' ? l.target.id : String(l.target);
+    
+    if (outDegreeMap.has(sId)) {
+      outDegreeMap.set(sId, (outDegreeMap.get(sId) || 0) + 1);
+    }
+    if (inDegreeMap.has(tId)) {
+      inDegreeMap.set(tId, (inDegreeMap.get(tId) || 0) + 1);
+    }
+  });
+
+  const risks: DependencyRisk[] = [];
+
+  files.forEach(f => {
+    const ca = inDegreeMap.get(f.path) || 0;
+    const ce = outDegreeMap.get(f.path) || 0;
+    const totalC = ca + ce;
+    const instability = totalC === 0 ? 0 : Number((ce / totalC).toFixed(2));
+    
+    const lines = f.content ? f.content.split('\n').length : 0;
+    // Risk score: ca has weight 3 (high impact on changes), ce has weight 1, complexity by line length
+    const complexityFactor = Math.min(10, Number((lines / 150).toFixed(1)));
+    const riskScore = Number((ca * 3.0 + ce + complexityFactor).toFixed(1));
+
+    const reasons: string[] = [];
+    if (ca > 5) reasons.push(`High Afferent Coupling (Fan-in = ${ca}): Many modules depend on this file. Changing it risks side-effects.`);
+    if (ce > 8) reasons.push(`High Efferent Coupling (Fan-out = ${ce}): Depends on too many helper/external files, making it fragile.`);
+    if (lines > 350) reasons.push(`File too large (${lines} lines), combining multiple responsibilities.`);
+    if (ca > 2 && instability < 0.2) reasons.push(`High Stability Single Point of Failure (SPOF): High fan-in but zero/low fan-out.`);
+
+    if (riskScore >= 6.0) {
+      risks.push({
+        filePath: f.path,
+        riskScore,
+        ca,
+        ce,
+        instability,
+        reasons: reasons.length > 0 ? reasons : ['Moderate coupling, potential hub file.']
+      });
+    }
+  });
+
+  // Sort by risk score descending
+  risks.sort((a, b) => b.riskScore - a.riskScore);
+
+  // Take top risks
+  const topRisks = risks.slice(0, 8);
+
+  // Check if API Key is valid, if so use Gemini to analyze
+  if (isValidApiKey(apiKey)) {
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+      
+      const risksSummaryText = topRisks.map(r => 
+        `- **File**: ${r.filePath}\n  - Risk Score: ${r.riskScore}\n  - Afferent Coupling (Fan-in): ${r.ca}\n  - Efferent Coupling (Fan-out): ${r.ce}\n  - Instability: ${r.instability}\n  - Warnings: ${r.reasons.join('; ')}`
+      ).join('\n');
+
+      const prompt = `You are a Principal Software Architect performing an automated codebase dependency coupling and vulnerability audit.
+Analyze the following coupling metrics of the top vulnerable/highly-coupled modules:
+${risksSummaryText}
+
+Based on these metrics, please write a comprehensive architectural report. Include:
+1. **Coupling Health Grade**: Give a Letter Grade (A, B, C, D, or F) and a brief sentence explaining why.
+2. **Key Structural Hazards**: Highlight the top 2-3 files that act as dangerous Single Points of Failure (SPOFs) or hyper-coupled hubs, explaining the risks they introduce.
+3. **Actionable Refactoring Recommendations**: Provide concrete recommendations to decouple these files (e.g., extracting interfaces, applying the Dependency Inversion Principle, breaking up god modules, or introducing event listeners).
+
+Format your output in clean Markdown. Be precise, highly professional, and direct. Do not include introductory conversational filler.`;
+
+      const response = await model.generateContent(prompt);
+      const summary = response.response.text();
+      return {
+        risks: topRisks,
+        summary: summary || 'Failed to generate summary content from Gemini.'
+      };
+    } catch (error: any) {
+      console.warn('Gemini Audit generation failed, falling back to static audit:', error);
+    }
+  }
+
+  // Fallback / Static Audit Report Generation
+  const averageRisk = topRisks.length > 0 
+    ? Number((topRisks.reduce((acc, r) => acc + r.riskScore, 0) / topRisks.length).toFixed(1))
+    : 0;
+
+  let grade = 'A';
+  let gradeReason = 'The codebase is highly modular with clean boundaries and no single point of failure.';
+  if (averageRisk > 25) {
+    grade = 'D-';
+    gradeReason = 'Severe tight coupling and god-files. High probability of ripple-effect regressions.';
+  } else if (averageRisk > 18) {
+    grade = 'C';
+    gradeReason = 'Moderate coupling. Several central files have high incoming dependents.';
+  } else if (averageRisk > 10) {
+    grade = 'B';
+    gradeReason = 'Good modular structure, with minor coupling hubs.';
+  }
+
+  let staticSummary = `## 🛡️ Dependency Risk Audit (Static Evaluation)
+**Codebase Modularity Grade: \`${grade}\`**
+*Reason: ${gradeReason}*
+
+### Key Structural Hazards
+`;
+
+  if (topRisks.length > 0) {
+    staticSummary += `We identified the following files as potential **Single Points of Failure (SPOFs)** due to high incoming connections (afferent coupling) or high complexity:\n\n`;
+    
+    topRisks.slice(0, 3).forEach((r, idx) => {
+      const name = r.filePath.split('/').pop();
+      staticSummary += `#### ${idx + 1}. \`${name}\` (${r.filePath})\n`;
+      staticSummary += `- **Risk Index**: \`${r.riskScore}\` (Afferent Coupling: \`${r.ca}\`, Efferent Coupling: \`${r.ce}\`)\n`;
+      staticSummary += `- **Stability**: Instability index is \`${r.instability}\` (closer to 0.0 means highly stable and hard to change without breaking dependents).\n`;
+      staticSummary += `- **Analysis**: This file is highly coupled. ${r.reasons.join(' ')}\n\n`;
+    });
+
+    staticSummary += `### Actionable Refactoring Recommendations
+1. **Decouple Stable Hubs**: For stable modules like \`${topRisks[0].filePath.split('/').pop()}\` with high fan-in, extract core interfaces or types to separate files so dependents do not bind directly to concrete implementation details.
+2. **Apply Dependency Inversion**: If a file has high fan-out (${topRisks[0].ce} dependencies), inject dependencies dynamically or use an event-driven pub-sub mechanism rather than hardcoding static imports.
+3. **Split God Modules**: Files exceeding 300 lines of code should be split into smaller, focused modules obeying the Single Responsibility Principle.`;
+  } else {
+    staticSummary += `No major structural risks detected. The dependency graph shows healthy separation of concerns.`;
+  }
+
+  return {
+    risks: topRisks,
+    summary: staticSummary
+  };
+}
+
