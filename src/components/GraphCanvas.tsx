@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
+import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
 
 interface GraphCanvasProps {
   graphData: CodebaseGraph;
   selectedNode: string | null;
   setSelectedNode: (id: string | null) => void;
-  viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics';
+  viewMode: 'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'dbSchema';
   searchQuery: string;
   collapsedFolders: Set<string>;
   setCollapsedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -76,6 +77,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [treeLayoutStyle, setTreeLayoutStyle] = useState<'top-down' | 'radial'>('top-down');
   const [hoveredComponentDetails, setHoveredComponentDetails] = useState<any | null>(null);
 
+  // DB Schema States
+  const [useDemoDbSchema, setUseDemoDbSchema] = useState(false);
+  const [selectedDbTableId, setSelectedDbTableId] = useState<string | null>(null);
+  const [hoveredDbTableId, setHoveredDbTableId] = useState<string | null>(null);
+
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
@@ -84,6 +90,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [isToolboxCollapsed, setIsToolboxCollapsed] = useState(false);
   const [isMinimapExpanded, setIsMinimapExpanded] = useState(false);
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
+
+  const dbSchema = useMemo(() => {
+    if (viewMode !== 'dbSchema') return { tables: [], relationships: [] };
+    if (useDemoDbSchema) {
+      return GET_DEMO_SCHEMA();
+    }
+    return parseDatabaseSchemas(files);
+  }, [files, viewMode, useDemoDbSchema]);
 
   // PR/Branch comparison states
   const [baseBranch, setBaseBranch] = useState('main');
@@ -832,9 +846,35 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       nodes = activeNodes;
       links = activeLinks;
+    } else if (viewMode === 'dbSchema') {
+      nodes = dbSchema.tables.map((table) => {
+        const cached = nodePositionsRef.current.get(table.id);
+        const cardHeight = 60 + table.fields.length * 24;
+        return {
+          id: table.id,
+          name: table.id,
+          sourceFile: table.sourceFile,
+          fields: table.fields,
+          width: 220,
+          height: cardHeight,
+          x: cached ? cached.x : undefined,
+          y: cached ? cached.y : undefined
+        };
+      });
+
+      links = dbSchema.relationships.map((rel) => ({
+        id: rel.id,
+        source: rel.source,
+        target: rel.target,
+        sourceField: rel.sourceField,
+        targetField: rel.targetField
+      }));
     }
 
     if (nodes.length === 0) {
+      if (viewMode === 'dbSchema') {
+        return;
+      }
       const g = svgElement.append('g').attr('transform', `translate(${width / 2}, ${height / 2})`);
       g.append('text')
         .attr('text-anchor', 'middle')
@@ -842,9 +882,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         .attr('font-size', '14px')
         .text('No matching elements found in this view mode.');
       return;
-    }
-
-    const drawMinimap = () => {
+    }    const drawMinimap = () => {
       const canvas = minimapCanvasRef.current;
       if (!canvas || !svgRef.current) return;
       const ctx = canvas.getContext('2d');
@@ -983,16 +1021,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     const simulation = d3.forceSimulation<any>(nodes)
       .force('link', d3.forceLink<any, any>(links).id((d) => d.id).distance(() => {
+        if (viewMode === 'dbSchema') return 240;
         if (viewMode === 'cluster') return 65;
         if (viewMode === 'hierarchy') return 70;
         return 100;
       }))
       .force('charge', d3.forceManyBody().strength(() => {
+        if (viewMode === 'dbSchema') return -600;
         if (viewMode === 'cluster') return -120;
         if (viewMode === 'hierarchy') return -160;
         return -220;
       }))
       .force('collision', d3.forceCollide<any>().radius((d) => {
+        if (viewMode === 'dbSchema') return Math.max(d.width || 220, d.height || 150) / 2 + 40;
         if (d.isFolder) return 24;
         if (viewMode === 'call') return 12 + Math.min(d.callCount * 1.5, 20);
         if (viewMode === 'dependency') {
@@ -1161,12 +1202,17 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         { id: 'arrow-highlight', color: 'var(--color-primary)' },
         { id: 'arrow-highlight-incoming', color: 'var(--color-secondary)' },
         { id: 'arrow-cycle', color: 'var(--color-alert)' },
-        { id: 'arrow-violating', color: '#f97316' }
+        { id: 'arrow-violating', color: '#f97316' },
+        { id: 'db-arrow', color: 'rgba(99, 102, 241, 0.6)' },
+        { id: 'db-arrow-highlight', color: 'var(--color-secondary)' }
       ])
       .enter().append('marker')
       .attr('id', (d) => d.id)
       .attr('viewBox', '0 -5 10 10')
-      .attr('refX', () => (viewMode === 'call' ? 16 : (viewMode === 'hierarchy' ? 18 : 22)))
+      .attr('refX', (d) => {
+        if (d.id.startsWith('db-arrow')) return 4;
+        return viewMode === 'call' ? 16 : (viewMode === 'hierarchy' ? 18 : 22);
+      })
       .attr('refY', 0)
       .attr('markerWidth', 5.5)
       .attr('markerHeight', 5.5)
@@ -1297,8 +1343,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const link = mainGroup.append('g').attr('class', 'links-container').selectAll('.link-element')
       .data(links)
       .enter()
-      .append('line')
+      .append(viewMode === 'dbSchema' ? 'path' : 'line')
       .attr('class', (d: any) => {
+        if (viewMode === 'dbSchema') return 'link-element db-relationship-link';
         let cls = 'link-element';
         if (viewMode === 'dependency') cls += ' flowing';
         if (viewMode === 'hierarchy') cls += ' props-flow';
@@ -1313,14 +1360,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         if (isViolating) cls += ' linter-violating-link';
         return cls;
       })
-      .attr('stroke', 'var(--link-stroke)')
+      .attr('fill', 'none')
+      .attr('stroke', () => {
+        if (viewMode === 'dbSchema') return 'rgba(99, 102, 241, 0.4)';
+        return 'var(--link-stroke)';
+      })
       .attr('stroke-width', (d: any) => {
+        if (viewMode === 'dbSchema') return 1.5;
         if (viewMode === 'dependency' && d.weight !== undefined) {
           return 1.0 + Math.min(d.weight * 0.5, 6.0);
         }
         return d.isAggregated ? 1.5 + Math.min(d.weight * 0.4, 4) : 1.5;
       })
       .attr('marker-end', (d: any) => {
+        if (viewMode === 'dbSchema') return 'url(#db-arrow)';
         const sId = typeof d.source === 'object' ? d.source.id : d.source;
         const tId = typeof d.target === 'object' ? d.target.id : d.target;
         const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
@@ -1342,6 +1395,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       })
       .on('click', (event, d) => {
         event.stopPropagation();
+        if (viewMode === 'dbSchema') {
+          setSelectedDbTableId(d.id);
+          if (d.sourceFile) {
+            setSelectedNode(d.sourceFile);
+          } else {
+            setSelectedNode(d.id);
+          }
+          return;
+        }
         setSelectedNode(d.id);
         if (d.isFolder) {
           setCollapsedFolders((prev) => {
@@ -1372,6 +1434,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         }
       })
       .on('mouseenter', (_, d) => {
+        if (viewMode === 'dbSchema') {
+          setHoveredDbTableId(d.id);
+          return;
+        }
         setHoveredNode(d.id);
         if (viewMode === 'cluster' && d.folder) {
           const folderMembers = nodes.filter((n: any) => n.folder === d.folder);
@@ -1397,6 +1463,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         }
       })
       .on('mouseleave', () => {
+        setHoveredDbTableId(null);
         setHoveredNode(null);
         setHoveredCluster(null);
         setHoveredComponentDetails(null);
@@ -1407,6 +1474,85 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     node.each(function (d: any) {
       const element = d3.select(this);
+      
+      if (viewMode === 'dbSchema') {
+        const card = element.append('foreignObject')
+          .attr('width', d.width)
+          .attr('height', d.height)
+          .attr('x', -d.width / 2)
+          .attr('y', -d.height / 2);
+
+        const cardDiv = card.append('xhtml:div')
+          .style('width', '100%')
+          .style('height', '100%')
+          .style('border', '1px solid var(--panel-border)')
+          .style('border-radius', '8px')
+          .style('background', 'rgba(10, 14, 26, 0.85)')
+          .style('backdrop-filter', 'blur(6px)')
+          .style('box-shadow', '0 4px 15px rgba(0,0,0,0.4)')
+          .style('display', 'flex')
+          .style('flex-direction', 'column')
+          .style('overflow', 'hidden')
+          .style('pointer-events', 'auto')
+          .style('user-select', 'none');
+
+        // Table Header
+        cardDiv.append('div')
+          .style('background', 'rgba(99, 102, 241, 0.1)')
+          .style('border-bottom', '1px solid var(--panel-border)')
+          .style('padding', '8px 12px')
+          .style('display', 'flex')
+          .style('align-items', 'center')
+          .style('gap', '8px')
+          .style('flex-shrink', '0')
+          .html(() => `
+            <span style="color: var(--color-primary); font-size: 0.85rem;">🗃️</span>
+            <span style="font-weight: 700; color: var(--text-primary); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${d.id}</span>
+          `);
+
+        // Fields Container
+        const body = cardDiv.append('div')
+          .style('flex', '1')
+          .style('overflow-y', 'auto')
+          .style('display', 'flex')
+          .style('flex-direction', 'column');
+
+        // Fields rows
+        d.fields.forEach((f: any) => {
+          const keyIcon = f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '&nbsp;&nbsp;';
+          const keyColor = f.isPrimaryKey ? 'var(--color-secondary)' : f.isForeignKey ? '#a855f7' : 'var(--text-primary)';
+          const isKey = f.isPrimaryKey || f.isForeignKey;
+          
+          body.append('div')
+            .style('display', 'flex')
+            .style('justify-content', 'space-between')
+            .style('align-items', 'center')
+            .style('padding', '4px 8px')
+            .style('font-size', '0.72rem')
+            .style('border-bottom', '1px solid rgba(255,255,255,0.03)')
+            .html(() => `
+              <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span style="font-size: 0.7rem; opacity: 0.8;">${keyIcon}</span>
+                <span style="color: ${keyColor}; font-weight: ${isKey ? '600' : 'normal'}">${f.name}</span>
+              </div>
+              <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.65rem;">${f.type}</span>
+            `);
+        });
+
+        // Hover styling updates
+        cardDiv
+          .on('mouseenter', () => {
+            cardDiv.style('border-color', 'var(--color-secondary)');
+            cardDiv.style('box-shadow', '0 0 15px rgba(0, 242, 254, 0.2)');
+          })
+          .on('mouseleave', () => {
+            const isSelected = selectedDbTableId === d.id;
+            cardDiv.style('border-color', isSelected ? 'var(--color-primary)' : 'var(--panel-border)');
+            cardDiv.style('box-shadow', isSelected ? '0 0 10px rgba(99, 102, 241, 0.2)' : '0 4px 15px rgba(0,0,0,0.4)');
+          });
+
+        return; // Don't run standard circle/folder drawing code
+      }
       
       const baseRadius = viewMode === 'call' 
         ? 8 + Math.min(d.callCount * 1.5, 20)
@@ -1594,7 +1740,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
     });
 
-    node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
+    if (viewMode !== 'dbSchema') {
+      node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
+    }
 
     simulation.on('tick', () => {
       nodes.forEach(n => {
@@ -1602,7 +1750,31 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
         }
       });
-      link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      if (viewMode === 'dbSchema') {
+        link.attr('d', (d: any) => {
+          const source = d.source;
+          const target = d.target;
+          if (!source || !target || source.x === undefined || target.x === undefined) return '';
+
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return '';
+
+          const scaleSrc = Math.min((source.width / 2) / Math.abs(dx), (source.height / 2) / Math.abs(dy));
+          const srcX = source.x + dx * scaleSrc;
+          const srcY = source.y + dy * scaleSrc;
+
+          const scaleTgt = Math.min((target.width / 2) / Math.abs(dx), (target.height / 2) / Math.abs(dy));
+          const arrowBackoff = 8 / Math.sqrt(dx*dx + dy*dy);
+          const tgtX = target.x - dx * (scaleTgt + arrowBackoff);
+          const tgtY = target.y - dy * (scaleTgt + arrowBackoff);
+
+          const midX = (srcX + tgtX) / 2;
+          return `M${srcX},${srcY} Q${midX},${(srcY + tgtY)/2 - 10} ${tgtX},${tgtY}`;
+        });
+      } else {
+        link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+      }
       if (pipeline) {
         pipeline.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
       }
@@ -1620,9 +1792,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     drawMinimap();
 
     return () => { simulation.stop(); };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema]);
   useEffect(() => {
     if (!svgRef.current) return;
+    if (viewMode === 'dbSchema') return;
     const activeId = hoveredNode || selectedNode;
     const query = searchQuery ? searchQuery.toLowerCase().trim() : '';
     const svgElement = d3.select(svgRef.current);
@@ -2038,6 +2211,64 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     };
   }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport]);
 
+  // Fast hover and selection highlighting for DB Schema
+  useEffect(() => {
+    if (viewMode !== 'dbSchema' || !svgRef.current) return;
+    const svgElement = d3.select(svgRef.current);
+    
+    // Update links styles
+    svgElement.selectAll('.db-relationship-link')
+      .attr('stroke', (d: any) => {
+        const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
+        const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
+        return isSelected || isHovered ? 'var(--color-secondary)' : 'rgba(99, 102, 241, 0.4)';
+      })
+      .attr('stroke-width', (d: any) => {
+        const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
+        const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
+        return isSelected || isHovered ? 3 : 1.5;
+      })
+      .attr('marker-end', (d: any) => {
+        const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
+        const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
+        return isSelected || isHovered ? 'url(#db-arrow-highlight)' : 'url(#db-arrow)';
+      })
+      .style('opacity', (d: any) => {
+        if (!hoveredDbTableId) return 1.0;
+        const isRelated = d.source.id === hoveredDbTableId || d.target.id === hoveredDbTableId;
+        return isRelated ? 1.0 : 0.2;
+      });
+
+    // Update nodes opacity & borders
+    svgElement.selectAll('.db-table-node').each(function (d: any) {
+      const el = d3.select(this);
+      const isHoveredSelf = hoveredDbTableId === d.id;
+      
+      let opacity = 1.0;
+      if (hoveredDbTableId) {
+        if (isHoveredSelf) {
+          opacity = 1.0;
+        } else {
+          // Check if related
+          const isRelated = dbSchema.relationships.some(r => 
+            (r.source === d.id && r.target === hoveredDbTableId) || 
+            (r.source === hoveredDbTableId && r.target === d.id)
+          );
+          opacity = isRelated ? 1.0 : 0.35;
+        }
+      }
+      
+      el.style('opacity', opacity);
+      
+      const cardDiv = el.select('foreignObject').select('div');
+      if (!cardDiv.empty()) {
+        const isSelectedSelf = selectedDbTableId === d.id;
+        cardDiv.style('border-color', isSelectedSelf || isHoveredSelf ? 'var(--color-secondary)' : 'var(--panel-border)');
+        cardDiv.style('box-shadow', isSelectedSelf || isHoveredSelf ? '0 0 15px rgba(0, 242, 254, 0.25)' : '0 4px 15px rgba(0,0,0,0.4)');
+      }
+    });
+  }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships]);
+
   return (
     <div 
       ref={containerRef} 
@@ -2243,6 +2474,32 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </div>
             )}
 
+            {/* DB Schema Controls */}
+            {viewMode === 'dbSchema' && (
+              <div className="toolbox-section">
+                <div className="section-header">🗃️ DB Schema Visualizer</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                  <div className="toggle-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Use Mock Demo Schema</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={useDemoDbSchema} 
+                        onChange={(e) => {
+                          setUseDemoDbSchema(e.target.checked);
+                          setSelectedDbTableId(null);
+                        }} 
+                      />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                    Toggle between real workspace database schemas and a complex e-commerce mock dataset.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Component Tree Controls */}
             {viewMode === 'hierarchy' && (
               <div className="toolbox-section">
@@ -2417,6 +2674,171 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       </div>
 
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+
+      {viewMode === 'dbSchema' && dbSchema.tables.length === 0 && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(5, 7, 15, 0.7)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 10
+        }}>
+          <div className="glass-panel" style={{
+            padding: '40px',
+            maxWidth: '500px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '20px',
+            borderRadius: '12px',
+            border: '1px solid var(--panel-border)',
+            boxShadow: '0 0 30px rgba(99, 102, 241, 0.15)'
+          }}>
+            <div style={{ fontSize: '3rem' }}>🗃️</div>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 700 }}>
+              No Database Schemas Found
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+              We scanned your codebase but couldn't find any Prisma schemas (`.prisma`), SQL DDL (`.sql`), Mongoose schemas, or SQLAlchemy models.
+            </p>
+            <button
+              className="cyber-button"
+              style={{
+                padding: '10px 20px',
+                fontSize: '0.85rem',
+                background: 'var(--color-primary)',
+                borderColor: 'var(--color-primary)'
+              }}
+              onClick={() => setUseDemoDbSchema(true)}
+            >
+              ⚡ Load Interactive Demo Schema
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'dbSchema' && selectedDbTableId && (() => {
+        const table = dbSchema.tables.find(t => t.id === selectedDbTableId);
+        if (!table) return null;
+
+        // Find incoming & outgoing relationships
+        const outgoing = dbSchema.relationships.filter(r => r.source === selectedDbTableId);
+        const incoming = dbSchema.relationships.filter(r => r.target === selectedDbTableId);
+
+        return (
+          <div 
+            className="glass-panel" 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              width: '320px',
+              maxHeight: 'calc(100% - 40px)',
+              overflowY: 'auto',
+              borderRadius: '8px',
+              border: '1px solid var(--panel-border)',
+              background: 'rgba(10, 14, 26, 0.92)',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              zIndex: 100,
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={16} style={{ color: 'var(--color-primary)' }} />
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{table.id}</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setSelectedDbTableId(null);
+                  setSelectedNode(null);
+                }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '1.2rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Source File: <code style={{ color: 'var(--text-secondary)' }}>{table.sourceFile}</code>
+            </div>
+
+            {/* Field Table */}
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)', marginBottom: '6px' }}>Fields & Columns</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                {table.fields.map(f => (
+                  <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 2px', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>{f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '•'}</span>
+                      <span style={{ fontWeight: f.isPrimaryKey || f.isForeignKey ? '600' : 'normal', color: f.isPrimaryKey ? 'var(--color-secondary)' : f.isForeignKey ? '#a855f7' : 'var(--text-primary)' }}>{f.name}</span>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', opacity: 0.8, fontSize: '0.68rem' }}>{f.type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Relationships */}
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)', marginBottom: '6px' }}>Relationships</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.7rem' }}>
+                {outgoing.length === 0 && incoming.length === 0 ? (
+                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No active relations</span>
+                ) : (
+                  <>
+                    {outgoing.map(r => (
+                      <div key={r.id} style={{ display: 'flex', flexDirection: 'column', padding: '6px', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '4px', border: '1px solid rgba(99, 102, 241, 0.15)' }}>
+                        <span style={{ fontWeight: 600, color: '#a855f7' }}>Outgoing Link (FK)</span>
+                        <span style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          Field <code style={{ color: 'var(--text-primary)' }}>{r.sourceField}</code> references <strong style={{ color: 'var(--color-primary)' }}>{r.target}</strong>.<code style={{ color: 'var(--text-primary)' }}>{r.targetField}</code>
+                        </span>
+                      </div>
+                    ))}
+                    {incoming.map(r => (
+                      <div key={r.id} style={{ display: 'flex', flexDirection: 'column', padding: '6px', background: 'rgba(16, 185, 129, 0.05)', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                        <span style={{ fontWeight: 600, color: '#10b981' }}>Incoming Link</span>
+                        <span style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          Table <strong style={{ color: 'var(--color-primary)' }}>{r.source}</strong>.<code style={{ color: 'var(--text-primary)' }}>{r.sourceField}</code> references <code style={{ color: 'var(--text-primary)' }}>{r.targetField}</code>
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {useDemoDbSchema && (
+              <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245,158,11,0.25)', fontWeight: 600 }}>🧪 DEMO SCHEMA</span>
+                <button 
+                  className="cyber-button text-btn alert" 
+                  style={{ padding: '3px 8px', fontSize: '0.65rem' }}
+                  onClick={() => {
+                    setUseDemoDbSchema(false);
+                    setSelectedDbTableId(null);
+                    setSelectedNode(null);
+                  }}
+                >
+                  Clear Demo
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Heatmap Legend */}
       {viewMode === 'dependency' && heatmapMode !== 'none' && (

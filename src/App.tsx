@@ -42,7 +42,7 @@ export default function App() {
   } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'docs'>('dependency');
+  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'docs' | 'dbSchema'>('dependency');
   const [searchQuery, setSearchQuery] = useState('');
   const [diffData, setDiffData] = useState<any | null>(null);
   const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult[] | null>(null);
@@ -625,6 +625,12 @@ export default function App() {
                   >
                     📖 API Docs
                   </button>
+                  <button
+                    className={`tab-btn ${viewMode === 'dbSchema' ? 'active' : ''}`}
+                    onClick={() => setViewMode('dbSchema')}
+                  >
+                    🗃️ DB Schema
+                  </button>
                 </div>
 
                 <div className="tabs-right-controls">
@@ -663,7 +669,7 @@ export default function App() {
               </div>
 
               {/* Sticky KPI Ribbon */}
-              {viewMode !== 'analytics' && viewMode !== 'docs' && (
+              {viewMode !== 'analytics' && viewMode !== 'docs' && viewMode !== 'dbSchema' && (
                 <KpiRibbon
                   graphData={graphData}
                   onOpenAnalytics={() => setViewMode('analytics')}
