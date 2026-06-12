@@ -299,6 +299,10 @@ code, pre {
   overflow: hidden;
 }
 
+.workspace-layout.docs-active-layout {
+  grid-template-columns: 1fr;
+}
+
 .workspace-layout.expanded-bottom {
   grid-template-rows: 1fr 240px;
 }

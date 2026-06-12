@@ -268,7 +268,7 @@ export const ApiDocsPortal: React.FC<ApiDocsPortalProps> = ({ files, apiKey }) =
   };
 
   return (
-    <div className="api-docs-viewport" style={{ display: 'flex', height: 'calc(100vh - 120px)', width: '100%', overflow: 'hidden' }}>
+    <div className="api-docs-viewport" style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
       
       {/* Sidebar endpoint directory */}
       <aside className="docs-sidebar" style={{ width: '320px', borderRight: '1px solid var(--panel-border)', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.15)', flexShrink: 0 }}>

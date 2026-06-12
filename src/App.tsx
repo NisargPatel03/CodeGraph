@@ -422,9 +422,10 @@ export default function App() {
         />
       ) : (
         graphData && (
-          <main className="workspace-layout">
+          <main className={`workspace-layout ${viewMode === 'docs' ? 'docs-active-layout' : ''}`}>
             {/* Left Sidebar - File Explorer */}
-            <aside className="glass-panel sidebar-left">
+            {viewMode !== 'docs' && (
+              <aside className="glass-panel sidebar-left">
               <div className="sidebar-header">
                 <div className="sidebar-title">
                   <span>Files Panel</span>
@@ -530,6 +531,7 @@ export default function App() {
                 )}
               </div>
             </aside>
+            )}
 
             {/* Center Area - D3 Graph Visualizer or Analytics Dashboard */}
             <section className="glass-panel center-panel" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -660,33 +662,35 @@ export default function App() {
             </section>
 
             {/* Right Sidebar - Inspector Panel */}
-            <Inspector
-              selectedFile={activeFile}
-              allFiles={repoData.files}
-              apiKey={apiKey}
-              cycles={graphData.cycles}
-              imports={activeFileImports}
-              selectedNodeId={selectedNodeId}
-              setSelectedNodeId={setSelectedNodeId}
-              setCollapsedFolders={setCollapsedFolders}
-              activeTraceNodeId={activeTraceNodeId}
-              setActiveTraceNodeId={setActiveTraceNodeId}
-              callNodes={graphData.callNodes || []}
-              callLinks={graphData.callLinks || []}
-              diffData={diffData}
-              linterViolations={linterViolations}
-              setLinterViolations={setLinterViolations}
-              linterRule={linterRule}
-              setLinterRule={setLinterRule}
-              isLinting={isLinting}
-              linterError={linterError}
-              onRunLinter={handleRunLinter}
-              auditReport={auditReport}
-              setAuditReport={setAuditReport}
-              isAuditing={isAuditing}
-              auditError={auditError}
-              onRunAudit={handleRunDependencyAudit}
-            />
+            {viewMode !== 'docs' && (
+              <Inspector
+                selectedFile={activeFile}
+                allFiles={repoData.files}
+                apiKey={apiKey}
+                cycles={graphData.cycles}
+                imports={activeFileImports}
+                selectedNodeId={selectedNodeId}
+                setSelectedNodeId={setSelectedNodeId}
+                setCollapsedFolders={setCollapsedFolders}
+                activeTraceNodeId={activeTraceNodeId}
+                setActiveTraceNodeId={setActiveTraceNodeId}
+                callNodes={graphData.callNodes || []}
+                callLinks={graphData.callLinks || []}
+                diffData={diffData}
+                linterViolations={linterViolations}
+                setLinterViolations={setLinterViolations}
+                linterRule={linterRule}
+                setLinterRule={setLinterRule}
+                isLinting={isLinting}
+                linterError={linterError}
+                onRunLinter={handleRunLinter}
+                auditReport={auditReport}
+                setAuditReport={setAuditReport}
+                isAuditing={isAuditing}
+                auditError={auditError}
+                onRunAudit={handleRunDependencyAudit}
+              />
+            )}
           </main>
         )
       )}
