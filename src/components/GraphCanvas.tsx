@@ -33,6 +33,7 @@ interface GraphCanvasProps {
   linterViolations?: import('../utils/aiHelper').LinterViolation | null;
   auditReport?: import('../utils/aiHelper').AuditReport | null;
   apiKey: string;
+  dbAuditTrigger?: number;
 }
 
 let mermaidInitialized = false;
@@ -214,6 +215,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   linterViolations,
   auditReport,
   apiKey,
+  dbAuditTrigger,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -340,6 +342,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       setIsAuditingDb(false);
     }
   };
+
+  useEffect(() => {
+    if (dbAuditTrigger && dbAuditTrigger > 0) {
+      handleRunDbAudit();
+    }
+  }, [dbAuditTrigger]);
 
   // PR/Branch comparison states
   const [baseBranch, setBaseBranch] = useState('main');

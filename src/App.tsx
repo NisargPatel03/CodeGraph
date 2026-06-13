@@ -12,6 +12,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { KpiRibbon } from './components/KpiRibbon';
 import { ApiDocsPortal } from './components/ApiDocsPortal';
 import { AiIcon } from './components/AiIcon';
+import { CommandPalette } from './components/CommandPalette';
 import logoImg from './assets/logo.png';
 import { semanticSearchCodebase, lintCodebaseRules, runDependencyAudit } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
@@ -54,6 +55,7 @@ export default function App() {
   const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
   const [isEvolutionMode, setIsEvolutionMode] = useState(false);
   const [currentEvolutionStep, setCurrentEvolutionStep] = useState(0);
+  const [dbAuditTrigger, setDbAuditTrigger] = useState(0);
 
   // AI Architectural Linter States
   const [linterViolations, setLinterViolations] = useState<import('./utils/aiHelper').LinterViolation | null>(null);
@@ -717,6 +719,7 @@ export default function App() {
                   linterViolations={linterViolations}
                   auditReport={auditReport}
                   apiKey={apiKey}
+                  dbAuditTrigger={dbAuditTrigger}
                 />
               )}
             </section>
@@ -851,6 +854,22 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {repoData && (
+        <CommandPalette
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          theme={theme}
+          setTheme={setTheme}
+          isChatOpen={isChatOpen}
+          setIsChatOpen={setIsChatOpen}
+          setIsSettingsOpen={setIsSettingsOpen}
+          onRunDependencyAudit={handleRunDependencyAudit}
+          onRunDbAudit={() => setDbAuditTrigger(prev => prev + 1)}
+          files={repoData.files}
+          onSelectFile={setSelectedNodeId}
+        />
       )}
     </div>
   );
