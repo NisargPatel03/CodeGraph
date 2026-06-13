@@ -1530,13 +1530,17 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             .style('padding', '4px 8px')
             .style('font-size', '0.72rem')
             .style('border-bottom', '1px solid rgba(255,255,255,0.03)')
-            .html(() => `
-              <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                <span style="font-size: 0.7rem; opacity: 0.8;">${keyIcon}</span>
-                <span style="color: ${keyColor}; font-weight: ${isKey ? '600' : 'normal'}">${f.name}</span>
-              </div>
-              <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.65rem;">${f.type}</span>
-            `);
+            .style('gap', '8px')
+            .html(() => {
+              const displayType = f.type.includes('ObjectId') ? 'ObjectId' : f.type.replace(/^(mongoose\.)?(Schema\.)?Types\./i, '');
+              return `
+                <div style="display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 0;">
+                  <span style="font-size: 0.7rem; opacity: 0.8;">${keyIcon}</span>
+                  <span style="color: ${keyColor}; font-weight: ${isKey ? '600' : 'normal'}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.name}</span>
+                </div>
+                <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.65rem; word-break: break-all; text-align: right; flex-grow: 1; padding-left: 4px;">${displayType}</span>
+              `;
+            });
         });
 
         // Hover styling updates
@@ -2779,15 +2783,18 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)', marginBottom: '6px' }}>Fields & Columns</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                {table.fields.map(f => (
-                  <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 2px', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span>{f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '•'}</span>
-                      <span style={{ fontWeight: f.isPrimaryKey || f.isForeignKey ? '600' : 'normal', color: f.isPrimaryKey ? 'var(--color-secondary)' : f.isForeignKey ? '#a855f7' : 'var(--text-primary)' }}>{f.name}</span>
+                {table.fields.map(f => {
+                  const displayType = f.type.includes('ObjectId') ? 'ObjectId' : f.type.replace(/^(mongoose\.)?(Schema\.)?Types\./i, '');
+                  return (
+                    <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 2px', borderBottom: '1px solid rgba(255,255,255,0.02)', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexShrink: 0 }}>
+                        <span>{f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '•'}</span>
+                        <span style={{ fontWeight: f.isPrimaryKey || f.isForeignKey ? '600' : 'normal', color: f.isPrimaryKey ? 'var(--color-secondary)' : f.isForeignKey ? '#a855f7' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-mono)', opacity: 0.8, fontSize: '0.68rem', wordBreak: 'break-all', textAlign: 'right', flexGrow: 1 }}>{displayType}</span>
                     </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', opacity: 0.8, fontSize: '0.68rem' }}>{f.type}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
