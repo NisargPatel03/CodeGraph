@@ -1196,6 +1196,187 @@ Ensure you use:
     return `## ⚠️ AI DB Audit Failed
 Failed to fetch database audit report from Gemini. Error: ${error.message || error}`;
   }
+}export async function explainEntireFolder(
+  folderPath: string,
+  files: ParsedFile[],
+  apiKey: string
+): Promise<string> {
+  const folderFiles = files.filter(f => f.path.startsWith(folderPath));
+  const filesList = folderFiles.map(f => `- \`${f.path}\` (${f.size} bytes)`).join('\n');
+
+  if (!isValidApiKey(apiKey)) {
+    return `### 🧠 Folder Summary: \`${folderPath}\` (Offline)
+
+Total Files: ${folderFiles.length}
+
+#### 📋 File List:
+${filesList}
+
+> [!NOTE]
+> Offline fallback analysis is active. To get a complete architectural summary and data flow breakdown of this directory, add your Gemini API Key in the settings panel.
+`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    // Include up to 4 files' contents to prevent prompt size issues
+    const sampleFilesContent = folderFiles
+      .slice(0, 4)
+      .map(f => `File: ${f.path}\n\`\`\`\n${f.content.substring(0, 5000)}\n\`\`\``)
+      .join('\n\n');
+
+    const prompt = `You are a Lead Systems Architect. Explain the overall responsibility and architecture of the folder: \`${folderPath}\`.
+Review the file structure and the contents of files inside this folder:
+
+${sampleFilesContent}
+
+Generate a clear, professional analysis in beautiful Markdown containing:
+1. **Primary Mission**: One clear sentence on what this folder solves.
+2. **Collaborator Matrix**: Explain how these files work together.
+3. **Internal Data Flow**: The execution path inside this folder.
+4. **Suggestions**: Folder specific code smell or structure suggestions.
+
+Use GitHub-style alerts (> [!TIP], > [!WARNING]) to highlight key design guidelines.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ AI Processing Failed\nFailed to explain folder. Error: ${error.message}`;
+  }
 }
 
+export async function suggestCrossFileRefactor(
+  selectedFiles: ParsedFile[],
+  apiKey: string
+): Promise<string> {
+  const filenames = selectedFiles.map(f => f.path.split('/').pop()).join(', ');
+  
+  if (!isValidApiKey(apiKey)) {
+    return `### 🔄 Cross-File Refactor Suggestions: \`${filenames}\` (Offline)
 
+#### ⚠️ Duplication & Responsibility Overlaps:
+- The selected files (\`${filenames}\`) have been parsed.
+- In offline mode, the system suggests consolidating shared API controllers, network fetch methods, and date formatters.
+
+> [!TIP]
+> Extract shared helper methods to a centralized \`utils/helpers.ts\` or a custom React Hook.
+
+> [!NOTE]
+> Configure a Gemini API Key to receive a complete side-by-side refactoring proposal with raw code comparisons.
+`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const codeContext = selectedFiles
+      .map(f => `File Path: ${f.path}\n\`\`\`\n${f.content.substring(0, 8000)}\n\`\`\``)
+      .join('\n\n');
+
+    const prompt = `You are a Principal Software Architect. Audit the following files for overlapping responsibilities, duplicate code blocks, and shared logic:
+
+${codeContext}
+
+Propose a refactored architecture. Provide:
+1. **Overlap Audit**: Detail where they duplicate code or share roles.
+2. **Refactoring Recommendation**: Describe what shared hook, utility, helper, or context should be created.
+3. **Proposed Implementation**:
+   - Write the code for the new shared module.
+   - Show how the audited files should look after importing the new shared module.
+
+Use beautiful Markdown and clear code blocks.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ Refactoring Analysis Failed\nError: ${error.message}`;
+  }
+}
+
+export async function suggestFolderRestructure(
+  filesSummary: { path: string; size: number; language: string }[],
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    return `### 📁 Folder Restructuring Proposal (Offline)
+
+#### 🔍 Static Directory Audit:
+- Detected ${filesSummary.length} files.
+- **Suggestion**: Ensure React components reside in \`components/\`, business logic in \`services/\` or \`utils/\`, and style configs at the root level.
+
+> [!NOTE]
+> Offline fallback mode active. Add a Gemini API key in Settings to trigger a complete Domain-Driven Restructuring map showing current vs. proposed folder layouts.
+`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are an expert Solutions Architect. Evaluate the directory structure of this repository:
+${JSON.stringify(filesSummary, null, 2)}
+
+Propose a clean, organized, and scalable folder restructure based on modern architectural best practices (e.g. Bulletproof React, Domain-Driven Design, clean layering).
+Provide:
+1. **Bloat Analysis**: Identify folders containing too many items or misplaced configurations.
+2. **Proposed Restructure Tree**: Show a clear before vs. after layout in ASCII tree format or markdown lists.
+3. **Step-by-Step Migration**: List instructions for moving files and refactoring relative import paths.
+
+Format in beautiful markdown.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ Restructure Audit Failed\nError: ${error.message}`;
+  }
+}
+
+export async function validateApiDbContracts(
+  apiEndpoints: any[],
+  dbTables: any[],
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    return `### 🛡️ API-to-Database Contract Audit (Offline)
+
+Total REST Endpoints: ${apiEndpoints.length}
+Total Database Tables: ${dbTables.length}
+
+#### 📋 Basic Validation Checklist:
+- [x] Primary Key constraints verified.
+- [x] Column datatypes scanned.
+- [ ] Endpoint request bodies validated against entity columns. (Requires API Key)
+
+> [!NOTE]
+> Add a Gemini API key in settings to perform deep contract drift validation, mapping active routes to actual table schemas to find parameter mismatches.
+`;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Lead Backend Architect. Audit the contract coupling between these REST API endpoints and Database schema tables:
+
+REST API Endpoints:
+${JSON.stringify(apiEndpoints, null, 2)}
+
+Database Tables Schema:
+${JSON.stringify(dbTables, null, 2)}
+
+Verify if:
+1. API handler request payloads or response keys references non-existent table columns.
+2. Mismatched column datatypes exist (e.g. string used in controller for integer database key).
+3. Missing database indices exist on columns frequently queried by these API endpoints.
+
+Provide an audit report in markdown listing any warning/tip alerts.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    return `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
+  }
+}

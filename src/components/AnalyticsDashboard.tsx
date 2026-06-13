@@ -21,7 +21,14 @@ import {
 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
-import { generateOnboardingGuide, generateArchitectureOverview, refactorCodeSmell, generateMermaidDiagram } from '../utils/aiHelper';
+import { 
+  generateOnboardingGuide, 
+  generateArchitectureOverview, 
+  refactorCodeSmell, 
+  generateMermaidDiagram,
+  suggestFolderRestructure,
+  validateApiDbContracts
+} from '../utils/aiHelper';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
 let mermaidInitialized = false;
@@ -277,7 +284,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onSelectFile,
   onUpdateFileContent,
 }) => {
-  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding'>('metrics');
+  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring'>('metrics');
   
   // Onboarding Exporter states
   const [onboardingDoc, setOnboardingDoc] = useState('');
@@ -289,6 +296,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const [mermaidDiagram, setMermaidDiagram] = useState('');
   const [loadingMermaid, setLoadingMermaid] = useState(false);
   const [archView, setArchView] = useState<'text' | 'diagram'>('diagram');
+
+  // Restructure & API-DB contract states
+  const [restructureDoc, setRestructureDoc] = useState('');
+  const [loadingRestructure, setLoadingRestructure] = useState(false);
+  const [apiDbContractDoc, setApiDbContractDoc] = useState('');
+  const [loadingApiDbContract, setLoadingApiDbContract] = useState(false);
   
   // Refactor Smell states
   const [refactorSmell, setRefactorSmell] = useState<any | null>(null);
@@ -341,6 +354,61 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       setLoadingOnboarding(false);
     }
   };
+
+  const handleGenerateRestructure = async () => {
+    setLoadingRestructure(true);
+    try {
+      const summary = files.map((f) => ({ path: f.path, size: f.size, language: f.language }));
+      const doc = await suggestFolderRestructure(summary, apiKey);
+      setRestructureDoc(doc);
+    } catch (err: any) {
+      setRestructureDoc(`### ⚠️ Restructure Failed\nError: ${err.message || err}`);
+    } finally {
+      setLoadingRestructure(false);
+    }
+  };
+
+  const handleGenerateApiDbContracts = async () => {
+    setLoadingApiDbContract(true);
+    try {
+      // Extract pseudo API endpoints from routes/controllers in files
+      const pseudoEndpoints = files
+        .filter(f => f.path.toLowerCase().includes('route') || f.path.toLowerCase().includes('controller') || f.path.toLowerCase().includes('api'))
+        .map(f => {
+          // Find standard REST keywords in content
+          const methods = [];
+          if (f.content.includes('GET') || f.content.includes('get(')) methods.push('GET');
+          if (f.content.includes('POST') || f.content.includes('post(')) methods.push('POST');
+          if (f.content.includes('PUT') || f.content.includes('put(')) methods.push('PUT');
+          if (f.content.includes('DELETE') || f.content.includes('delete(')) methods.push('DELETE');
+          return {
+            file: f.path.split('/').pop(),
+            path: `/api/${f.path.replace(/\.[^/.]+$/, '').replace(/\\/g, '/')}`,
+            methods: methods.length > 0 ? methods : ['GET']
+          };
+        });
+
+      // Extract pseudo database schemas
+      const dbTables = files
+        .filter(f => f.path.toLowerCase().includes('schema') || f.path.toLowerCase().includes('model') || f.path.toLowerCase().includes('prisma'))
+        .map(f => {
+          // Parse lines looking for model declarations
+          const matchModels = f.content.match(/(?:model|schema|table)\s+(\w+)/gi) || [];
+          return {
+            file: f.path.split('/').pop(),
+            entities: matchModels.map(m => m.replace(/(model|schema|table)\s+/i, ''))
+          };
+        });
+
+      const doc = await validateApiDbContracts(pseudoEndpoints, dbTables, apiKey);
+      setApiDbContractDoc(doc);
+    } catch (err: any) {
+      setApiDbContractDoc(`### ⚠️ Contract Validation Failed\nError: ${err.message || err}`);
+    } finally {
+      setLoadingApiDbContract(false);
+    }
+  };
+
 
   const handleGenerateArchitecture = async () => {
     const summary = files.map((f) => ({ path: f.path, language: f.language, size: f.size }));
@@ -559,10 +627,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             <BookOpen size={15} style={{ marginRight: '6px' }} />
             Onboarding Exporter
           </button>
-        </div>
-
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Powered by Gemini Intelligence
+          <button 
+            className={`tab-btn ${subTab === 'restructuring' ? 'active' : ''}`}
+            onClick={() => setSubTab('restructuring')}
+            style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '6px' }}
+          >
+            <Folder size={15} style={{ marginRight: '6px' }} />
+            Restructure & Contracts
+          </button>
         </div>
       </div>
 
@@ -1081,6 +1153,113 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               </button>
             </div>
           )}
+        </div>
+      )}
+      
+      {/* SUB-TAB 4: RESTRUCTURE & CONTRACTS */}
+      {subTab === 'restructuring' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            
+            {/* Folder Restructure Card */}
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, color: 'var(--color-primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📂 Folder Restructure Simulator
+                </h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                Gemini will audit the directory layout, highlight folder-level coupling, and simulate a clean, optimized structure (such as splitting overloaded utility folders).
+              </p>
+              
+              {restructureDoc ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="custom-scrollbar" style={{ flex: 1, maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(restructureDoc) }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      className="cyber-button secondary" 
+                      onClick={() => setRestructureDoc('')}
+                      style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                    >
+                      Clear
+                    </button>
+                    <button 
+                      className="cyber-button" 
+                      onClick={handleGenerateRestructure}
+                      disabled={loadingRestructure}
+                      style={{ padding: '8px 16px', fontSize: '0.8rem', flex: 1 }}
+                    >
+                      {loadingRestructure ? 'Regenerating...' : 'Regenerate'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', border: '1px dashed var(--panel-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.1)', gap: '12px' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🏗️</span>
+                  <button 
+                    className="cyber-button" 
+                    onClick={handleGenerateRestructure}
+                    disabled={loadingRestructure}
+                    style={{ padding: '8px 20px', fontSize: '0.8rem' }}
+                  >
+                    {loadingRestructure ? 'Analyzing Structure...' : '⚡ Generate Restructure Blueprint'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* API-to-Database Contract Validation Card */}
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, color: 'var(--color-secondary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🗃️ API-Database Contract Auditor
+                </h3>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                Audits data flow contract drift between your API routes (Express, Next.js routes) and database schemas (Prisma, SQL, schemas) to point out missing attributes or invalid type casts.
+              </p>
+
+              {apiDbContractDoc ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="custom-scrollbar" style={{ flex: 1, maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(apiDbContractDoc) }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      className="cyber-button secondary" 
+                      onClick={() => setApiDbContractDoc('')}
+                      style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                    >
+                      Clear
+                    </button>
+                    <button 
+                      className="cyber-button" 
+                      onClick={handleGenerateApiDbContracts}
+                      disabled={loadingApiDbContract}
+                      style={{ padding: '8px 16px', fontSize: '0.8rem', flex: 1, background: 'var(--color-secondary)', borderColor: 'var(--color-secondary)' }}
+                    >
+                      {loadingApiDbContract ? 'Re-Auditing...' : 'Re-Run Audit'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', border: '1px dashed var(--panel-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.1)', gap: '12px' }}>
+                  <span style={{ fontSize: '1.5rem' }}>🛡️</span>
+                  <button 
+                    className="cyber-button" 
+                    onClick={handleGenerateApiDbContracts}
+                    disabled={loadingApiDbContract}
+                    style={{ padding: '8px 20px', fontSize: '0.8rem', background: 'var(--color-secondary)', borderColor: 'var(--color-secondary)' }}
+                  >
+                    {loadingApiDbContract ? 'Auditing Drift...' : '🔍 Audit API-Database Contracts'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
 

@@ -14,7 +14,13 @@ import { ApiDocsPortal } from './components/ApiDocsPortal';
 import { AiIcon } from './components/AiIcon';
 import { CommandPalette } from './components/CommandPalette';
 import logoImg from './assets/logo.png';
-import { semanticSearchCodebase, lintCodebaseRules, runDependencyAudit } from './utils/aiHelper';
+import { 
+  semanticSearchCodebase, 
+  lintCodebaseRules, 
+  runDependencyAudit,
+  explainEntireFolder,
+  suggestCrossFileRefactor
+} from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
 // Tree interface for File Explorer
@@ -56,6 +62,18 @@ export default function App() {
   const [isEvolutionMode, setIsEvolutionMode] = useState(false);
   const [currentEvolutionStep, setCurrentEvolutionStep] = useState(0);
   const [dbAuditTrigger, setDbAuditTrigger] = useState(0);
+
+  // Multi-File AI Analysis States
+  const [isMultiSelectActive, setIsMultiSelectActive] = useState(false);
+  const [selectedFilePaths, setSelectedFilePaths] = useState<Set<string>>(new Set());
+  const [showRefactorModal, setShowRefactorModal] = useState(false);
+  const [isRefactoring, setIsRefactoring] = useState(false);
+  const [refactorProposal, setRefactorProposal] = useState<string | null>(null);
+
+  const [showFolderExplainModal, setShowFolderExplainModal] = useState(false);
+  const [isExplainingFolder, setIsExplainingFolder] = useState(false);
+  const [folderExplainReport, setFolderExplainReport] = useState<string | null>(null);
+  const [explainingFolderName, setExplainingFolderName] = useState<string | null>(null);
 
   // AI Architectural Linter States
   const [linterViolations, setLinterViolations] = useState<import('./utils/aiHelper').LinterViolation | null>(null);
@@ -180,6 +198,38 @@ export default function App() {
     });
   };
 
+  const handleRunFolderExplanation = async (folderPath: string) => {
+    if (!repoData) return;
+    setExplainingFolderName(folderPath);
+    setIsExplainingFolder(true);
+    setShowFolderExplainModal(true);
+    setFolderExplainReport(null);
+    try {
+      const report = await explainEntireFolder(folderPath, repoData.files, apiKey);
+      setFolderExplainReport(report);
+    } catch (err: any) {
+      setFolderExplainReport(`### ⚠️ Audit Error\nFailed to explain module folder: ${err.message || err}`);
+    } finally {
+      setIsExplainingFolder(false);
+    }
+  };
+
+  const handleRunCrossFileRefactor = async () => {
+    if (!repoData || selectedFilePaths.size < 2) return;
+    setIsRefactoring(true);
+    setShowRefactorModal(true);
+    setRefactorProposal(null);
+    try {
+      const selectedFiles = repoData.files.filter(f => selectedFilePaths.has(f.path));
+      const proposal = await suggestCrossFileRefactor(selectedFiles, apiKey);
+      setRefactorProposal(proposal);
+    } catch (err: any) {
+      setRefactorProposal(`### ⚠️ Refactoring Error\nFailed to generate refactoring proposal: ${err.message || err}`);
+    } finally {
+      setIsRefactoring(false);
+    }
+  };
+
   const handleDownloadZip = async () => {
     if (!repoData) return;
     try {
@@ -199,6 +249,66 @@ export default function App() {
     } catch (err) {
       console.error('Failed to generate ZIP archive:', err);
     }
+  };
+
+  const formatMarkdown = (text: string): string => {
+    if (!text) return '';
+    return text
+      // 1. Code blocks (triple backticks)
+      .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+        const escapedCode = code
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        const displayLang = lang ? lang.toUpperCase() : 'CODE';
+        return `
+          <div class="code-block-wrapper">
+            <div class="code-block-header">
+              <span>${displayLang}</span>
+              <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
+            </div>
+            <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+          </div>
+        `;
+      })
+      // 2. Headings
+      .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
+      .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
+      .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary); font-weight:600; margin:16px 0 6px 0;">$1</h4>')
+      .replace(/^#### (.*$)/gim, '<h5 style="color:var(--text-primary); font-weight:600; margin:12px 0 4px 0;">$1</h5>')
+      // 3. Lists
+      .replace(/^\s*[\-\*\+]\s+(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
+      // 4. Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // 5. Code tags
+      .replace(/\`(.*?)\`/g, '<code>$1</code>')
+      // 6. GitHub Style Alerts
+      .replace(/>\s*\[!WARNING\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(239,68,68,0.08); border-left:4px solid #f43f5e; border-radius:4px; color:#fda4af; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">⚠️ WARNING</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!IMPORTANT\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(99,102,241,0.08); border-left:4px solid #6366f1; border-radius:4px; color:#c7d2fe; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">🚨 IMPORTANT</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!TIP\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(16,185,129,0.08); border-left:4px solid #10b981; border-radius:4px; color:#a7f3d0; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">💡 TIP</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!NOTE\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(255,255,255,0.03); border-left:4px solid #9ca3af; border-radius:4px; color:var(--text-secondary); font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">📝 NOTE</div>
+          $1
+        </div>
+      `)
+      // Strip remaining blockquotes markers
+      .replace(/^\s*>\s*/gm, '');
   };
 
   const handleDataLoaded = (data: { 
@@ -318,11 +428,38 @@ export default function App() {
         <div
           key={item.path}
           className={`file-node ${isSelected ? 'active' : ''} ${hasCycle ? 'cycle-member' : ''}`}
-          style={{ paddingLeft: `${depth * 14 + 8}px` }}
-          onClick={() => setSelectedNodeId(item.path)}
+          style={{ paddingLeft: `${depth * 14 + 8}px`, display: 'flex', alignItems: 'center' }}
+          onClick={() => {
+            if (isMultiSelectActive) {
+              setSelectedFilePaths(prev => {
+                const next = new Set(prev);
+                if (next.has(item.path)) next.delete(item.path);
+                else next.add(item.path);
+                return next;
+              });
+            } else {
+              setSelectedNodeId(item.path);
+            }
+          }}
         >
+          {isMultiSelectActive && (
+            <input
+              type="checkbox"
+              className="file-select-checkbox"
+              checked={selectedFilePaths.has(item.path)}
+              onChange={(e) => {
+                e.stopPropagation();
+                setSelectedFilePaths(prev => {
+                  const next = new Set(prev);
+                  if (next.has(item.path)) next.delete(item.path);
+                  else next.add(item.path);
+                  return next;
+                });
+              }}
+            />
+          )}
           <File size={14} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: '6px' }}>
             {item.name}
           </span>
           {hasCycle && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-alert)', marginLeft: 'auto' }} />}
@@ -359,7 +496,31 @@ export default function App() {
               <Folder size={14} style={{ color: 'var(--color-secondary)', opacity: 0.8, flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
             </div>
-            {(viewMode === 'dependency' || viewMode === 'cluster') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <button
+                className="folder-explain-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRunFolderExplanation(item.path);
+                }}
+                title="Explain Folder Architecture"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--color-primary)',
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  fontSize: '0.65rem',
+                  opacity: 0.8,
+                  transition: 'opacity 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px'
+                }}
+              >
+                🧠 explain
+              </button>
+              {(viewMode === 'dependency' || viewMode === 'cluster') && (
               <button
                 className="tree-graph-toggle"
                 onClick={(e) => {
@@ -386,6 +547,7 @@ export default function App() {
                 {collapsedFolders.has(item.path) ? '📁 collapsed' : '📂 collapse'}
               </button>
             )}
+            </div>
           </div>
         )}
         {(isExpanded || !item.path || searchQuery) && (
@@ -513,7 +675,31 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div className="file-tree-container">
+              
+              {repoData && (
+                <div className="multi-select-toggle-row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)' }}>
+                  <button 
+                    className={`cyber-button ${isMultiSelectActive ? 'active' : 'secondary'}`} 
+                    style={{ fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }} 
+                    onClick={() => {
+                      setIsMultiSelectActive(!isMultiSelectActive);
+                      setSelectedFilePaths(new Set());
+                    }}
+                  >
+                    {isMultiSelectActive ? '✕ Exit Multi-Select' : '☑️ Multi-File Refactor'}
+                  </button>
+                  {isMultiSelectActive && selectedFilePaths.size > 0 && (
+                    <span 
+                      className="multi-select-clear-link"
+                      onClick={() => setSelectedFilePaths(new Set())}
+                    >
+                      Clear ({selectedFilePaths.size})
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="file-tree-container" style={{ position: 'relative' }}>
                 {isSearchingSemantically ? (
                   <div className="semantic-loading" style={{ padding: '24px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                     <div className="search-spinner" style={{ width: '20px', height: '20px' }} />
@@ -584,6 +770,17 @@ export default function App() {
                   fileTree && renderTree(fileTree)
                 )}
               </div>
+              {isMultiSelectActive && selectedFilePaths.size >= 2 && (
+                <div className="multi-select-toolbar">
+                  <div className="multi-select-header">
+                    <span>Selected Files</span>
+                    <span className="multi-select-count">{selectedFilePaths.size}</span>
+                  </div>
+                  <button className="multi-select-btn" onClick={handleRunCrossFileRefactor}>
+                    <Sparkles size={14} /> Refactor Selected Files
+                  </button>
+                </div>
+              )}
             </aside>
             )}
 
@@ -720,6 +917,7 @@ export default function App() {
                   auditReport={auditReport}
                   apiKey={apiKey}
                   dbAuditTrigger={dbAuditTrigger}
+                  onExplainFolder={handleRunFolderExplanation}
                 />
               )}
             </section>
@@ -850,6 +1048,92 @@ export default function App() {
                 onClick={() => setIsSettingsOpen(false)}
               >
                 Save & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Explainer Modal */}
+      {showFolderExplainModal && (
+        <div className="settings-overlay" onClick={() => setShowFolderExplainModal(false)}>
+          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ width: '80%', maxWidth: '800px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
+                🧠 Module Explainer: {explainingFolderName}
+              </h3>
+              <button 
+                onClick={() => setShowFolderExplainModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="custom-scrollbar" style={{ maxHeight: '60vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
+              {isExplainingFolder ? (
+                <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <div className="search-spinner" style={{ width: '32px', height: '32px' }} />
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>AI is mapping module boundaries & reading files...</span>
+                </div>
+              ) : (
+                <div 
+                  className="markdown-body" 
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(folderExplainReport || '') }} 
+                />
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+              <button 
+                className="cyber-button"
+                style={{ padding: '8px 20px', fontSize: '0.85rem' }}
+                onClick={() => setShowFolderExplainModal(false)}
+              >
+                Close Explanation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cross-File Refactoring Modal */}
+      {showRefactorModal && (
+        <div className="settings-overlay" onClick={() => setShowRefactorModal(false)}>
+          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ width: '90%', maxWidth: '1000px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
+                ✨ Cross-File AI Refactoring Proposal
+              </h3>
+              <button 
+                onClick={() => setShowRefactorModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="custom-scrollbar" style={{ maxHeight: '65vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
+              {isRefactoring ? (
+                <div style={{ padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <div className="search-spinner" style={{ width: '32px', height: '32px' }} />
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gemini is auditing overlapping logic & compiling DRY blueprints...</span>
+                </div>
+              ) : (
+                <div 
+                  className="markdown-body" 
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(refactorProposal || '') }} 
+                />
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+              <button 
+                className="cyber-button"
+                style={{ padding: '8px 20px', fontSize: '0.85rem' }}
+                onClick={() => setShowRefactorModal(false)}
+              >
+                Close Refactor Sheet
               </button>
             </div>
           </div>

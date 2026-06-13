@@ -34,6 +34,7 @@ interface GraphCanvasProps {
   auditReport?: import('../utils/aiHelper').AuditReport | null;
   apiKey: string;
   dbAuditTrigger?: number;
+  onExplainFolder?: (folderPath: string) => void;
 }
 
 let mermaidInitialized = false;
@@ -216,6 +217,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   auditReport,
   apiKey,
   dbAuditTrigger,
+  onExplainFolder,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2830,24 +2832,47 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                     allFolders.map(folder => {
                       const isCollapsed = collapsedFolders.has(folder);
                       return (
-                        <label key={folder} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
-                          <input
-                            type="checkbox"
-                            checked={isCollapsed}
-                            onChange={() => {
-                              setCollapsedFolders(prev => {
-                                const next = new Set(prev);
-                                if (next.has(folder)) next.delete(folder);
-                                else next.add(folder);
-                                return next;
-                              });
+                        <div key={folder} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.68rem', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none', overflow: 'hidden', flex: 1 }}>
+                            <input
+                              type="checkbox"
+                              checked={isCollapsed}
+                              onChange={() => {
+                                setCollapsedFolders(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(folder)) next.delete(folder);
+                                  else next.add(folder);
+                                  return next;
+                                });
+                              }}
+                              style={{ cursor: 'pointer', accentColor: 'var(--color-warning)' }}
+                            />
+                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={folder}>
+                              {folder}
+                            </span>
+                          </label>
+                          <button
+                            className="explain-cluster-btn"
+                            title="AI Explain Folder"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (onExplainFolder) onExplainFolder(folder);
                             }}
-                            style={{ cursor: 'pointer', accentColor: 'var(--color-warning)' }}
-                          />
-                          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={folder}>
-                            {folder}
-                          </span>
-                        </label>
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--color-primary)',
+                              cursor: 'pointer',
+                              padding: '2px 4px',
+                              fontSize: '0.62rem',
+                              opacity: 0.75,
+                              transition: 'opacity 0.2s'
+                            }}
+                          >
+                            🧠 explain
+                          </button>
+                        </div>
                       );
                     })
                   )}

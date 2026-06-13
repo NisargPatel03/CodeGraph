@@ -3035,4 +3035,139 @@ input:checked + .slider:before {
   font-style: italic;
 }
 
+/* Multi-File AI Analysis Styles */
+.file-select-checkbox {
+  margin-right: 8px;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.multi-select-toolbar {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: rgba(15, 17, 30, 0.95);
+  border: 1px solid var(--color-primary);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 10px rgba(139, 92, 246, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  animation: slideUpToolbar 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUpToolbar {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.multi-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.multi-select-count {
+  background: var(--color-primary);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+}
+
+.multi-select-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.multi-select-btn:hover {
+  background: #7c3aed;
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.4);
+}
+
+.multi-select-btn:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.multi-select-clear-link {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.multi-select-clear-link:hover {
+  color: var(--text-primary);
+}
+
+/* Compare Layout split view */
+.restructure-planner-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .restructure-planner-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tree-view-pane {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 200px;
+}
+
+.tree-pane-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-pane-content {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+
 
