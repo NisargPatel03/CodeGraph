@@ -68,6 +68,83 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
     }
   };
 
+  const downloadPng = () => {
+    try {
+      if (!ref.current) return;
+      const svgEl = ref.current.querySelector('svg');
+      if (!svgEl) return;
+
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      // Parse width and height safely from viewBox to prevent NaN/zero sizes
+      let width = 800;
+      let height = 600;
+      const viewBoxAttr = svgEl.getAttribute('viewBox');
+      if (viewBoxAttr) {
+        const parts = viewBoxAttr.split(/\s+/);
+        if (parts.length === 4) {
+          width = Math.ceil(parseFloat(parts[2]) || 800);
+          height = Math.ceil(parseFloat(parts[3]) || 600);
+        }
+      } else {
+        width = svgEl.clientWidth || svgEl.getBoundingClientRect().width || 800;
+        height = svgEl.clientHeight || svgEl.getBoundingClientRect().height || 600;
+      }
+
+      svgClone.setAttribute('width', String(width));
+      svgClone.setAttribute('height', String(height));
+      svgClone.style.backgroundColor = '#0a0a0f';
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const scale = 2;
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+
+          const context = canvas.getContext('2d');
+          if (context) {
+            context.fillStyle = '#0a0a0f';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.scale(scale, scale);
+            context.drawImage(image, 0, 0, width, height);
+
+            const pngUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download = 'codebase-architecture.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error('PNG canvas export failed:', err);
+          URL.revokeObjectURL(url);
+        }
+      };
+      image.onerror = (err) => {
+        console.error('Image load failed for PNG export:', err);
+        URL.revokeObjectURL(url);
+      };
+      image.src = url;
+    } catch (e) {
+      console.error('Download PNG failed:', e);
+    }
+  };
+
 
   useEffect(() => {
     if (!ref.current || !chart) return;
@@ -131,6 +208,15 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
         >
           <Download size={11} />
           Export SVG
+        </button>
+        <button
+          className="cyber-button secondary"
+          style={{ fontSize: '0.68rem', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={downloadPng}
+          title="Download as PNG (High-resolution raster image)"
+        >
+          <Download size={11} />
+          Export PNG
         </button>
       </div>
       <div ref={ref} style={{ width: '100%', textAlign: 'center', overflowX: 'auto' }} />
