@@ -6,6 +6,7 @@ import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
 import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
+import mermaid from 'mermaid';
 
 interface GraphCanvasProps {
   graphData: CodebaseGraph;
@@ -30,6 +31,211 @@ interface GraphCanvasProps {
   commits?: import('../utils/repoParser').GitHubCommitInfo[];
   linterViolations?: import('../utils/aiHelper').LinterViolation | null;
   auditReport?: import('../utils/aiHelper').AuditReport | null;
+}
+
+let mermaidInitialized = false;
+
+const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  const downloadSvg = () => {
+    try {
+      if (!ref.current) return;
+      const svgEl = ref.current.querySelector('svg');
+      if (!svgEl) return;
+
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'call-trace-sequence.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download SVG failed:', e);
+    }
+  };
+
+  const downloadPng = () => {
+    try {
+      if (!ref.current) return;
+      const svgEl = ref.current.querySelector('svg');
+      if (!svgEl) return;
+
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      const width = Math.ceil(svgClone.viewBox?.baseVal?.width || svgEl.clientWidth || 800);
+      const height = Math.ceil(svgClone.viewBox?.baseVal?.height || svgEl.clientHeight || 600);
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+      const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const scale = 2;
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+
+          const context = canvas.getContext('2d');
+          if (context) {
+            context.fillStyle = '#0a0a0f';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.scale(scale, scale);
+            context.drawImage(image, 0, 0, width, height);
+
+            const pngUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download = 'call-trace-sequence.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+        } catch (err) {
+          console.error('PNG canvas export failed:', err);
+        }
+      };
+      image.src = svgDataUrl;
+    } catch (e) {
+      console.error('Download PNG failed:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!ref.current || !chart) return;
+
+    if (!mermaidInitialized) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+          primaryColor: '#1e1b4b',
+          primaryTextColor: '#e2e8f0',
+          primaryBorderColor: '#4f46e5',
+          lineColor: '#6366f1',
+          secondaryColor: '#0f172a',
+          tertiaryColor: '#1e293b',
+          background: '#0a0a0f',
+          mainBkg: '#0f172a',
+          nodeBorder: '#4f46e5',
+          clusterBkg: '#1e1b4b',
+          titleColor: '#c4b5fd',
+          edgeLabelBackground: '#1e293b',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        },
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true },
+      });
+      mermaidInitialized = true;
+    }
+
+    const id = `mermaid-trace-${Date.now()}`;
+    ref.current.innerHTML = '';
+    setRenderError(null);
+
+    mermaid.render(id, chart)
+      .then(({ svg }) => {
+        if (ref.current) ref.current.innerHTML = svg;
+      })
+      .catch((err) => {
+        console.error('Mermaid render error:', err);
+        setRenderError(err?.message || 'Failed to render sequence diagram');
+      });
+  }, [chart]);
+
+  return (
+    <div style={{ width: '100%', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '8px' }}>
+        <button
+          className="cyber-button secondary"
+          style={{ fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={downloadSvg}
+        >
+          Download SVG
+        </button>
+        <button
+          className="cyber-button secondary"
+          style={{ fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+          onClick={downloadPng}
+        >
+          Download PNG
+        </button>
+      </div>
+      {renderError ? (
+        <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', color: '#fca5a5', fontSize: '0.78rem', width: '100%' }}>
+          ⚠️ Diagram render error: {renderError}
+        </div>
+      ) : (
+        <div ref={ref} className="mermaid-container" style={{ width: '100%', background: '#0a0a0f', padding: '16px', borderRadius: '8px', overflow: 'auto', display: 'flex', justifyContent: 'center' }} />
+      )}
+    </div>
+  );
+};
+
+function generateSequenceDiagram(activeTraceNodeId: string, steps: { source: string; target: string }[]): string {
+  let mermaidCode = 'sequenceDiagram\n  autonumber\n';
+
+  const getAlias = (id: string) => {
+    return id.replace(/[^a-zA-Z0-9]/g, '_');
+  };
+
+  const getLabel = (id: string) => {
+    const parts = id.split('::');
+    const func = parts.pop() || '';
+    const file = parts.join('::').split('/').pop() || '';
+    return `${file}::${func}()`;
+  };
+
+  const participantIds = new Set<string>();
+  participantIds.add(activeTraceNodeId);
+  steps.forEach(s => {
+    participantIds.add(s.source);
+    participantIds.add(s.target);
+  });
+
+  participantIds.forEach(id => {
+    const alias = getAlias(id);
+    const label = getLabel(id);
+    mermaidCode += `  participant ${alias} as ${JSON.stringify(label)}\n`;
+  });
+
+  mermaidCode += '\n';
+
+  if (steps.length === 0) {
+    mermaidCode += `  Note over ${getAlias(activeTraceNodeId)}: Trace initiated (no outgoing calls detected)\n`;
+  } else {
+    steps.forEach(s => {
+      const srcAlias = getAlias(s.source);
+      const tgtAlias = getAlias(s.target);
+      const tgtFunc = s.target.split('::').pop() || '';
+      mermaidCode += `  ${srcAlias}->>+${tgtAlias}: ${tgtFunc}()\n`;
+      mermaidCode += `  deactivate ${tgtAlias}\n`;
+    });
+  }
+
+  return mermaidCode;
 }
 
 export const GraphCanvas: React.FC<GraphCanvasProps> = ({
@@ -90,6 +296,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [isToolboxCollapsed, setIsToolboxCollapsed] = useState(false);
   const [isMinimapExpanded, setIsMinimapExpanded] = useState(false);
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
+  const [showUmlModal, setShowUmlModal] = useState(false);
+  const [umlActiveTab, setUmlActiveTab] = useState<'preview' | 'syntax'>('preview');
 
   const dbSchema = useMemo(() => {
     if (viewMode !== 'dbSchema') return { tables: [], relationships: [] };
@@ -239,6 +447,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     
     return steps;
   }, [activeTraceNodeId, graphData.callLinks, viewMode]);
+
+  const umlChartCode = useMemo(() => {
+    if (!activeTraceNodeId) return '';
+    return generateSequenceDiagram(activeTraceNodeId, traceSteps);
+  }, [activeTraceNodeId, traceSteps]);
 
   useEffect(() => {
     if (traceSteps.length === 0) {
@@ -2468,6 +2681,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                           </button>
                         </div>
                       )}
+
+                      <button 
+                        className="cyber-button" 
+                        style={{ 
+                          width: '100%', 
+                          marginTop: '8px', 
+                          padding: '6px 10px', 
+                          fontSize: '0.72rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          background: 'rgba(99, 102, 241, 0.15)',
+                          borderColor: 'rgba(99, 102, 241, 0.3)',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setShowUmlModal(true)}
+                      >
+                        <span>📊</span> Export Sequence Diagram
+                      </button>
                     </div>
                   ) : (
                     <div style={{ color: 'var(--text-muted)', lineHeight: '1.2' }}>
@@ -2974,6 +3207,175 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           onChangeSpeed={setReplaySpeed}
           onClose={() => setIsEvolutionMode(false)}
         />
+      )}
+
+      {showUmlModal && activeTraceNodeId && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 7, 15, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999
+        }} onClick={() => setShowUmlModal(false)}>
+          <div className="glass-panel" style={{
+            width: '90%',
+            maxWidth: '900px',
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: '12px',
+            border: '1px solid var(--panel-border)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+            overflow: 'hidden',
+            background: 'var(--panel-bg)'
+          }} onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--panel-border)',
+              background: 'rgba(255,255,255,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>📊</span>
+                <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>UML Call Trace Sequence Diagram</span>
+              </div>
+              <button 
+                onClick={() => setShowUmlModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Generated sequence flow from root function: <code style={{ color: 'var(--color-secondary)' }}>{activeTraceNodeId.split('::').pop()}()</code>
+              </div>
+
+              {/* Tab Selector */}
+              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--panel-border)', paddingBottom: '10px' }}>
+                <button
+                  className={`cyber-button ${umlActiveTab === 'preview' ? '' : 'secondary'}`}
+                  style={{ fontSize: '0.72rem', padding: '6px 12px' }}
+                  onClick={() => setUmlActiveTab('preview')}
+                >
+                  👁️ Visual Preview
+                </button>
+                <button
+                  className={`cyber-button ${umlActiveTab === 'syntax' ? '' : 'secondary'}`}
+                  style={{ fontSize: '0.72rem', padding: '6px 12px' }}
+                  onClick={() => setUmlActiveTab('syntax')}
+                >
+                  📝 Mermaid Syntax
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              {umlActiveTab === 'preview' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <MermaidDiagram chart={umlChartCode} />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button
+                      className="cyber-button secondary"
+                      style={{ fontSize: '0.68rem', padding: '4px 8px' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(umlChartCode);
+                        const toast = document.createElement('div');
+                        toast.style.position = 'fixed';
+                        toast.style.bottom = '20px';
+                        toast.style.left = '50%';
+                        toast.style.transform = 'translateX(-50%)';
+                        toast.style.background = 'var(--color-secondary)';
+                        toast.style.color = '#fff';
+                        toast.style.padding = '8px 16px';
+                        toast.style.borderRadius = '4px';
+                        toast.style.fontSize = '0.75rem';
+                        toast.style.zIndex = '9999999';
+                        toast.innerText = 'Copied to clipboard!';
+                        document.body.appendChild(toast);
+                        setTimeout(() => document.body.removeChild(toast), 2000);
+                      }}
+                    >
+                      Copy Code
+                    </button>
+                    <button
+                      className="cyber-button secondary"
+                      style={{ fontSize: '0.68rem', padding: '4px 8px' }}
+                      onClick={() => {
+                        const blob = new Blob([umlChartCode], { type: 'text/plain;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'call-trace.mermaid';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Download .mermaid
+                    </button>
+                  </div>
+                  <pre style={{
+                    background: '#05070f',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.75rem',
+                    overflowX: 'auto',
+                    margin: 0,
+                    maxHeight: '300px',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all'
+                  }}>
+                    {umlChartCode}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '12px 20px',
+              borderTop: '1px solid var(--panel-border)',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <button 
+                className="cyber-button secondary"
+                style={{ fontSize: '0.75rem', padding: '6px 16px' }}
+                onClick={() => setShowUmlModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>
