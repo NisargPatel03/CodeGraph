@@ -37,6 +37,7 @@
   - [Theme System](#7-theme-system)
   - [Static Analysis Engine](#8-static-analysis-engine)
 - [Architecture](#architecture)
+- [Future Enhancements Roadmap](#future-enhancements-roadmap)
 - [Contributing](#contributing)
 
 ---
@@ -554,6 +555,37 @@ A fully client-side, zero-dependency static analysis engine that parses source f
 5. **AI Augmentation** — Any AI action calls `aiHelper.ts` which talks to Gemini and returns Markdown. This includes file explanations, test suites, refactoring, semantic search, architecture linting, dependency auditing, and API route extraction.
 6. **API Documentation** — `ApiDocsPortal` uses `aiExtractEndpoints` to scan for REST routes and presents an interactive documentation workspace with live request testing
 7. **Rendering** — All AI responses are rendered by a shared `formatMarkdown()` utility that produces syntax-highlighted code blocks with copy buttons
+
+---
+
+## Future Enhancements Roadmap
+
+These are the remaining features and architectural modules planned to expand CodeGraph's capabilities:
+
+### 1. Database Schema Diagram Exporters (SVG & PNG)
+- **High-Fidelity Canvas Export** — Integrate high-fidelity PNG and SVG downloads for the Database Schema visualizer.
+- **Scalable Buffering** — Clone the active SVG nodes, parse the D3 viewBox coordinates, and draw onto an HTML5 Canvas to produce high-resolution, transparent-background database diagram sheets.
+
+### 2. SQL DDL / Schema Paste & Sandbox Panel
+- **"Try it Now" DDL Sandbox** — A sandbox text area inside the DB tab for pasting external SQL DDL (e.g. `CREATE TABLE...`) or Prisma schemas.
+- **Instanst Parser Integration** — Instantly parse the custom string and dynamically update the active D3 ER diagram on the screen without importing files.
+
+### 3. API-to-Database Data Flow Auditor
+- **Contract Mismatch Warnings** — Scans API controller files for DB queries and maps properties against actual DB Schema definitions.
+- **Drift HUD** — Displays warning markers if an API endpoint queries a column/field that does not exist in the database table schema or has a data-type mismatch.
+- **Visual Connector Paths** — Draws glowing flow-trace links from REST API endpoints in the Docs Portal to their respective database entities.
+
+### 4. Visual SQL Performance & Indexing Bottleneck Simulator
+- **D3 Query Execution Tree** — Allows developers to select two table nodes, configure a target join/query, and simulate query costs.
+- **Gemini Cost Prediction** — Calls Gemini to estimate performance costs (e.g., Sequential scan vs. Index scan) and plots the results as a visual D3 execution plan flow.
+
+### 5. Interactive Visual Migrations Builder
+- **Visual DB Modeller** — Double-clicking a database entity card opens an interactive drawer where developers can add columns, change field constraints, or create relationships by dragging links between cards.
+- **SQL Migration Compiler** — Computes the delta changes between the original schema and modified state, and outputs a ready-to-run SQL migration script or Prisma migration file.
+
+### 6. AI Code Smell Heatmap & Interactive Split-Diff Editor
+- **Smell Severity Heatmap** — Highlights complex, circular, or smelly files on the D3 canvas using a color-graded warning overlay.
+- **Side-by-Side Diff Fixer** — Selecting an AI Refactor action displays a split code editor showing a side-by-side git diff comparisons of the original code against the Gemini-optimized code with a single-click "Apply Refactoring" write button.
 
 ---
 
