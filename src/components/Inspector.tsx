@@ -1541,7 +1541,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
                   <strong style={{ display: 'block', marginBottom: '2px' }}>Offline Analysis Mode</strong>
-                  API Key is missing. CodeGraph will run high-fidelity static graph calculations ($Ca$/$Ce$/Instability) to analyze codebase risks.
+                  API Key is missing. CodeGraph will run high-fidelity static graph calculations (Ca / Ce / Instability) to analyze codebase risks.
                 </div>
               </div>
             )}
@@ -1704,13 +1704,13 @@ export const Inspector: React.FC<InspectorProps> = ({
                             {/* Mini Coupling Metrics Table */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', background: 'rgba(0,0,0,0.15)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.65rem' }}>
                               <div>
-                                <span style={{ color: 'var(--text-muted)' }}>Fan-in ($Ca$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ca}</strong>
+                                <span style={{ color: 'var(--text-muted)' }}>Fan-in (Ca):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ca}</strong>
                               </div>
                               <div>
-                                <span style={{ color: 'var(--text-muted)' }}>Fan-out ($Ce$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ce}</strong>
+                                <span style={{ color: 'var(--text-muted)' }}>Fan-out (Ce):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.ce}</strong>
                               </div>
                               <div>
-                                <span style={{ color: 'var(--text-muted)' }}>Instability ($I$):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.instability}</strong>
+                                <span style={{ color: 'var(--text-muted)' }}>Instability (I):</span> <strong style={{ color: 'var(--text-secondary)' }}>{risk.instability}</strong>
                               </div>
                             </div>
 
