@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
 import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
+import { auditDatabaseSchema } from '../utils/aiHelper';
 import mermaid from 'mermaid';
 
 interface GraphCanvasProps {
@@ -31,6 +32,7 @@ interface GraphCanvasProps {
   commits?: import('../utils/repoParser').GitHubCommitInfo[];
   linterViolations?: import('../utils/aiHelper').LinterViolation | null;
   auditReport?: import('../utils/aiHelper').AuditReport | null;
+  apiKey: string;
 }
 
 let mermaidInitialized = false;
@@ -211,6 +213,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   commits,
   linterViolations,
   auditReport,
+  apiKey,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -238,6 +241,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [selectedDbTableId, setSelectedDbTableId] = useState<string | null>(null);
   const [hoveredDbTableId, setHoveredDbTableId] = useState<string | null>(null);
 
+  // DB Auditor States
+  const [isAuditingDb, setIsAuditingDb] = useState(false);
+  const [dbAuditReport, setDbAuditReport] = useState<string | null>(null);
+  const [showDbAuditModal, setShowDbAuditModal] = useState(false);
+  const [dbAuditError, setDbAuditError] = useState<string | null>(null);
+
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
@@ -256,6 +265,81 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
     return parseDatabaseSchemas(files);
   }, [files, viewMode, useDemoDbSchema]);
+
+  const formatMarkdown = (text: string): string => {
+    if (!text) return '';
+    return text
+      // 1. Code blocks (triple backticks)
+      .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+        const escapedCode = code
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        const displayLang = lang ? lang.toUpperCase() : 'CODE';
+        return `
+          <div class="code-block-wrapper">
+            <div class="code-block-header">
+              <span>${displayLang}</span>
+              <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
+            </div>
+            <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+          </div>
+        `;
+      })
+      // 2. Headings
+      .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
+      .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
+      .replace(/^### (.*$)/gim, '<h4 style="color:var(--text-primary); font-weight:600; margin:16px 0 6px 0;">$1</h4>')
+      .replace(/^#### (.*$)/gim, '<h5 style="color:var(--text-primary); font-weight:600; margin:12px 0 4px 0;">$1</h5>')
+      // 3. Lists
+      .replace(/^\s*[\-\*\+]\s+(.*$)/gim, '<li style="margin-left:14px; list-style-type:circle; margin-bottom:4px;">$1</li>')
+      // 4. Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // 5. Code tags
+      .replace(/\`(.*?)\`/g, '<code>$1</code>')
+      // 6. GitHub Style Alerts
+      .replace(/>\s*\[!WARNING\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(239,68,68,0.08); border-left:4px solid #f43f5e; border-radius:4px; color:#fda4af; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">⚠️ WARNING</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!IMPORTANT\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(99,102,241,0.08); border-left:4px solid #6366f1; border-radius:4px; color:#c7d2fe; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">🚨 IMPORTANT</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!TIP\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(16,185,129,0.08); border-left:4px solid #10b981; border-radius:4px; color:#a7f3d0; font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">💡 TIP</div>
+          $1
+        </div>
+      `)
+      .replace(/>\s*\[!NOTE\]\s*\n([\s\S]*?)(?=\n>|\n\n|$)/gim, `
+        <div style="padding:12px 16px; margin: 12px 0; background:rgba(255,255,255,0.03); border-left:4px solid #9ca3af; border-radius:4px; color:var(--text-secondary); font-size:0.8rem;">
+          <div style="font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">📝 NOTE</div>
+          $1
+        </div>
+      `)
+      // Strip remaining blockquotes markers
+      .replace(/^\s*>\s*/gm, '');
+  };
+
+  const handleRunDbAudit = async () => {
+    setIsAuditingDb(true);
+    setDbAuditError(null);
+    try {
+      const report = await auditDatabaseSchema(dbSchema, apiKey);
+      setDbAuditReport(report);
+      setShowDbAuditModal(true);
+    } catch (err: any) {
+      setDbAuditError(err.message || String(err));
+      setShowDbAuditModal(true);
+    } finally {
+      setIsAuditingDb(false);
+    }
+  };
 
   // PR/Branch comparison states
   const [baseBranch, setBaseBranch] = useState('main');
@@ -2683,6 +2767,25 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
                     Toggle between real workspace database schemas and a complex e-commerce mock dataset.
                   </div>
+                  <button
+                    className="cyber-button primary"
+                    onClick={handleRunDbAudit}
+                    disabled={isAuditingDb}
+                    style={{
+                      width: '100%',
+                      marginTop: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      fontSize: '0.75rem',
+                      padding: '8px 12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Sparkles size={13} style={{ color: '#fbbf24' }} />
+                    {isAuditingDb ? 'Auditing Schema...' : 'Audit Database Design'}
+                  </button>
                 </div>
               </div>
             )}
@@ -3010,6 +3113,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </div>
             </div>
 
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', marginTop: '4px' }}>
+              <button
+                className="cyber-button secondary"
+                disabled={isAuditingDb}
+                style={{
+                  width: '100%',
+                  fontSize: '0.72rem',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+                onClick={handleRunDbAudit}
+              >
+                <Sparkles size={11} style={{ color: '#fbbf24' }} />
+                {isAuditingDb ? 'Auditing Schema...' : 'Audit Design Integrity'}
+              </button>
+            </div>
+
             {useDemoDbSchema && (
               <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245,158,11,0.25)', fontWeight: 600 }}>🧪 DEMO SCHEMA</span>
@@ -3321,6 +3445,123 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                 onClick={() => setShowUmlModal(false)}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showDbAuditModal && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 7, 15, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999
+        }} onClick={() => setShowDbAuditModal(false)}>
+          <div className="glass-panel" style={{
+            width: '90%',
+            maxWidth: '800px',
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: '12px',
+            border: '1px solid var(--panel-border)',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+            overflow: 'hidden',
+            background: 'var(--panel-bg)'
+          }} onClick={(e) => e.stopPropagation()}>
+            {/* Inline keyframe style */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes dbAuditModalSpin {
+                to { transform: rotate(360deg); }
+              }
+            `}} />
+            
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--panel-border)',
+              background: 'rgba(255,255,255,0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} style={{ color: '#fbbf24' }} />
+                <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>AI Database Design Audit</span>
+              </div>
+              <button 
+                onClick={() => setShowDbAuditModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '1.2rem',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div 
+              className="custom-scrollbar"
+              style={{ 
+                flex: 1, 
+                padding: '20px', 
+                overflowY: 'auto', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '16px' 
+              }}
+            >
+              {dbAuditError ? (
+                <div style={{ color: '#f43f5e', background: 'rgba(239, 68, 68, 0.1)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '0.8rem' }}>
+                  <strong>⚠️ Auditing Failed:</strong> {dbAuditError}
+                </div>
+              ) : dbAuditReport ? (
+                <div 
+                  className="ai-response-content markdown-body"
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(dbAuditReport) }}
+                  style={{
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: '1.6'
+                  }}
+                />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '12px' }}>
+                  <div className="spinner" style={{ width: '32px', height: '32px', border: '3px solid rgba(99, 102, 241, 0.1)', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'dbAuditModalSpin 1s linear infinite' }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Analyzing database schema integrity...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '12px 20px',
+              borderTop: '1px solid var(--panel-border)',
+              background: 'rgba(255,255,255,0.01)'
+            }}>
+              <button 
+                className="cyber-button secondary"
+                style={{ fontSize: '0.75rem', padding: '6px 16px', cursor: 'pointer' }}
+                onClick={() => setShowDbAuditModal(false)}
+              >
+                Close Audit
               </button>
             </div>
           </div>

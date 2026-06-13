@@ -716,6 +716,7 @@ export default function App() {
                   commits={repoData.commits}
                   linterViolations={linterViolations}
                   auditReport={auditReport}
+                  apiKey={apiKey}
                 />
               )}
             </section>

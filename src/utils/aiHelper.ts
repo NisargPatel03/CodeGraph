@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { ParsedFile } from './repoParser';
+import type { DbSchemaReport } from './schemaParser';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 
@@ -1101,4 +1102,100 @@ Wrap your JSON output in a single \`\`\`json block. Do not write any conversatio
     };
   }
 }
+
+export async function auditDatabaseSchema(schema: DbSchemaReport, apiKey: string): Promise<string> {
+  // 1. Fallback Offline Auditor if API key is invalid/missing
+  if (!isValidApiKey(apiKey)) {
+    const totalTables = schema.tables.length;
+    const totalRels = schema.relationships.length;
+    
+    // Find orphaned tables (no incoming and no outgoing relations)
+    const referencedTables = new Set<string>();
+    schema.relationships.forEach(r => {
+      referencedTables.add(r.source);
+      referencedTables.add(r.target);
+    });
+    const orphanedTables = schema.tables.filter(t => !referencedTables.has(t.id));
+    
+    // Find tables without primary keys
+    const tablesWithoutPk = schema.tables.filter(t => !t.fields.some(f => f.isPrimaryKey));
+    
+    // Calculate a mock score out of 100 based on standard static rules
+    let score = 100;
+    if (totalTables === 0) score = 0;
+    else {
+      score -= tablesWithoutPk.length * 15;
+      score -= orphanedTables.length * 10;
+      score -= Math.max(0, (totalTables * 0.5 - totalRels)) * 5;
+      score = Math.max(30, Math.min(100, Math.round(score)));
+    }
+    
+    return `## 🗃️ Database Design Audit Report (Static Analyzer)
+
+### 📊 Database Health Score: **${score}/100**
+
+This audit was performed in offline/fallback mode. Add a Gemini API key in Settings to generate a complete deep-learning architectural audit.
+
+---
+
+### 🔍 Static Issues & Observations
+
+${tablesWithoutPk.length > 0 ? `> [!IMPORTANT]
+> **Tables Missing Primary Key:** Detected ${tablesWithoutPk.length} tables without an explicit primary key defined. Primary keys are crucial for row identification, clustering, and index scans.
+> Affected Tables: ${tablesWithoutPk.map(t => `\`${t.id}\``).join(', ')}` : `> [!NOTE]
+> All tables have primary keys configured.`}
+
+${orphanedTables.length > 0 ? `> [!WARNING]
+> **Orphaned / Disconnected Tables:** Detected ${orphanedTables.length} tables with zero foreign key references (incoming or outgoing). Ensure these are not dead tables or missing design constraints.
+> Affected Tables: ${orphanedTables.map(t => `\`${t.id}\``).join(', ')}` : `> [!NOTE]
+> No orphaned tables detected. All tables are connected in the graph.`}
+
+> [!TIP]
+> **Performance Recommendations:**
+> - Ensure all foreign key columns (such as: ${schema.relationships.slice(0, 5).map(r => `\`${r.source}.${r.sourceField}\``).join(', ') || 'fields ending in Id'}) have indices explicitly declared to optimize join operations.
+> - Consider indexing columns frequently used in WHERE conditions, such as: \`email\`, \`username\`, \`slug\`, \`createdAt\`.
+
+---
+
+### 📋 Optimization Checklist
+- [${tablesWithoutPk.length === 0 ? 'x' : ' '}] Ensure every table has a Primary Key (\`id\` or uuid)
+- [${orphanedTables.length === 0 ? 'x' : ' '}] Resolve orphaned tables or add missing relationship links
+- [ ] Add explicit indexes on all foreign key columns to improve JOIN queries
+- [ ] Implement Soft Delete support (\`deletedAt\`) for critical relational records
+`;
+  }
+
+  // 2. Online Gemini Auditor
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Principal Database Administrator, Performance Engineer, and Database Architect.
+Audit the following database schema (tables and relationships) for structural issues, optimization opportunities, and design flaws.
+
+Please analyze the schema for:
+1. **Missing Indices**: Which fields (especially foreign keys, frequently searched query fields like emails/slugs, sort/timestamp columns) should have indices for performance.
+2. **Redundant or Transitive Relationships**: Are there relationships that could be simplified, or are circular/redundant?
+3. **Normalization & Denormalization Flaws**: Are there fields that violate 1NF, 2NF, or 3NF? (e.g., storing complex CSV strings, JSON array strings, duplicate columns, or transitively dependent columns).
+4. **Data Integrity & Type Safety**: Suggestions on data types, constraints (e.g., nullability, unique constraints, check constraints).
+5. **Orphaned Tables**: Identify tables that have no relationships to other tables.
+
+Here is the parsed schema structure in JSON format:
+${JSON.stringify(schema, null, 2)}
+
+Provide a detailed, professional audit report formatted in beautiful markdown. 
+Ensure you use:
+- GitHub-style alerts (e.g. > [!WARNING], > [!IMPORTANT], > [!TIP], > [!NOTE]) to highlight critical issues and recommendations.
+- A summary section with a "Database Health Score" (e.g., 78/100) presented clearly at the top.
+- Actionable recommendations in a clear markdown checklist format.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    console.error('Gemini DB Audit Error:', error);
+    return `## ⚠️ AI DB Audit Failed
+Failed to fetch database audit report from Gemini. Error: ${error.message || error}`;
+  }
+}
+
 
