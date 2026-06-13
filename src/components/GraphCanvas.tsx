@@ -53,6 +53,15 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
         svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
       }
 
+      // Add explicit dimensions and dark background to ensure visibility and prevent distortion
+      const width = svgEl.viewBox?.baseVal?.width || svgEl.clientWidth || 800;
+      const height = svgEl.viewBox?.baseVal?.height || svgEl.clientHeight || 600;
+      svgClone.setAttribute('width', String(width));
+      svgClone.setAttribute('height', String(height));
+      svgClone.style.backgroundColor = '#0a0a0f';
+      svgClone.style.padding = '20px';
+      svgClone.style.borderRadius = '8px';
+
       const svgString = new XMLSerializer().serializeToString(svgClone);
       const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
