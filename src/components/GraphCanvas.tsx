@@ -130,6 +130,7 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
       mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
+        maxTextSize: 100000,
         themeVariables: {
           primaryColor: '#1e1b4b',
           primaryTextColor: '#e2e8f0',
@@ -204,7 +205,7 @@ function generateSequenceDiagram(activeTraceNodeId: string, steps: { source: str
   const getLabel = (id: string) => {
     const parts = id.split('::');
     const func = parts.pop() || '';
-    const file = parts.join('::').split('/').pop() || '';
+    const file = parts.join('::').split(/[/\\]/).pop() || '';
     return `${file}::${func}()`;
   };
 

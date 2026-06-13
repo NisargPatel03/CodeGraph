@@ -123,6 +123,7 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
       mermaid.initialize({
         startOnLoad: false,
         theme: 'dark',
+        maxTextSize: 100000,
         themeVariables: {
           primaryColor: '#1e1b4b',
           primaryTextColor: '#e2e8f0',
