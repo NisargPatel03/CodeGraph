@@ -701,13 +701,19 @@ Based on these metrics, please write a comprehensive architectural report. Inclu
 2. **Key Structural Hazards**: Highlight the top 2-3 files that act as dangerous Single Points of Failure (SPOFs) or hyper-coupled hubs, explaining the risks they introduce.
 3. **Actionable Refactoring Recommendations**: Provide concrete recommendations to decouple these files (e.g., extracting interfaces, applying the Dependency Inversion Principle, breaking up god modules, or introducing event listeners).
 
-Format your output in clean Markdown. Be precise, highly professional, and direct. Do not include introductory conversational filler.`;
+Format your output in clean Markdown. Be precise, highly professional, and direct. Do not include introductory conversational filler.
+IMPORTANT: Do not use math/LaTeX style formula formatting or dollar signs ($) in your response. Write all metrics, variables, and formulas in plain text (e.g. write "I = 0.08" instead of "$I = 0.08$", "Ca" instead of "$C_a$", and "Ce" instead of "$C_e$").`;
 
       const response = await model.generateContent(prompt);
-      const summary = response.response.text();
+      let summary = response.response.text() || 'Failed to generate summary content from Gemini.';
+      
+      // Clean any accidental LaTeX math dollar sign delimiters
+      summary = summary.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
+      summary = summary.replace(/\$([^$]+)\$/g, '$1');
+
       return {
         risks: topRisks,
-        summary: summary || 'Failed to generate summary content from Gemini.'
+        summary
       };
     } catch (error: any) {
       console.warn('Gemini Audit generation failed, falling back to static audit:', error);
