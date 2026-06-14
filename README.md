@@ -36,6 +36,7 @@
   - [KPI Ribbon](#6-kpi-ribbon)
   - [Theme System](#7-theme-system)
   - [Static Analysis Engine](#8-static-analysis-engine)
+  - [Markdown & LaTeX Formatting Pipeline](#9-markdown--latex-formatting-pipeline)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -377,46 +378,26 @@ AI-powered database design auditor. Formats parsed database schema tables (colum
 
 ### 4. Reports & Analytics Dashboard
 
-**File:** `src/components/Reports.tsx`
+**Files:** `src/components/Reports.tsx` (Bottom Drawer) and `src/components/AnalyticsDashboard.tsx` (Full-screen view)
 
-A collapsible bottom panel with five tabs:
+CodeGraph provides two distinct analytical panels: a quick-access bottom **Reports Drawer** and a comprehensive, full-screen **Analytics Dashboard**.
 
-#### Dashboard Tab
-- **KPI Cards** — Total Files, Total Functions, Lines of Code, Complexity Score, and Dead Files
-- **Complexity Score Per Module** — Gradient bar chart of aggregate line complexity per folder
-- **Most Imported Files** — Ranking by in-degree (how many files import them)
-- **Dead Code Detection** — Files with 0 incoming imports (excluding entry points) flagged as unused
-- **Duplicate Function Detector** — Functions with identical names found in multiple files, with clickable file:line locations
-- **Highly Active Files (Churn)** — Ranking by estimated commit frequency
+#### 📂 Collapsible Reports Drawer (`Reports.tsx`)
+A bottom panel for quick codebase telemetry checks:
+- **Dashboard Tab** — Live metrics (Total Files/Functions, LoC, complexity, dead files), module line complexity distribution, and dead code detection.
+- **Code Smell Detector Tab** — Scans modules statically for length or dependency issues with an **✨ AI Refactor** action.
+- **Circular Dependency Cycles Tab** — Displays import loops (`File A → File B → File A`) to resolve tightly coupled code.
+- **Onboarding Guide Tab** — Triggers Gemini to write a readme/reading order guide (Download MD / Copy Notion / PDF Print).
+- **Architecture Visualizer & Overview Tab** — Generates and visualizes dynamic folder-subgraphed Mermaid.js topological diagrams.
 
-#### Code Smell Detector Tab
-Scans all files using the static analysis engine and presents findings categorized by severity:
-
-| Smell Type | Trigger Condition |
-|---|---|
-| `file_length` | File exceeds 500 lines |
-| `func_length` | Function exceeds 50 lines |
-| `nested_import` | Deep or circular nested import patterns |
-| `unused_export` | Exported symbol with no detected importer |
-| `circular_dep` | File participates in a circular dependency chain |
-
-Each smell card shows the file path, a description, severity badge, and an **✨ AI Refactor** button that opens a glassmorphic full-screen modal with Gemini's refactoring suggestion.
-
-#### Circular Dependency Cycles Tab
-Lists every detected cycle with the full chain displayed as `File A → File B → File C → File A`.
-
-#### Onboarding Guide Tab
-- Generate button triggers `generateOnboardingGuide`
-- Renders output as formatted Markdown with code blocks
-- **Export options:** Download as `.md`, Print as PDF, Copy to Notion
-
-#### Architecture Visualizer Tab
-- Clicking **Generate Architecture Diagram** triggers `generateMermaidDiagram`.
-- Automatically renders an interactive, clean **Mermaid.js** topological diagram representing folder subgraphs and file dependencies.
-
-#### Architecture Overview Tab
-- Generate button triggers `generateArchitectureOverview`
-- Renders a structured architectural analysis report.
+#### 📊 Full-Screen Analytics Dashboard (`AnalyticsDashboard.tsx`)
+A premium, multi-tab intelligence command center featuring:
+- **Tab 1: Codebase Health Metrics** — Complete KPI dashboard with module complexity heatmaps, file import leaders, codebase smell distribution charts, and interactive circular cycle lists.
+- **Tab 2: UML & Architecture** — Side-by-side workspace displaying a rendered, dynamic **UML Graph TD** diagram (built using Mermaid.js) and an AI-authored Architectural Guide.
+- **Tab 3: Onboarding Exporter** — Developer onboarding wizard allowing direct Markdown download, Notion clipboard copy, and print-optimized PDF generation.
+- **Tab 4: Restructuring & Contracts** (AI Simulator Suite):
+  - **Folder Restructure Simulator**: Evaluates coupling limits and generates a clean folder/file structural blueprint. Includes a **📄 PDF Export** button that renders a printable light-mode document.
+  - **API-Database Contract Auditor**: Statically scans express/next routing endpoints and database schemas (Prisma, SQL, SQLAlchemy, Mongoose). Uses Gemini to check model attribute drift or invalid type casts. Includes a **📄 PDF Export** button that outputs a print-friendly audit report.
 
 ---
 
@@ -502,6 +483,16 @@ A fully client-side, zero-dependency static analysis engine that parses source f
 #### Git History Simulation
 - `generateGitHistory()` — Creates a simulated 10-step commit timeline by categorizing files into logical development stages (config → utils → models → components → main)
 - `mapFilesToRealCommits()` — Maps real GitHub API commit data to files using commit message keyword matching and proportional distribution
+
+---
+
+### 9. Markdown & LaTeX Formatting Pipeline
+
+To guarantee visual elegance and technical correctness for all AI-generated contents (including the Chat Drawer, Inspector explanation, and Analytics reports), CodeGraph runs a multi-stage parser utility:
+
+- **Math-Mode LaTeX Sanitizer** — Strips LLM-introduced mathematical dollar signs and automatically converts LaTeX notation (e.g. `\to` $\to$ `→`, `\implies` $\to$ `⇒`, `\dots` $\to$ `...`, etc.) into clean, standard Unicode symbols.
+- **Glassmorphic Table Generator** — A custom parser that reads markdown pipe tables and outputs high-contrast, responsive CSS tables with hover highlights, clear headers, and scroll wrappers.
+- **Pre-formatted Code Isolation** — Identifies, separates, and placeholders code blocks during markdown sanitization to ensure syntax highlighting and copy-to-clipboard buttons operate reliably without collision.
 
 ---
 
