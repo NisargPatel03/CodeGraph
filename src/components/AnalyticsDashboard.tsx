@@ -1264,10 +1264,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       {/* SUB-TAB 4: RESTRUCTURE & CONTRACTS */}
       {subTab === 'restructuring' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '24px' }}>
             
             {/* Folder Restructure Card */}
-            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
+            <div className="glass-panel" style={{ minWidth: 0, padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, color: 'var(--color-primary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   📂 Folder Restructure Simulator
@@ -1289,7 +1289,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
-                      className="cyber-button secondary" 
+                       className="cyber-button secondary" 
                       onClick={() => setRestructureDoc('')}
                       style={{ padding: '8px 16px', fontSize: '0.8rem' }}
                     >
@@ -1321,7 +1321,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             </div>
 
             {/* API-to-Database Contract Validation Card */}
-            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
+            <div className="glass-panel" style={{ minWidth: 0, padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--panel-border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, color: 'var(--color-secondary)', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   🗃️ API-Database Contract Auditor
