@@ -142,10 +142,25 @@ const MermaidDiagram: React.FC<{ chart: string }> = ({ chart }) => {
 function formatMarkdown(text: string): string {
   if (!text) return '';
   
+  // Clean up LaTeX symbols like \to, \rightarrow, \Rightarrow, \implies wrapped in dollar signs
+  let cleanedText = text
+    .replace(/\\+\s*to\b/gi, '→')
+    .replace(/\\+\s*rightarrow\b/gi, '→')
+    .replace(/\\+\s*Rightarrow\b/gi, '⇒')
+    .replace(/\\+\s*implies\b/gi, '⇒')
+    .replace(/\\+\s*leftrightarrow\b/gi, '↔')
+    .replace(/\\+\s*leftarrow\b/gi, '←')
+    .replace(/\\+\s*dots\b/gi, '...')
+    .replace(/\\+\s*cdot\b/gi, '·')
+    .replace(/\\+\s*times\b/gi, '×');
+
+  // Clean up math block dollar signs around arrows or LaTeX symbols
+  cleanedText = cleanedText.replace(/\$([^\$]*?[\\→⇒↔←·×][^\$]*?)\$/g, '$1');
+
   // First, parse block-level elements like code blocks, which can contain newlines and pipe characters
   // We placeholder code blocks to avoid messing up their contents.
   const codeBlocks: string[] = [];
-  let processedText = text.replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+  let processedText = cleanedText.replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
     const escapedCode = code
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
