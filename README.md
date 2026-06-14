@@ -37,6 +37,7 @@
   - [Theme System](#7-theme-system)
   - [Static Analysis Engine](#8-static-analysis-engine)
   - [Markdown & LaTeX Formatting Pipeline](#9-markdown--latex-formatting-pipeline)
+  - [Command Palette & Keyboard Controls](#10-global-command-palette--keyboard-controls)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -133,6 +134,19 @@ Six built-in visual themes, switchable with an animated ripple effect:
 | `rose-gold` | Rose Gold / Bold Dark |
 | `synthwave` | Synthwave / Retro |
 
+### ⌨️ Global Command Palette (`Ctrl/Cmd + K`)
+- **Instant Switcher** — Quickly jump between views (Dependency Graph, Clusters, Call Graph, Component Tree, DB Schema), REST API Docs, and full-screen Analytics Dashboard.
+- **Fuzzy Search & Selector** — Interactive, fuzzy real-time search of workspace files with keyboard shortcuts.
+- **Action Shortcuts** — Trigger dependency risk audits, database schema audits, cycle application themes (`Alt + T`), or toggle the AI Chat Assistant (`Alt + A`) instantly.
+- **Full Keyboard Accessibility** — Move selection with arrow keys, activate commands with Enter, and dismiss with Escape.
+
+### 🛠️ Live-Writable Workspace Editor
+- **In-Browser Inline Code Editing** — Edit any selected file directly in the file inspector sidebar.
+- **Dynamic Telemetry Recalculation** — Saving changes triggers the static analysis engine to instantly recalculate codebase metrics, import graphs, circular dependencies, and duplicate functions.
+
+### ⚙️ Glassmorphic Settings Console
+- **Gemini API Configuration** — Secure panel to configure the Google Gemini API key to activate advanced explanations, linter rules, test suites, and schema audit features.
+
 ---
 
 ## Tech Stack
@@ -165,6 +179,7 @@ CodeGraph/
 │   │   ├── AiIcon.tsx               # Reusable animated AI sparkle icon component
 │   │   ├── AnalyticsDashboard.tsx   # Detailed analysis metrics & AI reports dashboard
 │   │   ├── ApiDocsPortal.tsx        # REST API documentation portal with live tester
+│   │   ├── CommandPalette.tsx       # Global keyboard-driven shortcuts & search command palette
 │   │   ├── EvolutionPlayer.tsx      # Git timeline replay slider & commit controls
 │   │   ├── GraphCanvas.tsx          # D3.js multi-mode graph renderer
 │   │   ├── Inspector.tsx            # File inspector sidebar with AI tools
@@ -493,6 +508,19 @@ To guarantee visual elegance and technical correctness for all AI-generated cont
 - **Math-Mode LaTeX Sanitizer** — Strips LLM-introduced mathematical dollar signs and automatically converts LaTeX notation (e.g. `\to` $\to$ `→`, `\implies` $\to$ `⇒`, `\dots` $\to$ `...`, etc.) into clean, standard Unicode symbols.
 - **Glassmorphic Table Generator** — A custom parser that reads markdown pipe tables and outputs high-contrast, responsive CSS tables with hover highlights, clear headers, and scroll wrappers.
 - **Pre-formatted Code Isolation** — Identifies, separates, and placeholders code blocks during markdown sanitization to ensure syntax highlighting and copy-to-clipboard buttons operate reliably without collision.
+
+---
+
+### 10. Global Command Palette & Keyboard Controls
+
+**File:** `src/components/CommandPalette.tsx`
+
+Accessible via `Ctrl + K` or `Cmd + K`, the command palette offers keyboard-first navigation and file discovery for power developers:
+
+- **Unified Navigation Commands** — Switch view tabs or toggle dashboard panels with keyboard commands.
+- **Fuzzy File Search** — Type any part of a file path (e.g. `App.tsx` or `aiHelper`) to instantly search and highlight the file node on the D3 canvas.
+- **Action Shortcuts** — Trigger audits (e.g. DB Schema Audit, Instability coupling audit) or cycle themes instantly using global shortcuts (e.g. `Alt + T` to cycle themes, `Alt + A` to toggle AI chat).
+- **Keyboard-Accessible HUD** — Full list navigation support via Arrow keys, Enter to select, and Escape to dismiss.
 
 ---
 
