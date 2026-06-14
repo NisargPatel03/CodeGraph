@@ -345,6 +345,107 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
   };
 
+  const handleExportDbAuditPDF = () => {
+    if (!dbAuditReport) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const formattedHtml = formatMarkdown(dbAuditReport);
+      
+      // Convert dark mode styles to printable high-contrast light mode styles
+      const printHtml = formattedHtml
+        .replace(/rgba\(239,\s*68,\s*68,\s*0\.08\)/g, '#fef2f2')
+        .replace(/#f43f5e/g, '#ef4444')
+        .replace(/#fda4af/g, '#991b1b')
+        .replace(/rgba\(99,\s*102,\s*241,\s*0\.08\)/g, '#eff6ff')
+        .replace(/#6366f1/g, '#3b82f6')
+        .replace(/#c7d2fe/g, '#1e3a8a')
+        .replace(/rgba\(16,\s*185,\s*129,\s*0\.08\)/g, '#ecfdf5')
+        .replace(/#10b981/g, '#10b981')
+        .replace(/#a7f3d0/g, '#065f46')
+        .replace(/rgba\(255,\s*255,\s*255,\s*0\.03\)/g, '#f9fafb')
+        .replace(/#9ca3af/g, '#6b7280')
+        .replace(/var\(--text-secondary\)/g, '#374151')
+        .replace(/#05070f/g, '#f3f4f6')
+        .replace(/var\(--panel-border\)/g, '#e5e7eb');
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>AI Database Schema Audit Report - CodeGraph</title>
+            <style>
+              body {
+                font-family: system-ui, -apple-system, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                padding: 40px;
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              h1, h2, h3, h4, h5, h6 {
+                color: #111827;
+                font-weight: 700;
+                margin-top: 1.5em;
+                margin-bottom: 0.5em;
+              }
+              h2 { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; font-size: 1.8rem; }
+              h3 { border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; font-size: 1.4rem; }
+              h4 { font-size: 1.1rem; }
+              code {
+                font-family: monospace;
+                background: #f3f4f6;
+                padding: 2px 4px;
+                border-radius: 4px;
+                font-size: 0.9em;
+              }
+              pre {
+                background: #f3f4f6;
+                padding: 16px;
+                border-radius: 8px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+              }
+              li { margin-bottom: 4px; }
+              blockquote {
+                margin: 1em 0;
+                padding-left: 1em;
+                border-left: 4px solid #e5e7eb;
+                color: #4b5563;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="content">
+              ${printHtml}
+            </div>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+
+      // Show toast
+      const toast = document.createElement('div');
+      toast.style.position = 'fixed';
+      toast.style.bottom = '20px';
+      toast.style.left = '50%';
+      toast.style.transform = 'translateX(-50%)';
+      toast.style.background = 'var(--color-secondary)';
+      toast.style.color = '#fff';
+      toast.style.padding = '8px 16px';
+      toast.style.borderRadius = '4px';
+      toast.style.fontSize = '0.75rem';
+      toast.style.zIndex = '9999999';
+      toast.innerText = 'Opened Print PDF dialog!';
+      document.body.appendChild(toast);
+      setTimeout(() => document.body.removeChild(toast), 2000);
+    }
+  };
+
   useEffect(() => {
     if (dbAuditTrigger && dbAuditTrigger > 0) {
       handleRunDbAudit();
@@ -3585,10 +3686,20 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             <div style={{
               display: 'flex',
               justifyContent: 'flex-end',
+              gap: '10px',
               padding: '12px 20px',
               borderTop: '1px solid var(--panel-border)',
               background: 'rgba(255,255,255,0.01)'
             }}>
+              {dbAuditReport && (
+                <button 
+                  className="cyber-button"
+                  style={{ fontSize: '0.75rem', padding: '6px 16px', cursor: 'pointer', background: 'var(--color-secondary)', borderColor: 'var(--color-secondary)' }}
+                  onClick={handleExportDbAuditPDF}
+                >
+                  Export PDF
+                </button>
+              )}
               <button 
                 className="cyber-button secondary"
                 style={{ fontSize: '0.75rem', padding: '6px 16px', cursor: 'pointer' }}
