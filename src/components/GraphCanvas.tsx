@@ -244,6 +244,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [useDemoDbSchema, setUseDemoDbSchema] = useState(false);
   const [selectedDbTableId, setSelectedDbTableId] = useState<string | null>(null);
   const [hoveredDbTableId, setHoveredDbTableId] = useState<string | null>(null);
+  const [dbQueryString, setDbQueryString] = useState('');
 
   // DB Auditor States
   const [isAuditingDb, setIsAuditingDb] = useState(false);
@@ -269,6 +270,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
     return parseDatabaseSchemas(files);
   }, [files, viewMode, useDemoDbSchema]);
+
+  const queryTokens = useMemo(() => {
+    if (!dbQueryString.trim()) return [];
+    const words = dbQueryString.match(/[a-zA-Z0-9_-]+/g) || [];
+    const lowerWords = words.map(w => w.toLowerCase());
+    return dbSchema.tables
+      .filter(t => lowerWords.includes(t.id.toLowerCase()))
+      .map(t => t.id);
+  }, [dbQueryString, dbSchema.tables]);
 
   const formatMarkdown = (text: string): string => {
     if (!text) return '';
@@ -1665,7 +1675,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         { id: 'arrow-cycle', color: 'var(--color-alert)' },
         { id: 'arrow-violating', color: '#f97316' },
         { id: 'db-arrow', color: 'rgba(99, 102, 241, 0.6)' },
-        { id: 'db-arrow-highlight', color: 'var(--color-secondary)' }
+        { id: 'db-arrow-highlight', color: 'var(--color-secondary)' },
+        { id: 'db-arrow-query', color: '#10b981' }
       ])
       .enter().append('marker')
       .attr('id', (d) => d.id)
@@ -2689,21 +2700,54 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     // Update links styles
     svgElement.selectAll('.db-relationship-link')
       .attr('stroke', (d: any) => {
+        if (queryTokens.length > 0) {
+          const sId = d.source.id || d.source;
+          const tId = d.target.id || d.target;
+          const hasSource = queryTokens.includes(sId);
+          const hasTarget = queryTokens.includes(tId);
+          if (hasSource && hasTarget) return '#10b981';
+          if (hasSource || hasTarget) return 'rgba(16, 185, 129, 0.5)';
+          return 'rgba(99, 102, 241, 0.15)';
+        }
         const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
         const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
         return isSelected || isHovered ? 'var(--color-secondary)' : 'rgba(99, 102, 241, 0.4)';
       })
       .attr('stroke-width', (d: any) => {
+        if (queryTokens.length > 0) {
+          const sId = d.source.id || d.source;
+          const tId = d.target.id || d.target;
+          const hasSource = queryTokens.includes(sId);
+          const hasTarget = queryTokens.includes(tId);
+          if (hasSource && hasTarget) return 4;
+          if (hasSource || hasTarget) return 2;
+          return 1;
+        }
         const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
         const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
         return isSelected || isHovered ? 3 : 1.5;
       })
       .attr('marker-end', (d: any) => {
+        if (queryTokens.length > 0) {
+          const sId = d.source.id || d.source;
+          const tId = d.target.id || d.target;
+          if (queryTokens.includes(sId) || queryTokens.includes(tId)) return 'url(#db-arrow-query)';
+          return 'url(#db-arrow)';
+        }
         const isHovered = hoveredDbTableId === d.source.id || hoveredDbTableId === d.target.id;
         const isSelected = selectedDbTableId === d.source.id || selectedDbTableId === d.target.id;
         return isSelected || isHovered ? 'url(#db-arrow-highlight)' : 'url(#db-arrow)';
       })
       .style('opacity', (d: any) => {
+        if (queryTokens.length > 0) {
+          const sId = d.source.id || d.source;
+          const tId = d.target.id || d.target;
+          const hasSource = queryTokens.includes(sId);
+          const hasTarget = queryTokens.includes(tId);
+          if (hasSource && hasTarget) return 1.0;
+          if (hasSource || hasTarget) return 0.6;
+          return 0.1;
+        }
         if (!hoveredDbTableId) return 1.0;
         const isRelated = d.source.id === hoveredDbTableId || d.target.id === hoveredDbTableId;
         return isRelated ? 1.0 : 0.2;
@@ -2715,7 +2759,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const isHoveredSelf = hoveredDbTableId === d.id;
       
       let opacity = 1.0;
-      if (hoveredDbTableId) {
+      if (queryTokens.length > 0) {
+        opacity = queryTokens.includes(d.id) ? 1.0 : 0.15;
+      } else if (hoveredDbTableId) {
         if (isHoveredSelf) {
           opacity = 1.0;
         } else {
@@ -2733,11 +2779,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       const cardDiv = el.select('foreignObject').select('div');
       if (!cardDiv.empty()) {
         const isSelectedSelf = selectedDbTableId === d.id;
-        cardDiv.style('border-color', isSelectedSelf || isHoveredSelf ? 'var(--color-secondary)' : 'var(--panel-border)');
-        cardDiv.style('box-shadow', isSelectedSelf || isHoveredSelf ? '0 0 15px rgba(0, 242, 254, 0.25)' : '0 4px 15px rgba(0,0,0,0.15)');
+        if (queryTokens.length > 0 && queryTokens.includes(d.id)) {
+          cardDiv.style('border-color', '#10b981');
+          cardDiv.style('box-shadow', '0 0 18px rgba(16, 185, 129, 0.45)');
+        } else {
+          cardDiv.style('border-color', isSelectedSelf || isHoveredSelf ? 'var(--color-secondary)' : 'var(--panel-border)');
+          cardDiv.style('box-shadow', isSelectedSelf || isHoveredSelf ? '0 0 15px rgba(0, 242, 254, 0.25)' : '0 4px 15px rgba(0,0,0,0.15)');
+        }
       }
     });
-  }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships]);
+  }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships, queryTokens]);
 
   // Smoothly pan & zoom to the selected node or selected DB table when it changes
   useEffect(() => {
@@ -3031,6 +3082,53 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                     <Sparkles size={13} style={{ color: '#fbbf24' }} />
                     {isAuditingDb ? 'Auditing Schema...' : 'Audit Database Design'}
                   </button>
+
+                  <div className="toolbox-divider" style={{ borderTop: '1px solid var(--panel-border)', margin: '8px 0' }}></div>
+                  
+                  {/* Query Sandbox */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-primary)' }}>💬 SQL / NoSQL Query Sandbox</span>
+                      {dbQueryString && (
+                        <button 
+                          onClick={() => setDbQueryString('')} 
+                          style={{ 
+                            background: 'transparent', 
+                            border: 'none', 
+                            color: 'var(--color-alert)', 
+                            fontSize: '0.65rem', 
+                            cursor: 'pointer', 
+                            padding: 0 
+                          }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      placeholder="e.g. SELECT * FROM User JOIN RetakeRequest"
+                      value={dbQueryString}
+                      onChange={(e) => setDbQueryString(e.target.value)}
+                      style={{
+                        width: '100%',
+                        height: '52px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--panel-border)',
+                        borderRadius: '4px',
+                        color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.65rem',
+                        padding: '6px',
+                        resize: 'none',
+                        outline: 'none',
+                        boxShadow: dbQueryString ? '0 0 10px rgba(16, 185, 129, 0.15)' : 'none',
+                        transition: 'border-color 0.2s, box-shadow 0.2s'
+                      }}
+                    />
+                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', lineHeight: '1.3' }}>
+                      Type SQL joins or table names. Matching schema cards will light up green in real-time.
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
