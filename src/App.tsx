@@ -18,8 +18,8 @@ import {
   semanticSearchCodebase, 
   lintCodebaseRules, 
   runDependencyAudit,
-  explainEntireFolder,
-  suggestCrossFileRefactor
+  explainEntireFolderStream,
+  suggestCrossFileRefactorStream
 } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
@@ -203,10 +203,16 @@ export default function App() {
     setExplainingFolderName(folderPath);
     setIsExplainingFolder(true);
     setShowFolderExplainModal(true);
-    setFolderExplainReport(null);
+    setFolderExplainReport('');
     try {
-      const report = await explainEntireFolder(folderPath, repoData.files, apiKey);
-      setFolderExplainReport(report);
+      await explainEntireFolderStream(
+        folderPath,
+        repoData.files,
+        apiKey,
+        (cumulativeText) => {
+          setFolderExplainReport(cumulativeText);
+        }
+      );
     } catch (err: any) {
       setFolderExplainReport(`### ⚠️ Audit Error\nFailed to explain module folder: ${err.message || err}`);
     } finally {
@@ -218,11 +224,16 @@ export default function App() {
     if (!repoData || selectedFilePaths.size < 2) return;
     setIsRefactoring(true);
     setShowRefactorModal(true);
-    setRefactorProposal(null);
+    setRefactorProposal('');
     try {
       const selectedFiles = repoData.files.filter(f => selectedFilePaths.has(f.path));
-      const proposal = await suggestCrossFileRefactor(selectedFiles, apiKey);
-      setRefactorProposal(proposal);
+      await suggestCrossFileRefactorStream(
+        selectedFiles,
+        apiKey,
+        (cumulativeText) => {
+          setRefactorProposal(cumulativeText);
+        }
+      );
     } catch (err: any) {
       setRefactorProposal(`### ⚠️ Refactoring Error\nFailed to generate refactoring proposal: ${err.message || err}`);
     } finally {
@@ -1071,7 +1082,7 @@ export default function App() {
             </div>
             
             <div className="custom-scrollbar" style={{ maxHeight: '60vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
-              {isExplainingFolder ? (
+              {isExplainingFolder && !folderExplainReport ? (
                 <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <div className="search-spinner" style={{ width: '32px', height: '32px' }} />
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>AI is mapping module boundaries & reading files...</span>
@@ -1079,7 +1090,7 @@ export default function App() {
               ) : (
                 <div 
                   className="markdown-body" 
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(folderExplainReport || '') }} 
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(folderExplainReport || '') + (isExplainingFolder ? ' <span class="typing-cursor"></span>' : '') }} 
                 />
               )}
             </div>
@@ -1114,7 +1125,7 @@ export default function App() {
             </div>
             
             <div className="custom-scrollbar" style={{ maxHeight: '65vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
-              {isRefactoring ? (
+              {isRefactoring && !refactorProposal ? (
                 <div style={{ padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <div className="search-spinner" style={{ width: '32px', height: '32px' }} />
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gemini is auditing overlapping logic & compiling DRY blueprints...</span>
@@ -1122,7 +1133,7 @@ export default function App() {
               ) : (
                 <div 
                   className="markdown-body" 
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(refactorProposal || '') }} 
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(refactorProposal || '') + (isRefactoring ? ' <span class="typing-cursor"></span>' : '') }} 
                 />
               )}
             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, X, Bot, Sparkles, MessageSquare, Trash2, HelpCircle } from 'lucide-react';
-import { askQuestionAboutCodebase } from '../utils/aiHelper';
+import { askQuestionAboutCodebaseStream } from '../utils/aiHelper';
 import type { ParsedFile } from '../utils/repoParser';
 
 function formatMarkdown(text: string): string {
@@ -64,15 +64,16 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, loading, isStreaming]);
 
   const handleSend = async (textToSend: string) => {
-    if (!textToSend.trim() || loading) return;
+    if (!textToSend.trim() || loading || isStreaming) return;
 
     const userMsg: Message = { role: 'user', text: textToSend };
     setMessages((prev) => [...prev, userMsg]);
@@ -90,21 +91,39 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
         ? { path: selectedFile.path, content: selectedFile.content }
         : null;
 
-      const reply = await askQuestionAboutCodebase(
+      // Append an empty model message structure for streaming text to land
+      setMessages((prev) => [...prev, { role: 'model', text: '' }]);
+      setLoading(false);
+      setIsStreaming(true);
+
+      await askQuestionAboutCodebaseStream(
         textToSend,
         activeFileContext,
         allFilesSummary,
-        apiKey
+        apiKey,
+        (cumulativeText) => {
+          setMessages((prev) => {
+            const copy = [...prev];
+            if (copy.length > 0 && copy[copy.length - 1].role === 'model') {
+              copy[copy.length - 1] = { role: 'model', text: cumulativeText };
+            }
+            return copy;
+          });
+        }
       );
-
-      setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'model', text: `⚠️ Failed to get reply: ${err.message || err}` },
-      ]);
+      setMessages((prev) => {
+        const copy = [...prev];
+        if (copy.length > 0 && copy[copy.length - 1].role === 'model') {
+          copy[copy.length - 1] = { role: 'model', text: `⚠️ Failed to stream reply: ${err.message || err}` };
+        } else {
+          copy.push({ role: 'model', text: `⚠️ Failed to stream reply: ${err.message || err}` });
+        }
+        return copy;
+      });
     } finally {
       setLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -312,7 +331,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
                 }}
               >
                 <div dangerouslySetInnerHTML={{
-                  __html: formatMarkdown(m.text)
+                  __html: formatMarkdown(m.text) + (isStreaming && idx === messages.length - 1 ? ' <span class="typing-cursor"></span>' : '')
                 }} />
               </div>
             </div>

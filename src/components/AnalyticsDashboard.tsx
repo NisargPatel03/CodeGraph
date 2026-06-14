@@ -26,8 +26,8 @@ import {
   generateArchitectureOverview, 
   refactorCodeSmell, 
   generateMermaidDiagram,
-  suggestFolderRestructure,
-  validateApiDbContracts
+  suggestFolderRestructureStream,
+  validateApiDbContractsStream
 } from '../utils/aiHelper';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
@@ -357,10 +357,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   const handleGenerateRestructure = async () => {
     setLoadingRestructure(true);
+    setRestructureDoc('');
     try {
       const summary = files.map((f) => ({ path: f.path, size: f.size, language: f.language }));
-      const doc = await suggestFolderRestructure(summary, apiKey);
-      setRestructureDoc(doc);
+      await suggestFolderRestructureStream(summary, apiKey, (cumulative) => {
+        setRestructureDoc(cumulative);
+      });
     } catch (err: any) {
       setRestructureDoc(`### ⚠️ Restructure Failed\nError: ${err.message || err}`);
     } finally {
@@ -370,6 +372,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   const handleGenerateApiDbContracts = async () => {
     setLoadingApiDbContract(true);
+    setApiDbContractDoc('');
     try {
       // Extract pseudo API endpoints from routes/controllers in files
       const pseudoEndpoints = files
@@ -382,7 +385,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           if (f.content.includes('PUT') || f.content.includes('put(')) methods.push('PUT');
           if (f.content.includes('DELETE') || f.content.includes('delete(')) methods.push('DELETE');
           return {
-            file: f.path.split('/').pop(),
+            file: f.path.split('/').pop() || '',
             path: `/api/${f.path.replace(/\.[^/.]+$/, '').replace(/\\/g, '/')}`,
             methods: methods.length > 0 ? methods : ['GET']
           };
@@ -395,13 +398,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           // Parse lines looking for model declarations
           const matchModels = f.content.match(/(?:model|schema|table)\s+(\w+)/gi) || [];
           return {
-            file: f.path.split('/').pop(),
+            file: f.path.split('/').pop() || '',
             entities: matchModels.map(m => m.replace(/(model|schema|table)\s+/i, ''))
           };
         });
 
-      const doc = await validateApiDbContracts(pseudoEndpoints, dbTables, apiKey);
-      setApiDbContractDoc(doc);
+      await validateApiDbContractsStream(pseudoEndpoints, dbTables, apiKey, (cumulative) => {
+        setApiDbContractDoc(cumulative);
+      });
     } catch (err: any) {
       setApiDbContractDoc(`### ⚠️ Contract Validation Failed\nError: ${err.message || err}`);
     } finally {
@@ -1172,10 +1176,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 Gemini will audit the directory layout, highlight folder-level coupling, and simulate a clean, optimized structure (such as splitting overloaded utility folders).
               </p>
               
-              {restructureDoc ? (
+              {loadingRestructure && !restructureDoc ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '12px' }}>
+                  <div className="search-spinner" style={{ width: '28px', height: '28px' }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Simulating cleanest architecture blueprint...</span>
+                </div>
+              ) : restructureDoc ? (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div className="custom-scrollbar" style={{ flex: 1, maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(restructureDoc) }} />
+                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(restructureDoc) + (loadingRestructure ? ' <span class="typing-cursor"></span>' : '') }} />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 
@@ -1221,10 +1230,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 Audits data flow contract drift between your API routes (Express, Next.js routes) and database schemas (Prisma, SQL, schemas) to point out missing attributes or invalid type casts.
               </p>
 
-              {apiDbContractDoc ? (
+              {loadingApiDbContract && !apiDbContractDoc ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '12px' }}>
+                  <div className="search-spinner" style={{ width: '28px', height: '28px' }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Auditing database & API endpoints mapping...</span>
+                </div>
+              ) : apiDbContractDoc ? (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div className="custom-scrollbar" style={{ flex: 1, maxHeight: '400px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(apiDbContractDoc) }} />
+                    <div className="markdown-body" dangerouslySetInnerHTML={{ __html: formatMarkdown(apiDbContractDoc) + (loadingApiDbContract ? ' <span class="typing-cursor"></span>' : '') }} />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <button 

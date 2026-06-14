@@ -1170,7 +1170,14 @@ ${orphanedTables.length > 0 ? `> [!WARNING]
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
     const prompt = `You are a Principal Database Administrator, Performance Engineer, and Database Architect.
+Today's date is ${currentDate}. You must use today's date (${currentDate}) in the report's headers or metadata section.
 Audit the following database schema (tables and relationships) for structural issues, optimization opportunities, and design flaws.
 
 Please analyze the schema for:
@@ -1380,3 +1387,290 @@ Provide an audit report in markdown listing any warning/tip alerts.`;
     return `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
   }
 }
+
+export async function askQuestionAboutCodebaseStream(
+  question: string,
+  currentFile: { path: string; content: string } | null,
+  allFiles: { path: string; size: number; language: string }[],
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const mockReply = `**AI Chat (Offline Mode)**
+You asked: "${question}"
+
+*To converse with Gemini about the codebase, please provide your Gemini API key in the top-right Settings box.*
+Here is a mock answer based on the current workspace context:
+- I see ${allFiles.length} files.
+- The active file in your inspector is \`${currentFile?.path || 'none'}\`.
+- To find things like "where is login handled?", I recommend searching the files panel for keywords like \`login\`, \`auth\`, or \`user\`.`;
+
+  if (!isValidApiKey(apiKey)) {
+    let cumulative = '';
+    for (const chunk of mockReply.split(' ')) {
+      cumulative += chunk + ' ';
+      onChunk(cumulative);
+      await new Promise((resolve) => setTimeout(resolve, 35));
+    }
+    return mockReply;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    let context = `You are an AI developer assistant built into the "CodeGraph" dashboard.
+The user is asking a question about their codebase.
+Here is the file structure of the repository:
+${JSON.stringify(allFiles.slice(0, 80), null, 2)}
+`;
+
+    if (currentFile) {
+      context += `
+The user is currently inspecting this file: \`${currentFile.path}\`. Here is its content:
+\`\`\`
+${currentFile.content.substring(0, 8000)}
+\`\`\`
+`;
+    }
+
+    const prompt = `${context}
+
+User Question: "${question}"
+
+Provide a detailed, helpful developer response. Highlight code files and folder names using backticks.`;
+
+    const result = await model.generateContentStream(prompt);
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(fullText);
+    }
+    return fullText;
+  } catch (error: any) {
+    const errMsg = `### ⚠️ AI Processing Failed\nFailed to fetch stream from Gemini: ${error.message || error}`;
+    onChunk(errMsg);
+    return errMsg;
+  }
+}
+
+export async function explainEntireFolderStream(
+  folderPath: string,
+  filesInFolder: { path: string; content: string }[],
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const mockReply = `### 🧠 Module Architectural Summary (Offline Mode)
+**Folder path:** \`${folderPath}\`
+*Gemini API key not found. Simulated offline response.*
+
+#### 📁 Structure Overview:
+${filesInFolder.map(f => `- \`${f.path.split('/').pop()}\` (${f.content.length} bytes)`).join('\n')}
+
+> [!TIP]
+> Grouping files inside \`${folderPath}\` forms a cohesive module boundary. Ensure dependencies are strictly imported and don't leak external concerns.`;
+
+  if (!isValidApiKey(apiKey)) {
+    let cumulative = '';
+    for (const chunk of mockReply.split(' ')) {
+      cumulative += chunk + ' ';
+      onChunk(cumulative);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    return mockReply;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Principal Software Architect. Provide an architectural explanation of the module/folder: "${folderPath}".
+Here is a list of files and their contents located inside this folder:
+${JSON.stringify(filesInFolder.map(f => ({ path: f.path, content: f.content.substring(0, 3000) })), null, 2)}
+
+Provide a beautiful, clear architecture report in markdown explaining the main purpose of this folder/module, its component responsibilities, and key design recommendations.`;
+
+    const result = await model.generateContentStream(prompt);
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(fullText);
+    }
+    return fullText;
+  } catch (error: any) {
+    const errMsg = `### ⚠️ Explanation Failed\nError: ${error.message || error}`;
+    onChunk(errMsg);
+    return errMsg;
+  }
+}
+
+export async function suggestCrossFileRefactorStream(
+  selectedFiles: { path: string; content: string }[],
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const mockReply = `### 🚀 Cross-File Refactoring Suggestions (Offline Mode)
+*Gemini API Key missing. Review static duplication recommendations.*
+
+#### 🔍 Selection Audit:
+${selectedFiles.map(f => `- \`${f.path.split('/').pop()}\` (${f.content.substring(0, 200).replace(/\n/g, ' ')}...)`).join('\n')}
+
+#### 💡 Suggested Shared Abstraction:
+1. Extract duplicate helper utility structures into a shared module.
+2. Align interface signatures to facilitate easier component reusability.`;
+
+  if (!isValidApiKey(apiKey)) {
+    let cumulative = '';
+    for (const chunk of mockReply.split(' ')) {
+      cumulative += chunk + ' ';
+      onChunk(cumulative);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    return mockReply;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Refactoring Expert. Analyze these selected files for overlapping responsibilities, duplication, or shared abstractions:
+${JSON.stringify(selectedFiles.map(f => ({ path: f.path, content: f.content.substring(0, 4000) })), null, 2)}
+
+Provide a detailed refactoring suggestion report in markdown. Outline:
+1. Detected code duplication or design overlaps.
+2. Refactoring blueprints (e.g. creating a shared utility or helper component).
+3. Code comparison or refactoring sketches showing before & after.`;
+
+    const result = await model.generateContentStream(prompt);
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(fullText);
+    }
+    return fullText;
+  } catch (error: any) {
+    const errMsg = `### ⚠️ Refactoring Analysis Failed\nError: ${error.message || error}`;
+    onChunk(errMsg);
+    return errMsg;
+  }
+}
+
+export async function suggestFolderRestructureStream(
+  filesSummary: { path: string; size: number; language: string }[],
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const mockReply = `### 📂 Codebase Folder Restructure Proposal (Offline Mode)
+*Gemini API key is not configured. Here is a generic clean architecture restructure blueprint:*
+
+\`\`\`
+src/
+  ├── components/        # Dumb/Reusable UI components (buttons, badges)
+  ├── features/          # Feature modules containing domain-specific hooks
+  ├── hooks/             # Global standalone React hooks
+  ├── utils/             # Independent pure helper utilities
+  └── App.tsx            # Application Shell & Router
+\`\`\`
+
+> [!TIP]
+> Ensure that components only import from sibling directories or parent utilities. Avoid importing elements upwards from specific feature packages to prevent spaghetti dependency graphs.`;
+
+  if (!isValidApiKey(apiKey)) {
+    let cumulative = '';
+    for (const chunk of mockReply.split(' ')) {
+      cumulative += chunk + ' ';
+      onChunk(cumulative);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    return mockReply;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Software Architect. Audit the current folder layout structure and file sizes of the project:
+${JSON.stringify(filesSummary, null, 2)}
+
+Propose an optimized structure (e.g. Domain-driven feature split, cleaning up bloated utilities folder, etc.).
+Structure your response in Markdown, highlighting the new proposed tree layout inside code blocks, and detail the migration plan.`;
+
+    const result = await model.generateContentStream(prompt);
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(fullText);
+    }
+    return fullText;
+  } catch (error: any) {
+    const errMsg = `### ⚠️ Restructure Suggestion Failed\nError: ${error.message || error}`;
+    onChunk(errMsg);
+    return errMsg;
+  }
+}
+
+export async function validateApiDbContractsStream(
+  apiEndpoints: { file: string; path: string; methods: string[] }[],
+  dbTables: { file: string; entities: string[] }[],
+  apiKey: string,
+  onChunk: (text: string) => void
+): Promise<string> {
+  const mockReply = `### 🗃️ API-Database Contract Audit Report (Offline Mode)
+
+#### 📝 Scanned Data Contracts Summary:
+- API routes scanned: ${apiEndpoints.length} endpoints.
+- Database tables: ${dbTables.length} tables found.
+
+- [x] Column datatypes scanned.
+- [ ] Endpoint request bodies validated against entity columns. (Requires API Key)
+
+> [!NOTE]
+> Add a Gemini API key in settings to perform deep contract drift validation, mapping active routes to actual table schemas to find parameter mismatches.`;
+
+  if (!isValidApiKey(apiKey)) {
+    let cumulative = '';
+    for (const chunk of mockReply.split(' ')) {
+      cumulative += chunk + ' ';
+      onChunk(cumulative);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    return mockReply;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are a Lead Backend Architect. Audit the contract coupling between these REST API endpoints and Database schema tables:
+
+REST API Endpoints:
+${JSON.stringify(apiEndpoints, null, 2)}
+
+Database Tables Schema:
+${JSON.stringify(dbTables, null, 2)}
+
+Verify if:
+1. API handler request payloads or response keys references non-existent table columns.
+2. Mismatched column datatypes exist (e.g. string used in controller for integer database key).
+3. Missing database indices exist on columns frequently queried by these API endpoints.
+
+Provide an audit report in markdown listing any warning/tip alerts.`;
+
+    const result = await model.generateContentStream(prompt);
+    let fullText = '';
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      fullText += chunkText;
+      onChunk(fullText);
+    }
+    return fullText;
+  } catch (error: any) {
+    const errMsg = `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
+    onChunk(errMsg);
+    return errMsg;
+  }
+}
+
