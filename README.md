@@ -87,6 +87,8 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **AI Test Suite Generator** — Generates a complete Jest/Vitest unit test suite for any file
 
 ### 🤖 AI Code Intelligence Suite
+
+- **⚡ Real-Time Streaming AI Responses** — Renders response text token-by-token directly in the browser. Utilises Google Gemini's `generateContentStream` API to stream answers for the AI Chat Assistant, Folder Explanations, Refactoring suggestions, Folder Restructure Simulation, and API-Database Contract Drift analysis. Accompanied by a neon typing cursor indicator to signal active processing.
 - **Semantic Code Search** — `semanticSearchCodebase` — AI-powered natural language query parser mapping user queries (e.g. "where we validate API keys") to the top matching files with relevance scores and match reasons.
 - **AI Mermaid Diagram Generator** — `generateMermaidDiagram` — Automatically structures top-level folder subgraphs and file dependencies into a beautiful, visual Mermaid.js diagram.
 - **AI Code Summary** — `getFileExplanation` — Explains a file's purpose, responsibilities, and architecture role in plain English.
@@ -388,6 +390,14 @@ Two-tier REST API route extractor. The static parser (`extractEndpointsFromCodeb
 AI-powered database design auditor. Formats parsed database schema tables (columns, datatypes, indexes, relationships) into JSON.
 - **Gemini Mode**: Prompts Gemini as a *Principal Database Architect* to scan for database schema violations (circular dependencies, 1NF/2NF/3NF design issues, missing indexes on foreign keys, redundant mappings). Outputs actionable recommendations with warning/tip boxes.
 - **Offline Fallback**: Evaluates schema structure locally, locating tables missing primary keys, orphaned tables with no links, and index targets on foreign key relations. Computes a localized **Database Health Score** out of 100.
+
+#### Real-Time Streaming Helpers (`generateContentStream`)
+For interactive components, CodeGraph uses asynchronous streaming generators to render text token-by-token instead of waiting for a single block completion:
+- **`askQuestionAboutCodebaseStream(question, currentFile, allFiles, apiKey, onChunk)`** — Streams responses in the floating Chat Drawer with codebase file context.
+- **`explainEntireFolderStream(folderPath, files, apiKey, onChunk)`** — Streams folder explanation summaries inside the glassmorphic directory modals.
+- **`suggestCrossFileRefactorStream(refactorDetails, apiKey, onChunk)`** — Streams refactoring solutions during code smell refactor modal sessions.
+- **`suggestFolderRestructureStream(filesSummary, apiKey, onChunk)`** — Streams layout proposals and grouping guidelines under the Restructure tab.
+- **`validateApiDbContractsStream(endpoints, tables, apiKey, onChunk)`** — Streams data validation rules and contract drift alerts in the API-Database contract tab.
 
 ---
 
