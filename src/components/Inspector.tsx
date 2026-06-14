@@ -7,27 +7,105 @@ import type { LinterViolation, AuditReport } from '../utils/aiHelper';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
-  return text
-    // 1. Code blocks (triple backticks)
-    .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
-      // Escape HTML entities to prevent rendering tags inside code block
-      const escapedCode = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      
-      const displayLang = lang ? lang.toUpperCase() : 'CODE';
-      
-      return `
-        <div class="code-block-wrapper">
-          <div class="code-block-header">
-            <span>${displayLang}</span>
-            <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
-          </div>
-          <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+  
+  // First, parse block-level elements like code blocks, which can contain newlines and pipe characters
+  // We placeholder code blocks to avoid messing up their contents.
+  const codeBlocks: string[] = [];
+  let processedText = text.replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+    const escapedCode = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const displayLang = lang ? lang.toUpperCase() : 'CODE';
+    const index = codeBlocks.length;
+    codeBlocks.push(`
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span>${displayLang}</span>
+          <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
         </div>
-      `;
-    })
+        <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+      </div>
+    `);
+    return `__CODE_BLOCK_PLACEHOLDER_${index}__`;
+  });
+
+  // Now, parse tables line-by-line
+  const lines = processedText.split('\n');
+  const resultLines: string[] = [];
+  let inTable = false;
+  let tableHeader: string[] = [];
+  let tableRows: string[][] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isTableRow = line.startsWith('|') && line.endsWith('|');
+
+    if (isTableRow) {
+      // Split the row by pipe, ignore first and last empty elements from split
+      const cells = line.split('|').map(c => c.trim()).slice(1, -1);
+      
+      // Check if it's a separator line like |:---|:---|
+      const isSeparator = cells.every(c => /^[:\-\s\|]+$/.test(c) || c === '');
+
+      if (isSeparator) {
+        // Skip separator line
+        continue;
+      }
+
+      if (!inTable) {
+        // Start a new table, this first row is the header
+        inTable = true;
+        tableHeader = cells;
+      } else {
+        // Add to rows
+        tableRows.push(cells);
+      }
+    } else {
+      if (inTable) {
+        // End the current table, render it as HTML
+        const tableHtml = renderHtmlTable(tableHeader, tableRows);
+        resultLines.push(tableHtml);
+        inTable = false;
+        tableHeader = [];
+        tableRows = [];
+      }
+      resultLines.push(lines[i]);
+    }
+  }
+
+  // If table was open at the end of the text
+  if (inTable) {
+    const tableHtml = renderHtmlTable(tableHeader, tableRows);
+    resultLines.push(tableHtml);
+  }
+
+  processedText = resultLines.join('\n');
+
+  // Helper to render HTML table
+  function renderHtmlTable(headers: string[], rows: string[][]): string {
+    const headerHtml = headers.map(h => `<th style="border: 1px solid var(--panel-border); padding: 8px 12px; background: rgba(255,255,255,0.05); text-align: left; font-weight: 600;">${h}</th>`).join('');
+    const rowsHtml = rows.map(row => {
+      const cellsHtml = row.map(cell => `<td style="border: 1px solid var(--panel-border); padding: 8px 12px;">${cell}</td>`).join('');
+      return `<tr style="border-bottom: 1px solid var(--panel-border);">${cellsHtml}</tr>`;
+    }).join('');
+
+    return `
+      <div style="overflow-x: auto; margin: 16px 0;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; background: rgba(0,0,0,0.1); border: 1px solid var(--panel-border); border-radius: 6px;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--panel-border);">${headerHtml}</tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Parse remaining block-level and inline markdown
+  processedText = processedText
     // 2. Headings
     .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
     .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
@@ -40,6 +118,13 @@ function formatMarkdown(text: string): string {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
     .replace(/\`(.*?)\`/g, '<code>$1</code>');
+
+  // Restore code blocks
+  codeBlocks.forEach((html, index) => {
+    processedText = processedText.replace(`__CODE_BLOCK_PLACEHOLDER_${index}__`, html);
+  });
+
+  return processedText;
 }
 
 
