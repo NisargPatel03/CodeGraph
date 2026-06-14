@@ -132,6 +132,13 @@ function formatMarkdown(text: string): string {
     // 5. Inline Code
     .replace(/\`(.*?)\`/g, '<code>$1</code>');
 
+  // Parse file paths and convert them to interactive buttons (before restoring code blocks)
+  const fileRegex = /\b(?:src|components|utils|pages)\/[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json)\b/gi;
+  processedText = processedText.replace(fileRegex, (filePath) => {
+    const fileName = filePath.split('/').pop() || filePath;
+    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+  });
+
   // Restore code blocks
   codeBlocks.forEach((html, index) => {
     processedText = processedText.replace(`__CODE_BLOCK_PLACEHOLDER_${index}__`, html);

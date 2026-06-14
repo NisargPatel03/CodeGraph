@@ -3230,3 +3230,34 @@ input:checked + .slider:before {
 .pulse-glow-ring {
   animation: pulse-ring 1.8s infinite ease-in-out;
 }
+
+/* Clickable File Tags in AI Chat Responses */
+.clickable-file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 4px;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  margin: 0 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+
+.clickable-file-tag:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-primary-glow);
+  transform: translateY(-1px);
+}
+
+.clickable-file-tag:active {
+  transform: translateY(0);
+}
+

@@ -435,6 +435,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       // Strip remaining blockquotes markers
       .replace(/^\s*>\s*/gm, '');
 
+    // Parse file paths and convert them to interactive buttons (before restoring code blocks)
+    const fileRegex = /\b(?:src|components|utils|pages)\/[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json)\b/gi;
+    processedText = processedText.replace(fileRegex, (filePath) => {
+      const fileName = filePath.split('/').pop() || filePath;
+      return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+    });
+
     // Restore code blocks
     codeBlocks.forEach((html, index) => {
       processedText = processedText.replace(`__CODE_BLOCK_PLACEHOLDER_${index}__`, html);
@@ -2265,9 +2272,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       reset: () => svgElement.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)),
     };
 
+    (window as any).locateFileNode = (filePath: string) => {
+      setSelectedNode(filePath);
+    };
+
     drawMinimap();
 
-    return () => { simulation.stop(); };
+    return () => {
+      simulation.stop();
+      delete (window as any).locateFileNode;
+    };
   }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema]);
   useEffect(() => {
     if (!svgRef.current) return;

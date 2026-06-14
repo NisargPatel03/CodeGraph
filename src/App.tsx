@@ -264,24 +264,46 @@ export default function App() {
 
   const formatMarkdown = (text: string): string => {
     if (!text) return '';
-    return text
-      // 1. Code blocks (triple backticks)
-      .replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
-        const escapedCode = code
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        const displayLang = lang ? lang.toUpperCase() : 'CODE';
-        return `
-          <div class="code-block-wrapper">
-            <div class="code-block-header">
-              <span>${displayLang}</span>
-              <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
-            </div>
-            <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+    
+    // Clean up LaTeX symbols like \to, \rightarrow, \Rightarrow, \implies wrapped in dollar signs
+    let cleanedText = text
+      .replace(/\\+\s*to\b/gi, '→')
+      .replace(/\\+\s*rightarrow\b/gi, '→')
+      .replace(/\\+\s*Rightarrow\b/gi, '⇒')
+      .replace(/\\+\s*implies\b/gi, '⇒')
+      .replace(/\\+\s*leftrightarrow\b/gi, '↔')
+      .replace(/\\+\s*leftarrow\b/gi, '←')
+      .replace(/\\+\s*dots\b/gi, '...')
+      .replace(/\\+\s*cdot\b/gi, '·')
+      .replace(/\\+\s*times\b/gi, '×');
+
+    // Clean up math block dollar signs around arrows or LaTeX symbols
+    cleanedText = cleanedText.replace(/\$([^\$]*?[\\→⇒↔←·×][^\$]*?)\$/g, '$1');
+
+    // First, parse block-level elements like code blocks, which can contain newlines and pipe characters
+    // We placeholder code blocks to avoid messing up their contents.
+    const codeBlocks: string[] = [];
+    let processedText = cleanedText.replace(/\`\`\`([a-zA-Z0-9]+)?\s*\n([\s\S]*?)\`\`\`/gm, (_match, lang, code) => {
+      const escapedCode = code
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const displayLang = lang ? lang.toUpperCase() : 'CODE';
+      const index = codeBlocks.length;
+      codeBlocks.push(`
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span>${displayLang}</span>
+            <button class="code-block-copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('pre').innerText); const el = this; el.innerText = 'Copied!'; setTimeout(() => el.innerText = 'Copy', 2000);">Copy</button>
           </div>
-        `;
-      })
+          <pre class="code-block-pre"><code>${escapedCode}</code></pre>
+        </div>
+      `);
+      return `__CODE_BLOCK_PLACEHOLDER_${index}__`;
+    });
+
+    // Parse remaining block-level and inline markdown
+    processedText = processedText
       // 2. Headings
       .replace(/^# (.*$)/gim, '<h2 style="color:var(--text-primary); font-weight:700; margin:22px 0 10px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;">$1</h2>')
       .replace(/^## (.*$)/gim, '<h3 style="color:var(--text-primary); font-weight:600; margin:18px 0 8px 0; border-bottom: 1px solid var(--panel-border); padding-bottom: 4px;">$1</h3>')
@@ -320,6 +342,20 @@ export default function App() {
       `)
       // Strip remaining blockquotes markers
       .replace(/^\s*>\s*/gm, '');
+
+    // Parse file paths and convert them to interactive buttons (before restoring code blocks)
+    const fileRegex = /\b(?:src|components|utils|pages)\/[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json)\b/gi;
+    processedText = processedText.replace(fileRegex, (filePath) => {
+      const fileName = filePath.split('/').pop() || filePath;
+      return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+    });
+
+    // Restore code blocks
+    codeBlocks.forEach((html, index) => {
+      processedText = processedText.replace(`__CODE_BLOCK_PLACEHOLDER_${index}__`, html);
+    });
+
+    return processedText;
   };
 
   const handleDataLoaded = (data: { 
