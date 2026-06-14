@@ -1060,6 +1060,29 @@ code, pre {
   fill-opacity: 0.05 !important;
 }
 
+/* --- Command Palette overrides for Arctic Light theme --- */
+[data-theme="arctic-light"] .command-palette-esc-badge {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.1);
+  color: var(--text-muted);
+}
+
+[data-theme="arctic-light"] .command-palette-kbd {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--text-muted);
+}
+
+[data-theme="arctic-light"] .command-palette-item:hover .command-palette-kbd,
+[data-theme="arctic-light"] .command-palette-item.selected .command-palette-kbd {
+  color: var(--text-secondary);
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+[data-theme="arctic-light"] .command-palette-footer {
+  background: rgba(15, 23, 42, 0.02);
+}
+
 /* --- 600ms Smooth Theme Crossfade Transition --- */
 body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-panel, .cyber-input, .cyber-button, .tab-btn, .glass-panel, .glass-panel-glow {
   transition: background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
@@ -2859,10 +2882,12 @@ input:checked + .slider:before {
 .command-palette-container {
   width: 90%;
   max-width: 600px;
-  background: rgba(10, 12, 22, 0.95);
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), 0 0 1px 1px var(--panel-border-glow);
   overflow: hidden;
   display: flex;
   flex-direction: column;
