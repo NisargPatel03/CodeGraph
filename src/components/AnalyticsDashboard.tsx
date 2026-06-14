@@ -703,6 +703,204 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     showToast('Copied Notion-compatible Markdown to Clipboard!');
   };
 
+  const handleExportRestructurePDF = () => {
+    if (!restructureDoc) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const formattedHtml = formatMarkdown(restructureDoc);
+      const printHtml = formattedHtml
+        .replace(/rgba\(239,\s*68,\s*68,\s*0\.08\)/g, '#fef2f2')
+        .replace(/#f43f5e/g, '#ef4444')
+        .replace(/#fda4af/g, '#991b1b')
+        .replace(/rgba\(99,\s*102,\s*241,\s*0\.08\)/g, '#eff6ff')
+        .replace(/#6366f1/g, '#3b82f6')
+        .replace(/#c7d2fe/g, '#1e3a8a')
+        .replace(/rgba\(16,\s*185,\s*129,\s*0\.08\)/g, '#ecfdf5')
+        .replace(/#10b981/g, '#10b981')
+        .replace(/#a7f3d0/g, '#065f46')
+        .replace(/rgba\(255,\s*255,\s*255,\s*0\.03\)/g, '#f9fafb')
+        .replace(/#9ca3af/g, '#6b7280')
+        .replace(/var\(--text-secondary\)/g, '#374151')
+        .replace(/#05070f/g, '#f3f4f6')
+        .replace(/var\(--panel-border\)/g, '#e5e7eb');
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Folder Restructure Blueprint - CodeGraph</title>
+            <style>
+              body {
+                font-family: system-ui, -apple-system, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                padding: 40px;
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              h1, h2, h3, h4, h5, h6 {
+                color: #111827;
+                font-weight: 700;
+                margin-top: 1.5em;
+                margin-bottom: 0.5em;
+              }
+              h2 { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; font-size: 1.8rem; }
+              h3 { border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; font-size: 1.4rem; }
+              h4 { font-size: 1.1rem; }
+              code {
+                font-family: monospace;
+                background: #f3f4f6;
+                padding: 2px 4px;
+                border-radius: 4px;
+                font-size: 0.9em;
+              }
+              pre {
+                background: #f3f4f6;
+                padding: 16px;
+                border-radius: 8px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+              }
+              li { margin-bottom: 4px; }
+              blockquote {
+                margin: 1em 0;
+                padding-left: 1em;
+                border-left: 4px solid #e5e7eb;
+                color: #4b5563;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 16px 0;
+              }
+              th, td {
+                border: 1px solid #e5e7eb;
+                padding: 8px 12px;
+                text-align: left;
+              }
+              th {
+                background-color: #f9fafb;
+                font-weight: 600;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Folder Restructure Blueprint</h1>
+            <div class="content">
+              ${printHtml}
+            </div>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      showToast('Opened Print PDF dialog!');
+    }
+  };
+
+  const handleExportApiDbContractPDF = () => {
+    if (!apiDbContractDoc) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const formattedHtml = formatMarkdown(apiDbContractDoc);
+      const printHtml = formattedHtml
+        .replace(/rgba\(239,\s*68,\s*68,\s*0\.08\)/g, '#fef2f2')
+        .replace(/#f43f5e/g, '#ef4444')
+        .replace(/#fda4af/g, '#991b1b')
+        .replace(/rgba\(99,\s*102,\s*241,\s*0\.08\)/g, '#eff6ff')
+        .replace(/#6366f1/g, '#3b82f6')
+        .replace(/#c7d2fe/g, '#1e3a8a')
+        .replace(/rgba\(16,\s*185,\s*129,\s*0\.08\)/g, '#ecfdf5')
+        .replace(/#10b981/g, '#10b981')
+        .replace(/#a7f3d0/g, '#065f46')
+        .replace(/rgba\(255,\s*255,\s*255,\s*0\.03\)/g, '#f9fafb')
+        .replace(/#9ca3af/g, '#6b7280')
+        .replace(/var\(--text-secondary\)/g, '#374151')
+        .replace(/#05070f/g, '#f3f4f6')
+        .replace(/var\(--panel-border\)/g, '#e5e7eb');
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>API-Database Contract Audit Report - CodeGraph</title>
+            <style>
+              body {
+                font-family: system-ui, -apple-system, sans-serif;
+                line-height: 1.6;
+                color: #1f2937;
+                padding: 40px;
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              h1, h2, h3, h4, h5, h6 {
+                color: #111827;
+                font-weight: 700;
+                margin-top: 1.5em;
+                margin-bottom: 0.5em;
+              }
+              h2 { border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; font-size: 1.8rem; }
+              h3 { border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; font-size: 1.4rem; }
+              h4 { font-size: 1.1rem; }
+              code {
+                font-family: monospace;
+                background: #f3f4f6;
+                padding: 2px 4px;
+                border-radius: 4px;
+                font-size: 0.9em;
+              }
+              pre {
+                background: #f3f4f6;
+                padding: 16px;
+                border-radius: 8px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+              }
+              li { margin-bottom: 4px; }
+              blockquote {
+                margin: 1em 0;
+                padding-left: 1em;
+                border-left: 4px solid #e5e7eb;
+                color: #4b5563;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 16px 0;
+              }
+              th, td {
+                border: 1px solid #e5e7eb;
+                padding: 8px 12px;
+                text-align: left;
+              }
+              th {
+                background-color: #f9fafb;
+                font-weight: 600;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>API-Database Contract Audit Report</h1>
+            <div class="content">
+              ${printHtml}
+            </div>
+            <script>
+              window.onload = function() {
+                window.print();
+                window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      showToast('Opened Print PDF dialog!');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', padding: '24px', gap: '24px', background: 'rgba(5, 8, 20, 0.4)' }}>
       {/* Sub tabs header */}
@@ -1291,9 +1489,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     <button 
                        className="cyber-button secondary" 
                       onClick={() => setRestructureDoc('')}
-                      style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                      style={{ padding: '8px 12px', fontSize: '0.8rem' }}
                     >
                       Clear
+                    </button>
+                    <button 
+                      className="cyber-button secondary" 
+                      onClick={handleExportRestructurePDF}
+                      style={{ padding: '8px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="Export blueprint as PDF"
+                    >
+                      📄 PDF
                     </button>
                     <button 
                       className="cyber-button" 
@@ -1345,9 +1551,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     <button 
                       className="cyber-button secondary" 
                       onClick={() => setApiDbContractDoc('')}
-                      style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                      style={{ padding: '8px 12px', fontSize: '0.8rem' }}
                     >
                       Clear
+                    </button>
+                    <button 
+                      className="cyber-button secondary" 
+                      onClick={handleExportApiDbContractPDF}
+                      style={{ padding: '8px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      title="Export audit report as PDF"
+                    >
+                      📄 PDF
                     </button>
                     <button 
                       className="cyber-button" 
