@@ -806,6 +806,8 @@ export const Reports: React.FC<ReportsProps> = ({
                             gap: '4px',
                             background: 'rgba(139, 92, 246, 0.15)',
                             borderColor: 'rgba(139, 92, 246, 0.3)',
+                            color: 'var(--color-primary)',
+                            fontWeight: 600,
                           }}
                         >
                           <AiIcon size={12} />

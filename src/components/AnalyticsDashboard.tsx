@@ -902,7 +902,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', padding: '24px', gap: '24px', background: 'rgba(5, 8, 20, 0.4)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', padding: '24px', gap: '24px', background: 'transparent' }}>
       {/* Sub tabs header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -1127,7 +1127,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 <select 
                   value={smellTypeFilter} 
                   onChange={(e) => setSmellTypeFilter(e.target.value)}
-                  style={{ background: 'rgba(10,15,30,0.8)', border: '1px solid var(--panel-border)', color: 'var(--text-secondary)', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px' }}
+                  style={{ background: 'var(--input-bg)', border: '1px solid var(--panel-border)', color: 'var(--text-primary)', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px', outline: 'none', cursor: 'pointer' }}
                 >
                   <option value="all">All Types</option>
                   <option value="file_length">File Length</option>
@@ -1140,7 +1140,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 <select 
                   value={smellSortKey} 
                   onChange={(e) => setSmellSortKey(e.target.value as any)}
-                  style={{ background: 'rgba(10,15,30,0.8)', border: '1px solid var(--panel-border)', color: 'var(--text-secondary)', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px' }}
+                  style={{ background: 'var(--input-bg)', border: '1px solid var(--panel-border)', color: 'var(--text-primary)', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px', outline: 'none', cursor: 'pointer' }}
                 >
                   <option value="severity">Sort by Severity</option>
                   <option value="file">Sort by File Name</option>
@@ -1202,7 +1202,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                           <button
                             className="cyber-button"
                             onClick={() => handleRefactor(smell)}
-                            style={{ padding: '4px 8px', fontSize: '0.7rem', background: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.2)' }}
+                            style={{ 
+                              padding: '4px 8px', 
+                              fontSize: '0.7rem', 
+                              background: 'rgba(139, 92, 246, 0.1)', 
+                              borderColor: 'rgba(139, 92, 246, 0.2)',
+                              color: 'var(--color-primary)',
+                              fontWeight: 600
+                            }}
                           >
                             <Sparkles size={11} style={{ marginRight: '4px' }} />
                             Refactor

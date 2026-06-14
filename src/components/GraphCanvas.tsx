@@ -2943,6 +2943,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                           gap: '6px',
                           background: 'rgba(99, 102, 241, 0.15)',
                           borderColor: 'rgba(99, 102, 241, 0.3)',
+                          color: 'var(--color-primary)',
+                          fontWeight: 600,
                           cursor: 'pointer'
                         }}
                         onClick={() => setShowUmlModal(true)}
