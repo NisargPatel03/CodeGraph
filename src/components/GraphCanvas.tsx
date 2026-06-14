@@ -1948,9 +1948,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           .style('height', '100%')
           .style('border', '1px solid var(--panel-border)')
           .style('border-radius', '8px')
-          .style('background', 'rgba(10, 14, 26, 0.85)')
+          .style('background', 'var(--panel-bg)')
           .style('backdrop-filter', 'blur(6px)')
-          .style('box-shadow', '0 4px 15px rgba(0,0,0,0.4)')
+          .style('box-shadow', '0 4px 15px rgba(0,0,0,0.15)')
           .style('display', 'flex')
           .style('flex-direction', 'column')
           .style('overflow', 'hidden')
@@ -1990,7 +1990,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             .style('align-items', 'center')
             .style('padding', '4px 8px')
             .style('font-size', '0.72rem')
-            .style('border-bottom', '1px solid rgba(255,255,255,0.03)')
+            .style('border-bottom', '1px solid var(--panel-border)')
             .style('gap', '8px')
             .html(() => {
               const displayType = f.type.includes('ObjectId') ? 'ObjectId' : f.type.replace(/^(mongoose\.)?(Schema\.)?Types\./i, '');
@@ -2013,7 +2013,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           .on('mouseleave', () => {
             const isSelected = selectedDbTableId === d.id;
             cardDiv.style('border-color', isSelected ? 'var(--color-primary)' : 'var(--panel-border)');
-            cardDiv.style('box-shadow', isSelected ? '0 0 10px rgba(99, 102, 241, 0.2)' : '0 4px 15px rgba(0,0,0,0.4)');
+            cardDiv.style('box-shadow', isSelected ? '0 0 10px rgba(99, 102, 241, 0.2)' : '0 4px 15px rgba(0,0,0,0.15)');
           });
 
         return; // Don't run standard circle/folder drawing code
@@ -2729,7 +2729,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       if (!cardDiv.empty()) {
         const isSelectedSelf = selectedDbTableId === d.id;
         cardDiv.style('border-color', isSelectedSelf || isHoveredSelf ? 'var(--color-secondary)' : 'var(--panel-border)');
-        cardDiv.style('box-shadow', isSelectedSelf || isHoveredSelf ? '0 0 15px rgba(0, 242, 254, 0.25)' : '0 4px 15px rgba(0,0,0,0.4)');
+        cardDiv.style('box-shadow', isSelectedSelf || isHoveredSelf ? '0 0 15px rgba(0, 242, 254, 0.25)' : '0 4px 15px rgba(0,0,0,0.15)');
       }
     });
   }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships]);
@@ -3274,9 +3274,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               overflowY: 'auto',
               borderRadius: '8px',
               border: '1px solid var(--panel-border)',
-              background: 'rgba(10, 14, 26, 0.92)',
+              background: 'var(--panel-bg)',
               backdropFilter: 'blur(8px)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
               zIndex: 100,
               padding: '16px',
               display: 'flex',
@@ -3284,7 +3284,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               gap: '12px'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Database size={16} style={{ color: 'var(--color-primary)' }} />
                 <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{table.id}</span>
@@ -3307,11 +3307,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             {/* Field Table */}
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-secondary)', marginBottom: '6px' }}>Fields & Columns</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'var(--input-bg)', padding: '6px', borderRadius: '6px', border: '1px solid var(--panel-border)' }}>
                 {table.fields.map(f => {
                   const displayType = f.type.includes('ObjectId') ? 'ObjectId' : f.type.replace(/^(mongoose\.)?(Schema\.)?Types\./i, '');
                   return (
-                    <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 2px', borderBottom: '1px solid rgba(255,255,255,0.02)', gap: '12px' }}>
+                    <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 2px', borderBottom: '1px solid var(--panel-border)', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexShrink: 0 }}>
                         <span>{f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '•'}</span>
                         <span style={{ fontWeight: f.isPrimaryKey || f.isForeignKey ? '600' : 'normal', color: f.isPrimaryKey ? 'var(--color-secondary)' : f.isForeignKey ? '#a855f7' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
@@ -3352,7 +3352,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               </div>
             </div>
 
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', marginTop: '4px' }}>
+            <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '10px', marginTop: '4px' }}>
               <button
                 className="cyber-button secondary"
                 disabled={isAuditingDb}
@@ -3374,7 +3374,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             </div>
 
             {useDemoDbSchema && (
-              <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ marginTop: 'auto', borderTop: '1px solid var(--panel-border)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245,158,11,0.25)', fontWeight: 600 }}>🧪 DEMO SCHEMA</span>
                 <button 
                   className="cyber-button text-btn alert" 
