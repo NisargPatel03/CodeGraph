@@ -3213,3 +3213,20 @@ input:checked + .slider:before {
   0%, 100% { opacity: 0; }
   50% { opacity: 1; }
 }
+
+/* Pulsing Focus Glow Ring for Selected Node */
+@keyframes pulse-ring {
+  0%, 100% {
+    stroke-width: 2px;
+    stroke: var(--color-secondary);
+    filter: drop-shadow(0 0 3px var(--color-secondary-glow));
+  }
+  50% {
+    stroke-width: 5px;
+    stroke: var(--color-secondary);
+    filter: drop-shadow(0 0 12px var(--color-secondary));
+  }
+}
+.pulse-glow-ring {
+  animation: pulse-ring 1.8s infinite ease-in-out;
+}

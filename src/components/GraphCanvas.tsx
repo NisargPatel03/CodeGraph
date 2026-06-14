@@ -2327,6 +2327,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             .style('text-decoration', null)
             .style('opacity', null);
       }
+
+      const isSelected = selectedNode && d.id === selectedNode;
+      if (!circle.empty()) circle.classed('pulse-glow-ring', !!isSelected);
+      if (!polygon.empty()) polygon.classed('pulse-glow-ring', !!isSelected);
+      if (!folderPath.empty()) folderPath.classed('pulse-glow-ring', !!isSelected);
     });
 
     nodesG.classed('hotspot', (d: any) => heatmapMode === 'churn' && d.churn && d.churn >= 45);
@@ -2733,6 +2738,30 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
     });
   }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships]);
+
+  // Smoothly pan & zoom to the selected node or selected DB table when it changes
+  useEffect(() => {
+    const targetId = viewMode === 'dbSchema' ? selectedDbTableId : selectedNode;
+    if (!targetId || !svgRef.current || !zoomBehaviorRef.current || !containerRef.current) return;
+    
+    // Look up node coordinates from nodePositionsRef
+    const pos = nodePositionsRef.current.get(targetId);
+    if (!pos) return;
+    
+    const svgElement = d3.select(svgRef.current);
+    const width = containerRef.current.clientWidth || 800;
+    const height = containerRef.current.clientHeight || 600;
+    
+    svgElement.transition()
+      .duration(850)
+      .ease(d3.easeCubicOut)
+      .call(
+        zoomBehaviorRef.current.transform,
+        d3.zoomIdentity
+          .translate(width / 2 - pos.x * 1.3, height / 2 - pos.y * 1.3)
+          .scale(1.3)
+      );
+  }, [selectedNode, selectedDbTableId, viewMode]);
 
   return (
     <div 
