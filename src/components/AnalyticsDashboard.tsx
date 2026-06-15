@@ -388,6 +388,339 @@ function formatMarkdown(text: string): string {
   return processedText;
 }
 
+const RiskQuadrantChart: React.FC<{
+  nodes: any[];
+  onSelectFile: (filePath: string) => void;
+}> = ({ nodes, onSelectFile }) => {
+  const [hoveredNode, setHoveredNode] = useState<any | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
+  const points = useMemo(() => {
+    if (!nodes || nodes.length === 0) return [];
+    
+    const maxComp = Math.max(...nodes.map(n => n.complexity || 0), 100);
+    const maxChurn = Math.max(...nodes.map(n => n.churn || 0), 10);
+    const avgComp = nodes.reduce((sum, n) => sum + (n.complexity || 0), 0) / nodes.length;
+    const avgChurn = nodes.reduce((sum, n) => sum + (n.churn || 0), 0) / nodes.length;
+
+    return nodes.map(n => {
+      const comp = n.complexity || 0;
+      const ch = n.churn || 0;
+      
+      let quadrant: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' = 'bottom-left';
+      if (comp >= avgComp && ch >= avgChurn) quadrant = 'top-right';
+      else if (comp < avgComp && ch >= avgChurn) quadrant = 'top-left';
+      else if (comp >= avgComp && ch < avgChurn) quadrant = 'bottom-right';
+      
+      return {
+        node: n,
+        xVal: comp,
+        yVal: ch,
+        quadrant,
+        riskScore: comp * ch
+      };
+    });
+  }, [nodes]);
+
+  if (!nodes || nodes.length === 0) return null;
+
+  const maxComp = Math.max(...nodes.map(n => n.complexity || 0), 100);
+  const maxChurn = Math.max(...nodes.map(n => n.churn || 0), 10);
+  const avgComp = Math.round(nodes.reduce((sum, n) => sum + (n.complexity || 0), 0) / nodes.length);
+  const avgChurn = Math.round(nodes.reduce((sum, n) => sum + (n.churn || 0), 0) / nodes.length);
+
+  const hotspots = points
+    .filter(p => p.quadrant === 'top-right')
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 5);
+
+  const svgWidth = 550;
+  const svgHeight = 320;
+  const padding = { top: 25, right: 25, bottom: 45, left: 55 };
+
+  const chartWidth = svgWidth - padding.left - padding.right;
+  const chartHeight = svgHeight - padding.top - padding.bottom;
+
+  const maxSqrtComp = Math.sqrt(maxComp);
+  const avgSqrtComp = Math.sqrt(avgComp);
+
+  const getSvgCoords = (comp: number, churn: number) => {
+    const sqrtComp = Math.sqrt(comp);
+    const x = padding.left + (sqrtComp / maxSqrtComp) * chartWidth;
+    const y = padding.top + chartHeight - (churn / maxChurn) * chartHeight;
+    return { x, y };
+  };
+
+  const xThreshold = padding.left + (avgSqrtComp / maxSqrtComp) * chartWidth;
+  const yThreshold = padding.top + chartHeight - (avgChurn / maxChurn) * chartHeight;
+
+  return (
+    <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+        <Activity size={15} style={{ color: 'var(--color-alert)' }} />
+        Churn vs. Complexity: Risk Quadrants
+      </h4>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+        This quadrant plot identifies architectural hotspots. Files in the **Top-Right (High Churn + High Complexity)** quadrant represent high-maintenance code debt.
+      </p>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginTop: '8px' }}>
+        
+        {/* Left column: Interactive SVG Scatter Plot */}
+        <div style={{ position: 'relative', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', border: '1px solid var(--panel-border)', overflow: 'hidden' }}>
+          <svg 
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const scaleX = svgWidth / rect.width;
+              const scaleY = svgHeight / rect.height;
+              setTooltipPos({
+                x: (e.clientX - rect.left) * scaleX + 12,
+                y: (e.clientY - rect.top) * scaleY - 12
+              });
+            }}
+            onMouseLeave={() => setHoveredNode(null)}
+          >
+            {/* Quadrant Overlays */}
+            {/* Top-Left: Frequent Churn */}
+            <rect
+              x={padding.left}
+              y={padding.top}
+              width={xThreshold - padding.left}
+              height={yThreshold - padding.top}
+              fill="rgba(168, 85, 247, 0.015)"
+            />
+            {/* Top-Right: Hotspots */}
+            <rect
+              x={xThreshold}
+              y={padding.top}
+              width={chartWidth - (xThreshold - padding.left)}
+              height={yThreshold - padding.top}
+              fill="rgba(239, 68, 68, 0.03)"
+            />
+            {/* Bottom-Left: Stable & Simple */}
+            <rect
+              x={padding.left}
+              y={yThreshold}
+              width={xThreshold - padding.left}
+              height={chartHeight - (yThreshold - padding.top)}
+              fill="rgba(16, 185, 129, 0.015)"
+            />
+            {/* Bottom-Right: Complex Core */}
+            <rect
+              x={xThreshold}
+              y={yThreshold}
+              width={chartWidth - (xThreshold - padding.left)}
+              height={chartHeight - (yThreshold - padding.top)}
+              fill="rgba(249, 115, 22, 0.015)"
+            />
+
+            {/* Grid Line Axes */}
+            <line
+              x1={padding.left}
+              y1={padding.top + chartHeight}
+              x2={padding.left + chartWidth}
+              y2={padding.top + chartHeight}
+              stroke="var(--panel-border)"
+              strokeWidth={1}
+            />
+            <line
+              x1={padding.left}
+              y1={padding.top}
+              x2={padding.left}
+              y2={padding.top + chartHeight}
+              stroke="var(--panel-border)"
+              strokeWidth={1}
+            />
+
+            {/* Threshold dashed lines */}
+            <line
+              x1={xThreshold}
+              y1={padding.top}
+              x2={xThreshold}
+              y2={padding.top + chartHeight}
+              stroke="rgba(255, 255, 255, 0.15)"
+              strokeDasharray="4 4"
+            />
+            <line
+              x1={padding.left}
+              y1={yThreshold}
+              x2={padding.left + chartWidth}
+              y2={yThreshold}
+              stroke="rgba(255, 255, 255, 0.15)"
+              strokeDasharray="4 4"
+            />
+
+            {/* Quadrant Labels */}
+            <text x={padding.left + 10} y={padding.top + 18} fill="#a855f7" fontSize="9" fontWeight="600" opacity="0.8">🔄 Frequent Churn</text>
+            <text x={svgWidth - padding.right - 10} y={padding.top + 18} fill="#ef4444" fontSize="9" fontWeight="600" textAnchor="end" opacity="0.8">⚠️ Hotspots</text>
+            <text x={padding.left + 10} y={svgHeight - padding.bottom - 10} fill="#10b981" fontSize="9" fontWeight="600" opacity="0.8">✅ Stable & Simple</text>
+            <text x={svgWidth - padding.right - 10} y={svgHeight - padding.bottom - 10} fill="#f97316" fontSize="9" fontWeight="600" textAnchor="end" opacity="0.8">📦 Complex Core</text>
+
+            {/* Axes Ticks and Labels */}
+            {/* X-Axis: Complexity (LOC) */}
+            <text x={padding.left + chartWidth / 2} y={svgHeight - 12} fill="var(--text-muted)" fontSize="9" textAnchor="middle" fontWeight="500">
+              Complexity (Lines of Code) [Sqrt Scale]
+            </text>
+            {/* Y-Axis: Churn (Commits) */}
+            <text 
+              x={14} 
+              y={padding.top + chartHeight / 2} 
+              fill="var(--text-muted)" 
+              fontSize="9" 
+              textAnchor="middle" 
+              fontWeight="500"
+              transform={`rotate(-90, 14, ${padding.top + chartHeight / 2})`}
+            >
+              Churn (Commit Count)
+            </text>
+
+            {/* X Axis ticks */}
+            <line x1={padding.left} y1={padding.top + chartHeight} x2={padding.left} y2={padding.top + chartHeight + 4} stroke="var(--panel-border)" />
+            <text x={padding.left} y={padding.top + chartHeight + 14} fill="var(--text-muted)" fontSize="8" textAnchor="middle">0</text>
+
+            <line x1={xThreshold} y1={padding.top + chartHeight} x2={xThreshold} y2={padding.top + chartHeight + 4} stroke="var(--panel-border)" />
+            <text x={xThreshold} y={padding.top + chartHeight + 14} fill="var(--text-muted)" fontSize="8" textAnchor="middle">avg ({avgComp})</text>
+
+            <line x1={padding.left + chartWidth} y1={padding.top + chartHeight} x2={padding.left + chartWidth} y2={padding.top + chartHeight + 4} stroke="var(--panel-border)" />
+            <text x={padding.left + chartWidth} y={padding.top + chartHeight + 14} fill="var(--text-muted)" fontSize="8" textAnchor="middle">{maxComp}</text>
+
+            {/* Y Axis ticks */}
+            <line x1={padding.left - 4} y1={padding.top + chartHeight} x2={padding.left} y2={padding.top + chartHeight} stroke="var(--panel-border)" />
+            <text x={padding.left - 8} y={padding.top + chartHeight + 3} fill="var(--text-muted)" fontSize="8" textAnchor="end">0</text>
+
+            <line x1={padding.left - 4} y1={yThreshold} x2={padding.left} y2={yThreshold} stroke="var(--panel-border)" />
+            <text x={padding.left - 8} y={yThreshold + 3} fill="var(--text-muted)" fontSize="8" textAnchor="end">avg ({avgChurn})</text>
+
+            <line x1={padding.left - 4} y1={padding.top} x2={padding.left} y2={padding.top} stroke="var(--panel-border)" />
+            <text x={padding.left - 8} y={padding.top + 3} fill="var(--text-muted)" fontSize="8" textAnchor="end">{maxChurn}</text>
+
+            {/* Dots */}
+            {points.map((p, idx) => {
+              const coords = getSvgCoords(p.xVal, p.yVal);
+              let color = '#10b981'; // green
+              if (p.quadrant === 'top-right') color = '#ef4444'; // red
+              else if (p.quadrant === 'top-left') color = '#a855f7'; // purple
+              else if (p.quadrant === 'bottom-right') color = '#f97316'; // orange
+
+              const isHovered = hoveredNode && hoveredNode.id === p.node.id;
+
+              return (
+                <circle
+                  key={p.node.id || idx}
+                  cx={coords.x}
+                  cy={coords.y}
+                  r={isHovered ? 8 : 5}
+                  fill={color}
+                  stroke="rgba(0,0,0,0.4)"
+                  strokeWidth={isHovered ? 1.5 : 0.8}
+                  style={{ cursor: 'pointer', transition: 'all 0.1s ease-out' }}
+                  onMouseEnter={() => setHoveredNode(p.node)}
+                  onClick={() => onSelectFile(p.node.id)}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Floating Glassmorphic Tooltip */}
+          {hoveredNode && (
+            <div 
+              style={{
+                position: 'absolute',
+                left: `${(tooltipPos.x / svgWidth) * 100}%`,
+                top: `${(tooltipPos.y / svgHeight) * 100}%`,
+                transform: 'translate(-20%, -110%)',
+                background: 'rgba(10, 10, 15, 0.95)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                fontSize: '0.72rem',
+                color: 'var(--text-primary)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                zIndex: 10
+              }}
+            >
+              <div style={{ fontWeight: 600, color: 'var(--color-primary)', marginBottom: '3px' }}>
+                {hoveredNode.name}
+              </div>
+              <div style={{ color: 'var(--text-secondary)' }}>
+                Path: <span style={{ color: 'var(--text-muted)' }}>{hoveredNode.id}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                <div>LOC: <strong style={{ color: 'var(--text-primary)' }}>{hoveredNode.complexity}</strong></div>
+                <div>Churn: <strong style={{ color: 'var(--text-primary)' }}>{hoveredNode.churn} commits</strong></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right column: Top 5 Hotspots Panel */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h5 style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', margin: 0, letterSpacing: '0.05em' }}>
+            Top Refactoring Hotspots (Debt)
+          </h5>
+          
+          {hotspots.length === 0 ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--panel-border)', borderRadius: '8px', padding: '16px', background: 'rgba(255,255,255,0.01)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                No files in the high-risk quadrant! Codebase is stable.
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {hotspots.map((item, idx) => (
+                <div
+                  key={item.node.id}
+                  onClick={() => onSelectFile(item.node.id)}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    padding: '10px 14px',
+                    background: 'rgba(239, 68, 68, 0.03)',
+                    border: '1px solid rgba(239, 68, 68, 0.15)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.06)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.03)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.15)';
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      #{idx + 1} {item.node.name}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', padding: '1px 6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderRadius: '4px', fontWeight: 600 }}>
+                      Risk Index: {item.riskScore}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    {item.node.id}
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    <span>Lines: <strong style={{ color: 'var(--text-primary)' }}>{item.node.complexity}</strong></span>
+                    <span>Churn: <strong style={{ color: 'var(--text-primary)' }}>{item.node.churn} commits</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+      </div>
+    </div>
+  );
+};
+
 interface AnalyticsDashboardProps {
   files: ParsedFile[];
   cycles: string[][];
@@ -1130,9 +1463,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   );
                 })}
               </div>
-            </div>
-
           </div>
+
+          <RiskQuadrantChart 
+            nodes={graphData.nodes} 
+            onSelectFile={onSelectFile} 
+          />
 
           {/* Row 3: Full-width Code Smells Table */}
           <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
