@@ -4,6 +4,25 @@ import type { DbSchemaReport } from './schemaParser';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 
+// Simple in-memory AI response cache
+const aiCache = new Map<string, any>();
+
+// Generate a cache key based on function name and input parameters
+function getCacheKey(action: string, payload: any): string {
+  try {
+    const serialized = JSON.stringify(payload);
+    let hash = 0;
+    for (let i = 0; i < serialized.length; i++) {
+      const char = serialized.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash |= 0; // Convert to 32bit integer
+    }
+    return `${action}:${hash}`;
+  } catch {
+    return `${action}:${Math.random()}`;
+  }
+}
+
 // Simple check if API key exists and is valid format
 export function isValidApiKey(key: string): boolean {
   return key.trim().length > 10;
@@ -33,6 +52,11 @@ export async function getFileExplanation(filePath: string, fileContent: string, 
     return getMockFileExplanation(filePath);
   }
 
+  const cacheKey = getCacheKey('getFileExplanation', { filePath, fileContent });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -48,7 +72,9 @@ ${fileContent.substring(0, 15000)}
 \`\`\``;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     console.error('Gemini API Error:', error);
     return `### ⚠️ AI Processing Failed
@@ -62,17 +88,12 @@ export async function generateOnboardingGuide(
 ): Promise<string> {
   if (!isValidApiKey(apiKey)) {
     return `### 🚀 Quickstart & Onboarding Guide (Demo)
+Key Entry Points, Reading Order, Commands, and project architecture will be generated here in dynamic markdown formats once an API Key is set in Settings.`;
+  }
 
-#### 📦 Project Overview
-This repository contains ${filesSummary.length} files across languages like **${Array.from(new Set(filesSummary.map(f => f.language))).join(', ')}**.
-
-#### 🛠️ Getting Started
-1. Clone the project locally.
-2. Run \`npm install\` to pull core dependencies.
-3. Launch the development workspace via \`npm run dev\`.
-4. Ensure environment credentials are set up.
-
-*Add your Gemini API Key in the settings tab to generate a fully detailed, custom guide for this specific codebase.*`;
+  const cacheKey = getCacheKey('generateOnboardingGuide', { filesSummary });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
   }
 
   try {
@@ -91,7 +112,9 @@ File list:
 ${JSON.stringify(filesSummary.slice(0, 100), null, 2)}`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ Failed to Generate Onboarding Guide\nError: ${error.message}`;
   }
@@ -113,6 +136,11 @@ Based on the file paths:
 *Add your Gemini API Key in the settings tab to generate a custom visual architecture design report.*`;
   }
 
+  const cacheKey = getCacheKey('generateArchitectureOverview', { filesSummary });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -129,7 +157,9 @@ File list:
 ${JSON.stringify(filesSummary.slice(0, 100), null, 2)}`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ Failed to Generate Architecture Overview\nError: ${error.message}`;
   }
@@ -150,6 +180,11 @@ Here is a mock answer based on the current workspace context:
 - I see ${allFiles.length} files.
 - The active file in your inspector is \`${currentFile?.path || 'none'}\`.
 - To find things like "where is login handled?", I recommend searching the files panel for keywords like \`login\`, \`auth\`, or \`user\`.`;
+  }
+
+  const cacheKey = getCacheKey('askQuestionAboutCodebase', { question, currentFile, allFiles });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
   }
 
   try {
@@ -178,7 +213,9 @@ User Question: "${question}"
 Provide a detailed, helpful developer response. If you don't know the answer or if it's not present in the files list, make a reasonable guess or suggest where they might look in similar architectures. Highlight code files and folder names using backticks.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `⚠️ Chat request failed. Error: ${error.message}`;
   }
@@ -205,6 +242,11 @@ Here is a general refactoring tip:
 3. **Use Descriptors**: Use clear parameter names and extract complex nested conditionals into descriptive variables.`;
   }
 
+  const cacheKey = getCacheKey('refactorCodeSmell', { filePath, fileContent, smellMessage, smellDetails });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -228,7 +270,9 @@ Your response MUST include:
 3. **Key Improvements**: Bullet points explaining what you changed and why it is better.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ AI Refactoring Failed
 Error: ${error.message || error}`;
@@ -257,6 +301,11 @@ describe('${fileName.split('.')[0]}', () => {
 *Add your Gemini API Key in the settings panel to generate a fully custom test suite.*`;
   }
 
+  const cacheKey = getCacheKey('generateTestSuite', { filePath, fileContent });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -276,7 +325,9 @@ ${fileContent.substring(0, 15000)}
 Provide a professional test suite. Explain your choices briefly at the start of your response, then provide the complete test code block.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ Failed to Generate Test Suite
 Error: ${error.message || error}`;
@@ -301,6 +352,11 @@ export async function generateMermaidDiagram(
   C --> J["repoParser.ts"]
   D --> B
   D --> C`;
+  }
+
+  const cacheKey = getCacheKey('generateMermaidDiagram', { filesSummary, links });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
   }
 
   try {
@@ -339,7 +395,9 @@ IMPORTANT RULES:
 - Keep it readable — 20-35 nodes maximum.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const text = result.response.text().trim();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `graph TD\n  ERR["Diagram generation failed"]`;
   }
@@ -410,6 +468,11 @@ export async function semanticSearchCodebase(
     return results;
   }
 
+  const cacheKey = getCacheKey('semanticSearchCodebase', { query, filesSummary });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
@@ -445,11 +508,13 @@ Example JSON output structure:
     const parsed = JSON.parse(responseText);
     
     if (Array.isArray(parsed)) {
-      return parsed.map((item: any) => ({
+      const results = parsed.map((item: any) => ({
         filePath: String(item.filePath || ''),
         relevanceScore: Number(item.relevanceScore || 0),
         reason: String(item.reason || '')
       }));
+      aiCache.set(cacheKey, results);
+      return results;
     }
     return [];
   } catch (error: any) {
@@ -544,6 +609,18 @@ export async function lintCodebaseRules(
     };
   }
 
+  const cacheKey = getCacheKey('lintCodebaseRules', { 
+    rule, 
+    files: files.map(f => f.path), 
+    links: links.map(l => ({ 
+      source: typeof l.source === 'object' ? l.source.id : String(l.source), 
+      target: typeof l.target === 'object' ? l.target.id : String(l.target) 
+    })) 
+  });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
@@ -591,7 +668,7 @@ Example Output structure:
     const text = result.response.text();
     const parsed = JSON.parse(text);
 
-    return {
+    const violation = {
       violatingNodes: Array.isArray(parsed.violatingNodes) ? parsed.violatingNodes.map(String) : [],
       violatingLinks: Array.isArray(parsed.violatingLinks) ? parsed.violatingLinks.map((l: any) => ({
         source: String(l.source || ''),
@@ -599,6 +676,8 @@ Example Output structure:
       })) : [],
       explanation: String(parsed.explanation || 'No explanation provided.')
     };
+    aiCache.set(cacheKey, violation);
+    return violation;
   } catch (error: any) {
     console.error('Linter API Error:', error);
     throw new Error(`Failed to evaluate architecture rule: ${error.message || error}`);
@@ -685,6 +764,11 @@ export async function runDependencyAudit(
 
   // Check if API Key is valid, if so use Gemini to analyze
   if (isValidApiKey(apiKey)) {
+    const cacheKey = getCacheKey('runDependencyAudit', { topRisks });
+    if (aiCache.has(cacheKey)) {
+      return aiCache.get(cacheKey);
+    }
+
     try {
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -712,10 +796,12 @@ IMPORTANT: Do not use math/LaTeX style formula formatting or dollar signs ($) in
       summary = summary.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
       summary = summary.replace(/\$([^$]+)\$/g, '$1');
 
-      return {
+      const report = {
         risks: topRisks,
         summary
       };
+      aiCache.set(cacheKey, report);
+      return report;
     } catch (error: any) {
       console.warn('Gemini Audit generation failed, falling back to static audit:', error);
     }
@@ -1019,6 +1105,11 @@ Add a Gemini API key in the settings panel to enable deep endpoint request/respo
     };
   }
 
+  const cacheKey = getCacheKey('aiExtractEndpoints', { staticEndpoints });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   // Find the files that actually contain routing
   const uniqueRoutingPaths = Array.from(new Set(staticEndpoints.map(e => e.filePath)));
   if (uniqueRoutingPaths.length === 0) {
@@ -1085,6 +1176,7 @@ Wrap your JSON output in a single \`\`\`json block. Do not write any conversatio
     
     const parsedReport = JSON.parse(jsonString.trim()) as ApiDocsReport;
     if (parsedReport && Array.isArray(parsedReport.endpoints)) {
+      aiCache.set(cacheKey, parsedReport);
       return parsedReport;
     }
     throw new Error('Parsed result does not conform to ApiDocsReport structure.');
@@ -1109,7 +1201,7 @@ export async function auditDatabaseSchema(schema: DbSchemaReport, apiKey: string
     const totalTables = schema.tables.length;
     const totalRels = schema.relationships.length;
     
-    // Find orphaned tables (no incoming and no outgoing relations)
+    // Find orphaned tables (no incoming and no outgoing relationships)
     const referencedTables = new Set<string>();
     schema.relationships.forEach(r => {
       referencedTables.add(r.source);
@@ -1165,6 +1257,11 @@ ${orphanedTables.length > 0 ? `> [!WARNING]
 `;
   }
 
+  const cacheKey = getCacheKey('auditDatabaseSchema', { schema });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   // 2. Online Gemini Auditor
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -1197,13 +1294,17 @@ Ensure you use:
 - Actionable recommendations in a clear markdown checklist format.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     console.error('Gemini DB Audit Error:', error);
     return `## ⚠️ AI DB Audit Failed
 Failed to fetch database audit report from Gemini. Error: ${error.message || error}`;
   }
-}export async function explainEntireFolder(
+}
+
+export async function explainEntireFolder(
   folderPath: string,
   files: ParsedFile[],
   apiKey: string
@@ -1222,6 +1323,11 @@ ${filesList}
 > [!NOTE]
 > Offline fallback analysis is active. To get a complete architectural summary and data flow breakdown of this directory, add your Gemini API Key in the settings panel.
 `;
+  }
+
+  const cacheKey = getCacheKey('explainEntireFolder', { folderPath, filesSummary: folderFiles.map(f => ({ path: f.path, size: f.size })) });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
   }
 
   try {
@@ -1248,7 +1354,9 @@ Generate a clear, professional analysis in beautiful Markdown containing:
 Use GitHub-style alerts (> [!TIP], > [!WARNING]) to highlight key design guidelines.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ AI Processing Failed\nFailed to explain folder. Error: ${error.message}`;
   }
@@ -1275,6 +1383,11 @@ export async function suggestCrossFileRefactor(
 `;
   }
 
+  const cacheKey = getCacheKey('suggestCrossFileRefactor', { selectedFiles: selectedFiles.map(f => ({ path: f.path, content: f.content })) });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1297,7 +1410,9 @@ Propose a refactored architecture. Provide:
 Use beautiful Markdown and clear code blocks.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ Refactoring Analysis Failed\nError: ${error.message}`;
   }
@@ -1319,6 +1434,11 @@ export async function suggestFolderRestructure(
 `;
   }
 
+  const cacheKey = getCacheKey('suggestFolderRestructure', { filesSummary });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1335,7 +1455,9 @@ Provide:
 Format in beautiful markdown.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ Restructure Audit Failed\nError: ${error.message}`;
   }
@@ -1362,6 +1484,11 @@ Total Database Tables: ${dbTables.length}
 `;
   }
 
+  const cacheKey = getCacheKey('validateApiDbContracts', { apiEndpoints, dbTables });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1382,7 +1509,9 @@ Verify if:
 Provide an audit report in markdown listing any warning/tip alerts.`;
 
     const result = await model.generateContent(prompt);
-    return result.response.text();
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
   } catch (error: any) {
     return `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
   }
@@ -1412,6 +1541,13 @@ Here is a mock answer based on the current workspace context:
       await new Promise((resolve) => setTimeout(resolve, 35));
     }
     return mockReply;
+  }
+
+  const cacheKey = getCacheKey('askQuestionAboutCodebaseStream', { question, currentFile, allFiles });
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    onChunk(cached);
+    return cached;
   }
 
   try {
@@ -1446,6 +1582,7 @@ Provide a detailed, helpful developer response. Highlight code files and folder 
       fullText += chunkText;
       onChunk(fullText);
     }
+    aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
     const errMsg = `### ⚠️ AI Processing Failed\nFailed to fetch stream from Gemini: ${error.message || error}`;
@@ -1480,6 +1617,13 @@ ${filesInFolder.map(f => `- \`${f.path.split('/').pop()}\` (${f.content.length} 
     return mockReply;
   }
 
+  const cacheKey = getCacheKey('explainEntireFolderStream', { folderPath, filesInFolder: filesInFolder.map(f => ({ path: f.path, size: f.content.length })) });
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    onChunk(cached);
+    return cached;
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1497,6 +1641,7 @@ Provide a beautiful, clear architecture report in markdown explaining the main p
       fullText += chunkText;
       onChunk(fullText);
     }
+    aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
     const errMsg = `### ⚠️ Explanation Failed\nError: ${error.message || error}`;
@@ -1530,6 +1675,13 @@ ${selectedFiles.map(f => `- \`${f.path.split('/').pop()}\` (${f.content.substrin
     return mockReply;
   }
 
+  const cacheKey = getCacheKey('suggestCrossFileRefactorStream', { selectedFiles: selectedFiles.map(f => ({ path: f.path, size: f.content.length })) });
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    onChunk(cached);
+    return cached;
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1549,6 +1701,7 @@ Provide a detailed refactoring suggestion report in markdown. Outline:
       fullText += chunkText;
       onChunk(fullText);
     }
+    aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
     const errMsg = `### ⚠️ Refactoring Analysis Failed\nError: ${error.message || error}`;
@@ -1587,6 +1740,13 @@ src/
     return mockReply;
   }
 
+  const cacheKey = getCacheKey('suggestFolderRestructureStream', { filesSummary });
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    onChunk(cached);
+    return cached;
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1604,6 +1764,7 @@ Structure your response in Markdown, highlighting the new proposed tree layout i
       fullText += chunkText;
       onChunk(fullText);
     }
+    aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
     const errMsg = `### ⚠️ Restructure Suggestion Failed\nError: ${error.message || error}`;
@@ -1640,6 +1801,13 @@ export async function validateApiDbContractsStream(
     return mockReply;
   }
 
+  const cacheKey = getCacheKey('validateApiDbContractsStream', { apiEndpoints, dbTables });
+  if (aiCache.has(cacheKey)) {
+    const cached = aiCache.get(cacheKey);
+    onChunk(cached);
+    return cached;
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
@@ -1666,6 +1834,7 @@ Provide an audit report in markdown listing any warning/tip alerts.`;
       fullText += chunkText;
       onChunk(fullText);
     }
+    aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
     const errMsg = `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
