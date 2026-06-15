@@ -28,27 +28,27 @@
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
 - [Feature Deep Dives](#feature-deep-dives)
-  - [Graph Visualization](#1-graph-visualization-engine)
-  - [File Inspector](#2-file-inspector)
-  - [AI Code Intelligence Suite](#3-ai-code-intelligence-suite)
-  - [Reports & Analytics Dashboard](#4-reports--analytics-dashboard)
-  - [API Documentation Portal](#5-api-documentation-portal)
-  - [KPI Ribbon](#6-kpi-ribbon)
-  - [Theme System](#7-theme-system)
-  - [Static Analysis Engine](#8-static-analysis-engine)
-  - [Markdown & LaTeX Formatting Pipeline](#9-markdown--latex-formatting-pipeline)
-  - [Command Palette & Keyboard Controls](#10-global-command-palette--keyboard-controls)
-  - [Shareable URLs & Deep-Linking State](#11-shareable-urls--deep-linking-state)
-  - [Recent Workspaces History](#12-recent-workspaces-history)
-  - [AI Response Caching Layer](#13-ai-response-caching-layer)
-  - [Real GitHub File Metadata HUD](#14-real-github-file-metadata-hud)
-  - [Dynamic Filter System](#15-dynamic-filter-system)
-  - [3D WebGL-Style Graph Canvas](#16-3d-webgl-style-graph-canvas)
-  - [AI Caching & Token Telemetry Dashboard](#17-ai-caching--token-telemetry-dashboard)
-  - [Churn vs. Complexity Risk Quadrant Chart](#18-churn-vs-complexity-risk-quadrant-chart)
-  - [Mermaid.js UML Diagram Exporter](#19-mermaidjs-uml-diagram-exporter)
+  - [Graph Visualization](#graph-visualization-engine)
+  - [File Inspector](#file-inspector)
+  - [AI Code Intelligence Suite](#ai-code-intelligence-suite)
+  - [Reports & Analytics Dashboard](#reports-analytics-dashboard)
+  - [API Documentation Portal](#api-documentation-portal)
+  - [KPI Ribbon](#kpi-ribbon)
+  - [Theme System](#theme-system)
+  - [Static Analysis Engine](#static-analysis-engine)
+  - [Markdown & LaTeX Formatting Pipeline](#markdown-latex-formatting-pipeline)
+  - [Command Palette & Keyboard Controls](#command-palette-keyboard-controls)
+  - [Shareable URLs & Deep-Linking State](#shareable-urls-deep-linking-state)
+  - [Recent Workspaces History](#recent-workspaces-history)
+  - [AI Response Caching Layer](#ai-response-caching-layer)
+  - [Real GitHub File Metadata HUD](#real-github-file-metadata-hud)
+  - [Dynamic Filter System](#dynamic-filter-system)
+  - [3D WebGL-Style Graph Canvas](#3d-webgl-style-graph-canvas)
+  - [AI Caching & Token Telemetry Dashboard](#ai-caching-token-telemetry-dashboard)
+  - [Churn vs. Complexity Risk Quadrant Chart](#churn-vs-complexity-risk-quadrant-chart)
+  - [Mermaid.js UML Diagram Exporter](#mermaidjs-uml-diagram-exporter)
 - [Architecture](#architecture)
-- [Security & Privacy](#-security-privacy--error-handling)
+- [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
 
 ---
@@ -325,7 +325,7 @@ When loading a GitHub repository, CodeGraph accepts an optional **GitHub Persona
 
 ## Feature Deep Dives
 
-### 1. Graph Visualization Engine
+### <a id="graph-visualization-engine"></a>1. Graph Visualization Engine
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -384,7 +384,7 @@ To support codebases exceeding 500+ files without lagging or crashing the browse
 
 ---
 
-### 2. File Inspector & PR Diff Inspector
+### <a id="file-inspector"></a>2. File Inspector & PR Diff Inspector
 
 **File:** `src/components/Inspector.tsx`
 
@@ -424,7 +424,7 @@ When a branch comparison is active and a modified node is selected, the inspecto
 
 ---
 
-### 3. AI Code Intelligence Suite
+### <a id="ai-code-intelligence-suite"></a>3. AI Code Intelligence Suite
 
 **File:** `src/utils/aiHelper.ts`
 
@@ -478,7 +478,7 @@ For interactive components, CodeGraph uses asynchronous streaming generators to 
 
 ---
 
-### 4. Reports & Analytics Dashboard
+### <a id="reports-analytics-dashboard"></a>4. Reports & Analytics Dashboard
 
 **Files:** `src/components/Reports.tsx` (Bottom Drawer) and `src/components/AnalyticsDashboard.tsx` (Full-screen view)
 
@@ -507,7 +507,7 @@ A premium, multi-tab intelligence command center featuring:
 
 ---
 
-### 5. API Documentation Portal
+### <a id="api-documentation-portal"></a>5. API Documentation Portal
 
 **File:** `src/components/ApiDocsPortal.tsx`
 
@@ -529,7 +529,7 @@ A full-featured, interactive REST API documentation explorer accessible from the
 
 ---
 
-### 6. KPI Ribbon
+### <a id="kpi-ribbon"></a>6. KPI Ribbon
 
 **File:** `src/components/KpiRibbon.tsx`
 
@@ -541,7 +541,7 @@ A compact, sticky summary bar rendered directly below the graph tabs (visible in
 
 ---
 
-### 7. Theme System
+### <a id="theme-system"></a>7. Theme System
 
 Themes are controlled by a `data-theme` attribute on `<html>` and a set of CSS custom properties:
 
@@ -561,7 +561,7 @@ Theme selection persists in `localStorage`. Switching themes triggers a CSS-anim
 
 ---
 
-### 8. Static Analysis Engine
+### <a id="static-analysis-engine"></a>8. Static Analysis Engine
 
 **File:** `src/utils/codeAnalyzer.ts`
 
@@ -592,7 +592,7 @@ A fully client-side, zero-dependency static analysis engine that parses source f
 
 ---
 
-### 9. Markdown & LaTeX Formatting Pipeline
+### <a id="markdown-latex-formatting-pipeline"></a>9. Markdown & LaTeX Formatting Pipeline
 
 To guarantee visual elegance and technical correctness for all AI-generated contents (including the Chat Drawer, Inspector explanation, and Analytics reports), CodeGraph runs a multi-stage parser utility:
 
@@ -602,7 +602,7 @@ To guarantee visual elegance and technical correctness for all AI-generated cont
 
 ---
 
-### 10. Global Command Palette & Keyboard Controls
+### <a id="command-palette-keyboard-controls"></a>10. Global Command Palette & Keyboard Controls
 
 **File:** `src/components/CommandPalette.tsx`
 
@@ -615,7 +615,7 @@ Accessible via `Ctrl + K` or `Cmd + K`, the command palette offers keyboard-firs
 
 ---
 
-### 11. Shareable URLs & Deep-Linking State
+### <a id="shareable-urls-deep-linking-state"></a>11. Shareable URLs & Deep-Linking State
 
 CodeGraph supports full serialization of the application's visual configurations directly into the browser URL query string. This enables sharing a specific codebase analysis state with other team members.
 
@@ -628,7 +628,7 @@ CodeGraph supports full serialization of the application's visual configurations
 
 ---
 
-### 12. Recent Workspaces History
+### <a id="recent-workspaces-history"></a>12. Recent Workspaces History
 
 **File:** `src/components/RepoSelector.tsx`
 
@@ -641,7 +641,7 @@ To make returning to previous codebases fast and seamless, CodeGraph features a 
 
 ---
 
-### 13. AI Response Caching Layer
+### <a id="ai-response-caching-layer"></a>13. AI Response Caching Layer
 
 **File:** `src/utils/aiHelper.ts`
 
@@ -652,7 +652,7 @@ To minimize API usage cost, prevent rate-limiting, and boost responsiveness, Cod
 
 ---
 
-### 14. Real GitHub File Metadata HUD
+### <a id="real-github-file-metadata-hud"></a>14. Real GitHub File Metadata HUD
 
 **File:** `src/components/Inspector.tsx`
 
@@ -664,7 +664,7 @@ When a GitHub repository is loaded, CodeGraph replaces simulated metadata calcul
 
 ---
 
-### 15. Dynamic Filter System
+### <a id="dynamic-filter-system"></a>15. Dynamic Filter System
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -676,7 +676,7 @@ The Dynamic Graph Filtering panel floats on the main viewport, providing real-ti
 
 ---
 
-### 16. 3D WebGL-Style Graph Canvas
+### <a id="3d-webgl-style-graph-canvas"></a>16. 3D WebGL-Style Graph Canvas
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -690,7 +690,7 @@ A high-fidelity 3D visualization option built using lightweight, native HTML5 Ca
 
 ---
 
-### 17. AI Caching & Token Telemetry Dashboard
+### <a id="ai-caching-token-telemetry-dashboard"></a>17. AI Caching & Token Telemetry Dashboard
 
 **Files:** `src/components/RepoSelector.tsx` and `src/utils/aiHelper.ts`
 
@@ -702,7 +702,7 @@ An analytical instrumentation dashboard embedded inside the Settings slide-out p
 
 ---
 
-### 18. Churn vs. Complexity Risk Quadrant Chart
+### <a id="churn-vs-complexity-risk-quadrant-chart"></a>18. Churn vs. Complexity Risk Quadrant Chart
 
 **File:** `src/components/AnalyticsDashboard.tsx`
 
@@ -718,7 +718,7 @@ The Churn vs. Complexity Scatter Plot is an interactive SVG-rendered graph layou
 
 ---
 
-### 19. Mermaid.js UML Diagram Exporter
+### <a id="mermaidjs-uml-diagram-exporter"></a>19. Mermaid.js UML Diagram Exporter
 
 **Files:** `src/components/AnalyticsDashboard.tsx` and `src/components/Reports.tsx`
 
@@ -787,7 +787,7 @@ An integrated technical exporter that allows exporting the Gemini-generated Merm
 
 ---
 
-## 🔒 Security, Privacy & Error Handling
+## <a id="security-privacy-error-handling"></a>🔒 Security, Privacy & Error Handling
 
 CodeGraph is engineered with a strict client-side architecture to safeguard proprietary codebases, secure configuration keys, and deliver clean, descriptive error states.
 
