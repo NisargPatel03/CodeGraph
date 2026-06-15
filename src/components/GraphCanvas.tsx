@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles, Download } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
@@ -262,6 +262,195 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
   const [showUmlModal, setShowUmlModal] = useState(false);
   const [umlActiveTab, setUmlActiveTab] = useState<'preview' | 'syntax'>('preview');
+
+  const getCanvasStyles = () => {
+    let cssText = '';
+    try {
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          const rules = sheet.cssRules || sheet.rules;
+          if (!rules) continue;
+          for (const rule of Array.from(rules)) {
+            if (rule.type === CSSRule.STYLE_RULE) {
+              const selector = (rule as CSSStyleRule).selectorText;
+              if (selector && (
+                selector.includes('node') ||
+                selector.includes('link') ||
+                selector.includes('hull') ||
+                selector.includes('warning') ||
+                selector.includes('risk') ||
+                selector.includes('marker') ||
+                selector.includes('pipeline') ||
+                selector.includes('component-mini-card')
+              )) {
+                cssText += rule.cssText + '\n';
+              }
+            } else if (rule.type === CSSRule.KEYFRAMES_RULE) {
+              const name = (rule as CSSKeyframesRule).name;
+              if (name && (
+                name.includes('flow') ||
+                name.includes('dash') ||
+                name.includes('pulse')
+              )) {
+                cssText += rule.cssText + '\n';
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore CORS stylesheet errors
+        }
+      }
+    } catch (e) {
+      console.error('Error reading stylesheets:', e);
+    }
+    return cssText;
+  };
+
+  const exportGraph = (format: 'svg' | 'png') => {
+    try {
+      const svgEl = svgRef.current;
+      if (!svgEl) return;
+
+      const svgClone = svgEl.cloneNode(true) as SVGSVGElement;
+      if (!svgClone.getAttribute('xmlns')) {
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!svgClone.getAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      // Add CSS variables for the current theme
+      const computedStyle = getComputedStyle(document.body);
+      const variables = [
+        '--bg-main',
+        '--bg-glow',
+        '--bg-grid',
+        '--panel-bg',
+        '--panel-border',
+        '--panel-border-glow',
+        '--color-primary',
+        '--color-primary-glow',
+        '--color-secondary',
+        '--color-secondary-glow',
+        '--link-stroke',
+        '--text-primary',
+        '--text-secondary',
+        '--text-muted',
+        '--input-bg',
+        '--tabs-header-bg',
+        '--scrollbar-thumb'
+      ];
+      let cssVariables = ':root {\n';
+      variables.forEach(v => {
+        const val = computedStyle.getPropertyValue(v).trim();
+        if (val) {
+          cssVariables += `  ${v}: ${val};\n`;
+        }
+      });
+      cssVariables += '}\n';
+
+      // Inject style block
+      const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      styleEl.textContent = cssVariables + '\n' + getCanvasStyles();
+      svgClone.insertBefore(styleEl, svgClone.firstChild);
+
+      // Set dimensions
+      const width = svgEl.clientWidth || 800;
+      const height = svgEl.clientHeight || 600;
+      svgClone.setAttribute('width', String(width));
+      svgClone.setAttribute('height', String(height));
+      if (!svgClone.getAttribute('viewBox')) {
+        svgClone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      }
+
+      // Insert solid background behind everything
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', '100%');
+      bgRect.setAttribute('height', '100%');
+      bgRect.setAttribute('fill', computedStyle.getPropertyValue('--bg-main').trim() || '#060913');
+      if (svgClone.firstChild) {
+        svgClone.insertBefore(bgRect, svgClone.firstChild.nextSibling);
+      } else {
+        svgClone.appendChild(bgRect);
+      }
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
+
+      if (format === 'svg') {
+        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `codegraph-export-${viewMode}-${Date.now()}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showExportToast('Exported SVG successfully!');
+      } else {
+        const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const scale = 2; // For higher DPI/clarity
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.scale(scale, scale);
+              ctx.drawImage(img, 0, 0, width, height);
+              const pngUrl = canvas.toDataURL('image/png');
+              const a = document.createElement('a');
+              a.href = pngUrl;
+              a.download = `codegraph-export-${viewMode}-${Date.now()}.png`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              showExportToast('Exported PNG successfully!');
+            }
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error('PNG canvas export failed:', e);
+            URL.revokeObjectURL(url);
+            showExportToast('PNG Export failed. Standalone SVG is recommended.');
+          }
+        };
+        img.onerror = (err) => {
+          console.error('Image load failed for PNG export:', err);
+          URL.revokeObjectURL(url);
+          showExportToast('PNG Export failed due to load error.');
+        };
+        img.src = url;
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      showExportToast('Export failed.');
+    }
+  };
+
+  const showExportToast = (message: string) => {
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.background = 'var(--color-primary, #8b5cf6)';
+    toast.style.color = '#fff';
+    toast.style.padding = '8px 16px';
+    toast.style.borderRadius = '6px';
+    toast.style.fontSize = '0.75rem';
+    toast.style.fontWeight = 'bold';
+    toast.style.zIndex = '9999999';
+    toast.style.boxShadow = '0 0 15px rgba(139, 92, 246, 0.4)';
+    toast.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => document.body.removeChild(toast), 2500);
+  };
 
   const dbSchema = useMemo(() => {
     if (viewMode !== 'dbSchema') return { tables: [], relationships: [] };
@@ -3345,6 +3534,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         </button>
         <button className="control-btn" title="Reset View" onClick={(e) => { e.stopPropagation(); (window as any).graphZoom?.reset(); }}>
           <RotateCcw size={16} />
+        </button>
+        <button 
+          className="control-btn" 
+          style={{ width: 'auto', padding: '0 8px', gap: '4px' }} 
+          title="Export Graph as SVG" 
+          onClick={(e) => { e.stopPropagation(); exportGraph('svg'); }}
+        >
+          <Download size={14} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>SVG</span>
+        </button>
+        <button 
+          className="control-btn" 
+          style={{ width: 'auto', padding: '0 8px', gap: '4px' }} 
+          title="Export Graph as PNG" 
+          onClick={(e) => { e.stopPropagation(); exportGraph('png'); }}
+        >
+          <Download size={14} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>PNG</span>
         </button>
       </div>
 
