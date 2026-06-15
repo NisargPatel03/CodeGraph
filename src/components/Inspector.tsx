@@ -1155,7 +1155,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                               {githubMetadata.commitMessage && (
                                 <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px', marginTop: '2px' }}>
                                   <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Last Commit Message:</span>
-                                  <span style={{ fontStyle: 'italic', color: 'var(--text-secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={githubMetadata.commitMessage}>
+                                  <span style={{ fontStyle: 'italic', color: 'var(--text-secondary)', display: 'block', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }} title={githubMetadata.commitMessage}>
                                     "{githubMetadata.commitMessage}"
                                   </span>
                                 </div>
