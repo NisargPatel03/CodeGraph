@@ -1497,15 +1497,18 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         activeNodes = activeNodes.filter(n => n.isFolder || n.isNpm || (n.language && n.language.toLowerCase() === filterLanguage.toLowerCase()));
       }
       if (filterMinLoc > 0) {
-        // Average 40 characters per line of code
-        activeNodes = activeNodes.filter(n => n.isFolder || n.isNpm || !n.size || (n.size / 40) >= filterMinLoc);
+        activeNodes = activeNodes.filter(n => {
+          if (n.isFolder || n.isNpm) return true;
+          const loc = n.complexity !== undefined ? n.complexity : (n.size ? Math.ceil(n.size / 40) : 0);
+          return loc >= filterMinLoc;
+        });
       }
       if (filterFolderPath.trim() !== '') {
-        const cleanPath = filterFolderPath.trim().toLowerCase();
+        const cleanPath = filterFolderPath.trim().toLowerCase().replace(/\\/g, '/');
         activeNodes = activeNodes.filter(n => 
           n.isNpm || 
-          n.id.toLowerCase().includes(cleanPath) || 
-          (n.folder && n.folder.toLowerCase().includes(cleanPath))
+          n.id.toLowerCase().replace(/\\/g, '/').includes(cleanPath) || 
+          (n.folder && n.folder.toLowerCase().replace(/\\/g, '/').includes(cleanPath))
         );
       }
 
