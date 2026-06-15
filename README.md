@@ -42,6 +42,9 @@
   - [Recent Workspaces History](#12-recent-workspaces-history)
   - [AI Response Caching Layer](#13-ai-response-caching-layer)
   - [Real GitHub File Metadata HUD](#14-real-github-file-metadata-hud)
+  - [Dynamic Filter System](#15-dynamic-filter-system)
+  - [3D WebGL-Style Graph Canvas](#16-3d-webgl-style-graph-canvas)
+  - [AI Caching & Token Telemetry Dashboard](#17-ai-caching--token-telemetry-dashboard)
 - [Architecture](#architecture)
 - [Security & Privacy](#-security-privacy--error-handling)
 - [Contributing](#contributing)
@@ -179,6 +182,18 @@ Six built-in visual themes, switchable with an animated ripple effect:
 ### ⚡ D3 Performance Optimizations (Large Codebases)
 - **Synchronous Offline Simulation Warming** — Bypasses 60 FPS visual rendering cycles during initial chaotic layout settling on repositories with $>100$ files. Runs `100 - 180` force ticks synchronously in memory, instantly placing nodes in their stable coordinate configurations.
 - **Dynamic Quadtree Friction Tuning** — Lowers collision strength to `0.45` on large graphs ($>300$ nodes) to prevent bouncing oscillations and speed up simulation convergence.
+
+### 🎛️ Dynamic Graph Filter System
+- **Real-Time Graph Pruning** — A floating control panel allows developers to filter files/tables on the viewport by programming language (e.g. JavaScript, Python, Rust, Go), complexity size thresholds, or sub-folder directories.
+- **Physics Layout Re-Settling** — Applying filters automatically re-runs D3 simulations for the filtered subset, immediately settling layout coordinates without rendering frozen nodes.
+
+### 🎨 3D WebGL-Style Graph Canvas
+- **Native Canvas 3D Holomap** — Toggle the visualization from 2D SVG into a 3D perspective Canvas. Renders nodes as shiny 3D spheres with dynamic depth-sorting (Z-ordering) and links as light-faded pathways.
+- **Bioluminescent Particle Streams** — Animates data packets traversing link pathways in real-time.
+- **Interactive Orbit Controls** — Support for mouse-drag camera orbit rotation, mouse-wheel scroll zooming, and a slow-spin auto-rotation mode. Full synchronization with node hover and click-selection details.
+
+### ⚡ AI Cache Savings & Token Telemetry Dashboard
+- **Live Cache Diagnostics Panel** — A telemetry dashboard inside the Settings drawer displaying cache hit ratios, cumulative processed vs. saved tokens, and real-time developer financial cost/time savings metrics.
 
 ---
 
@@ -623,6 +638,44 @@ When a GitHub repository is loaded, CodeGraph replaces simulated metadata calcul
 - **Metadata Extraction:** Extracts the real author name, last modified date/time (formatted locally), and the last commit message.
 - **Exact Commit Counts:** Synchronously parses the `Link` headers of the commits API to discover the exact number of times the selected file has been changed in the repository's history.
 - **Fluid Layout Wrapper:** The commit message container utilizes standard CSS wrapping guidelines (`pre-wrap`/`break-word`) to prevent long descriptions from truncating.
+
+---
+
+### 15. Dynamic Filter System
+
+**File:** `src/components/GraphCanvas.tsx`
+
+The Dynamic Graph Filtering panel floats on the main viewport, providing real-time, interactive graph querying:
+- **Language Filtering:** Show/hide files based on their programming language extension (JavaScript, TypeScript, Python, Rust, Go, SQL, HTML, CSS).
+- **Complexity Size Thresholding:** A slider filter to hide small boilerplate files and focus only on complex source modules (complexity LOC metrics).
+- **Directory Path Scoping:** A folder query text filter that matches folder names (e.g. `/src/components` or `/utils`) to isolate specific subgraphs.
+- **Simulation Re-warm Integration:** Filter states are fully wired into D3's reactivity loops. Filtering immediately triggers D3 force layout adjustments, computing positions only for the active, visible subset of files or database tables.
+
+---
+
+### 16. 3D WebGL-Style Graph Canvas
+
+**File:** `src/components/GraphCanvas.tsx`
+
+A high-fidelity 3D visualization option built using lightweight, native HTML5 Canvas drawing loops rather than heavy Three.js dependencies:
+- **Perspective Projection Engine:** Implements 3D rotation matrices and perspective division mapping (`fov` ratio calculations) to translate three-dimensional coordinates `(x, y, z)` onto a flat 2D viewport.
+- **Z-Order Depth Sorting:** Sorts nodes and connection lines by Z-depth dynamically before drawing each frame, guaranteeing correct visual occlusion.
+- **Interactive Orbit Camera Controls:** Users can drag the canvas to rotate the graph on the X and Y axes, scroll the mouse wheel to scale zoom, and click nodes to open sidebar metrics.
+- **Auto-Rotation (Spin Mode):** Toggles a slow, orbital Y-axis rotation that showcases the network structure as a holographic visualizer.
+- **Glowing Sphere Shading:** Uses radial gradient fills to paint glowing sphere materials for nodes, with depth-faded line links.
+- **Real-time Flow Particles:** Animates bioluminescent packets of light that flow along connection pathways, indicating codebase execution routing.
+
+---
+
+### 17. AI Caching & Token Telemetry Dashboard
+
+**Files:** `src/components/RepoSelector.tsx` and `src/utils/aiHelper.ts`
+
+An analytical instrumentation dashboard embedded inside the Settings slide-out panel that displays real-time telemetry from the Gemini caching layer:
+- **Cache Hit Rate:** Visualizes the effectiveness of the caching layer as a percentage of queries served locally.
+- **Token Counters:** Displays cumulative tokens processed by Gemini versus total tokens saved (retrieved from cache hits). Token estimates are calculated using standard character-to-token multipliers.
+- **Financial Savings Estimate:** Translates saved tokens into US dollar estimates based on standard Gemini 3.5 API pricing models ($0.15 per million input tokens).
+- **Engineering Hours Saved:** Translates cache hits into time saved, based on a developer onboarding velocity estimate (approx. 2 minutes of comprehension time saved per AI request cache hit).
 
 ---
 
