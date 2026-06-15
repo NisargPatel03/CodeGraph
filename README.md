@@ -39,6 +39,9 @@
   - [Markdown & LaTeX Formatting Pipeline](#9-markdown--latex-formatting-pipeline)
   - [Command Palette & Keyboard Controls](#10-global-command-palette--keyboard-controls)
   - [Shareable URLs & Deep-Linking State](#11-shareable-urls--deep-linking-state)
+  - [Recent Workspaces History](#12-recent-workspaces-history)
+  - [AI Response Caching Layer](#13-ai-response-caching-layer)
+  - [Real GitHub File Metadata HUD](#14-real-github-file-metadata-hud)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -86,6 +89,7 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Code Preview** — Syntax-aware scrollable raw code block
 - **AI Code Summary** — One-click Gemini AI explanation of any selected file
 - **AI Test Suite Generator** — Generates a complete Jest/Vitest unit test suite for any file
+- **Real Git Metadata HUD** — Dynamically queries the GitHub API to render the file's last modified timestamp, author, last commit message (with multiline wrap), and exact total commit count (parsed from HTTP pagination headers). Gracefully falls back to size-based simulated commit estimates for ZIP/sandbox workspaces.
 
 ### 🤖 AI Code Intelligence Suite
 
@@ -146,6 +150,17 @@ Six built-in visual themes, switchable with an animated ripple effect:
 ### 🛠️ Live-Writable Workspace Editor
 - **In-Browser Inline Code Editing** — Edit any selected file directly in the file inspector sidebar.
 - **Dynamic Telemetry Recalculation** — Saving changes triggers the static analysis engine to instantly recalculate codebase metrics, import graphs, circular dependencies, and duplicate functions.
+
+### 🕒 Recent Workspaces History
+- **Persistent Tracking** — Automatically logs successful repository/workspace setups inside `localStorage.recent_repos_history`, storing the last 5 accessed workspaces.
+- **One-Click Loading** — Instantly fetches and reloads prior GitHub repositories and Demo Sandboxes.
+- **Glassmorphic History Cards** — Renders custom colored status badges (`GitHub`, `ZIP Archive`, `Demo Sandbox`), creation timestamps, and a "Clear History" button.
+- **Synchronous Write-Thru** — Bypasses React batch scheduling to immediately commit history data to disk on load, preventing unmount race conditions.
+
+### ⚡ AI Response Caching Layer
+- **Centralized In-Memory Caches** — Employs a cache lookup map utilizing a custom polynomial rolling hash key to prevent redundant Gemini API calls.
+- **Instant Stream Replay** — Instantly serves cached stream results chunk-by-chunk on cache hits to simulate typewriter responses with zero network delay.
+- **Comprehensive API Coverage** — Wraps all 12 promise-based AI methods and 5 streaming generators with token-saving caching guards.
 
 ### ⚙️ Glassmorphic Settings Console
 - **Gemini API Configuration** — Secure panel to configure the Google Gemini API key to activate advanced explanations, linter rules, test suites, and schema audit features.
@@ -571,6 +586,42 @@ CodeGraph supports full serialization of the application's visual configurations
   - **`view`**: Restores the active visualization pane (e.g., `dependency`, `cluster`, `call`, `dbSchema`, `apiDocs`, `analytics`).
   - **`node`, `search`, `trace`, `depth`, `theme`**: Restores the selected file path, search text, function trace ID, depth layout level, and interface color theme automatically on load.
 - **Glassmorphic Loading States**: Includes dedicated initialization screens that fetch resources via the GitHub REST API or load the local ZIP parser dynamically, rendering smooth loading transitions and error modals for broken parameters.
+
+---
+
+### 12. Recent Workspaces History
+
+**File:** `src/components/RepoSelector.tsx`
+
+To make returning to previous codebases fast and seamless, CodeGraph features a persistent workspace history tracker:
+- **Automatic Logging:** Successfully opening any codebase (via GitHub URL, ZIP dropzone, or sandbox button) logs it in `recent_repos_history` in `localStorage`.
+- **Intelligent Reload Logic:**
+  - **GitHub URL / Sandbox:** Instantly fires the API request or sets up mock models in a single click.
+  - **Local ZIP Archives:** Indicates that local files must be uploaded again (due to browser sandbox security policies) and presets input areas.
+- **Deduplication & Truncation:** Maintains exactly the 5 most recently loaded workspaces, sorting them chronologically and clearing older duplicates.
+
+---
+
+### 13. AI Response Caching Layer
+
+**File:** `src/utils/aiHelper.ts`
+
+To minimize API usage cost, prevent rate-limiting, and boost responsiveness, CodeGraph implements a high-performance in-memory caching system:
+- **Hash-Key Generation:** Utilizes a polynomial rolling hash function that produces distinct cache keys based on query context, file path, and active text content.
+- **Unified Cache Wrapping:** All 12 promise-based AI methods (e.g. `getFileExplanation`, `generateTestSuite`, `runDependencyAudit`, etc.) and all 5 async generator streaming methods are wrapped in cache-first logic.
+- **Streaming Caching:** When a streaming generator executes, the cache intercepts and collects the output chunks. On cache hits, the cached stream is instantaneously re-emitted chunk-by-chunk to maintain typing animations without hitting the network.
+
+---
+
+### 14. Real GitHub File Metadata HUD
+
+**File:** `src/components/Inspector.tsx`
+
+When a GitHub repository is loaded, CodeGraph replaces simulated metadata calculations with real, on-demand telemetry directly from the GitHub REST API:
+- **On-Demand Background Fetching:** When a node or file tree element is selected, the inspector fires a request using the user's optional Personal Access Token (PAT) to ensure high rate limits.
+- **Metadata Extraction:** Extracts the real author name, last modified date/time (formatted locally), and the last commit message.
+- **Exact Commit Counts:** Synchronously parses the `Link` headers of the commits API to discover the exact number of times the selected file has been changed in the repository's history.
+- **Fluid Layout Wrapper:** The commit message container utilizes standard CSS wrapping guidelines (`pre-wrap`/`break-word`) to prevent long descriptions from truncating.
 
 ---
 
