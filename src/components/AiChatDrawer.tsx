@@ -359,7 +359,17 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
       >
         {messages.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '16px', textAlign: 'center', opacity: 0.8 }}>
-            <MessageSquare size={36} style={{ color: 'var(--color-primary)', opacity: 0.6 }} />
+            <img 
+              src="/ai-logo.png" 
+              alt="CodeGraph AI Logo" 
+              style={{ 
+                width: '64px', 
+                height: '64px', 
+                borderRadius: '12px', 
+                boxShadow: '0 0 16px var(--color-primary-glow)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }} 
+            />
             <div>
               <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '4px' }}>Ask me about the codebase</h4>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', maxWidth: '240px', lineHeight: '1.4' }}>

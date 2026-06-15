@@ -1300,6 +1300,26 @@ export default function App() {
               </button>
             </div>
             
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--panel-border)', marginTop: '16px' }}>
+              <img 
+                src="/ai-logo.png" 
+                alt="CodeGraph AI Logo" 
+                style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: '10px', 
+                  boxShadow: '0 0 16px var(--color-primary-glow)',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }} 
+              />
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>CodeGraph Gemini Intelligence</h4>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  Unlocks codebase Q&A, custom lint rules, schema contract drift analysis, and automated unit test generators.
+                </p>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Gemini API Key</label>
               <input
