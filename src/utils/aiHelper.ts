@@ -28,6 +28,30 @@ export function isValidApiKey(key: string): boolean {
   return key.trim().length > 10;
 }
 
+export function formatGeminiError(error: any): string {
+  const msg = error?.message || String(error);
+  if (msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resourceexhausted') || msg.toLowerCase().includes('rate limit')) {
+    return `### ⚠️ Gemini API Rate Limit Exceeded (429)
+The Google Gemini API quota/rate limit has been exceeded.
+
+**Recommendations:**
+* Please wait 1-2 minutes for the rate limit window to reset.
+* Consider configuring a higher-tier paid API key or utilizing a different key in the Settings panel.`;
+  }
+  if (msg.includes('API_KEY_INVALID') || msg.toLowerCase().includes('key not found') || msg.toLowerCase().includes('invalid api key')) {
+    return `### ⚠️ Invalid Gemini API Key
+The API key configured in the settings or environment is invalid or unauthorized.
+
+**Recommendations:**
+* Click the ⚙️ Settings icon in the top header and verify your API key is correct.
+* Get a valid key from Google AI Studio ([ai.google.dev](https://ai.google.dev/)).`;
+  }
+  return `### ⚠️ AI Processing Failed
+Failed to fetch response from Gemini.
+
+**Details:** ${msg}`;
+}
+
 // Generate file description fallback mock
 function getMockFileExplanation(filePath: string): string {
   const name = filePath.split('/').pop() || '';
@@ -77,8 +101,7 @@ ${fileContent.substring(0, 15000)}
     return text;
   } catch (error: any) {
     console.error('Gemini API Error:', error);
-    return `### ⚠️ AI Processing Failed
-Failed to fetch explanation from Gemini. Error: ${error.message || error}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -116,7 +139,7 @@ ${JSON.stringify(filesSummary.slice(0, 100), null, 2)}`;
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ Failed to Generate Onboarding Guide\nError: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -161,7 +184,7 @@ ${JSON.stringify(filesSummary.slice(0, 100), null, 2)}`;
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ Failed to Generate Architecture Overview\nError: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -217,7 +240,7 @@ Provide a detailed, helpful developer response. If you don't know the answer or 
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `⚠️ Chat request failed. Error: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -274,8 +297,7 @@ Your response MUST include:
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ AI Refactoring Failed
-Error: ${error.message || error}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -329,8 +351,7 @@ Provide a professional test suite. Explain your choices briefly at the start of 
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ Failed to Generate Test Suite
-Error: ${error.message || error}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -519,7 +540,7 @@ Example JSON output structure:
     return [];
   } catch (error: any) {
     console.error('Semantic search error:', error);
-    throw error;
+    throw new Error(formatGeminiError(error));
   }
 }
 
@@ -680,7 +701,7 @@ Example Output structure:
     return violation;
   } catch (error: any) {
     console.error('Linter API Error:', error);
-    throw new Error(`Failed to evaluate architecture rule: ${error.message || error}`);
+    throw new Error(formatGeminiError(error));
   }
 }
 
@@ -1299,8 +1320,7 @@ Ensure you use:
     return text;
   } catch (error: any) {
     console.error('Gemini DB Audit Error:', error);
-    return `## ⚠️ AI DB Audit Failed
-Failed to fetch database audit report from Gemini. Error: ${error.message || error}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -1358,7 +1378,7 @@ Use GitHub-style alerts (> [!TIP], > [!WARNING]) to highlight key design guideli
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ AI Processing Failed\nFailed to explain folder. Error: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -1414,7 +1434,7 @@ Use beautiful Markdown and clear code blocks.`;
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ Refactoring Analysis Failed\nError: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -1459,7 +1479,7 @@ Format in beautiful markdown.`;
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ Restructure Audit Failed\nError: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -1513,7 +1533,7 @@ Provide an audit report in markdown listing any warning/tip alerts.`;
     aiCache.set(cacheKey, text);
     return text;
   } catch (error: any) {
-    return `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
+    return formatGeminiError(error);
   }
 }
 
@@ -1585,7 +1605,7 @@ Provide a detailed, helpful developer response. Highlight code files and folder 
     aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
-    const errMsg = `### ⚠️ AI Processing Failed\nFailed to fetch stream from Gemini: ${error.message || error}`;
+    const errMsg = formatGeminiError(error);
     onChunk(errMsg);
     return errMsg;
   }
@@ -1644,7 +1664,7 @@ Provide a beautiful, clear architecture report in markdown explaining the main p
     aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
-    const errMsg = `### ⚠️ Explanation Failed\nError: ${error.message || error}`;
+    const errMsg = formatGeminiError(error);
     onChunk(errMsg);
     return errMsg;
   }
@@ -1704,7 +1724,7 @@ Provide a detailed refactoring suggestion report in markdown. Outline:
     aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
-    const errMsg = `### ⚠️ Refactoring Analysis Failed\nError: ${error.message || error}`;
+    const errMsg = formatGeminiError(error);
     onChunk(errMsg);
     return errMsg;
   }
@@ -1767,7 +1787,7 @@ Structure your response in Markdown, highlighting the new proposed tree layout i
     aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
-    const errMsg = `### ⚠️ Restructure Suggestion Failed\nError: ${error.message || error}`;
+    const errMsg = formatGeminiError(error);
     onChunk(errMsg);
     return errMsg;
   }
@@ -1837,7 +1857,7 @@ Provide an audit report in markdown listing any warning/tip alerts.`;
     aiCache.set(cacheKey, fullText);
     return fullText;
   } catch (error: any) {
-    const errMsg = `### ⚠️ API-to-Database Audit Failed\nError: ${error.message}`;
+    const errMsg = formatGeminiError(error);
     onChunk(errMsg);
     return errMsg;
   }

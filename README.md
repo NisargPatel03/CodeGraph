@@ -43,6 +43,7 @@
   - [AI Response Caching Layer](#13-ai-response-caching-layer)
   - [Real GitHub File Metadata HUD](#14-real-github-file-metadata-hud)
 - [Architecture](#architecture)
+- [Security & Privacy](#-security-privacy--error-handling)
 - [Contributing](#contributing)
 
 ---
@@ -680,6 +681,42 @@ When a GitHub repository is loaded, CodeGraph replaces simulated metadata calcul
 5. **AI Augmentation** — Any AI action calls `aiHelper.ts` which talks to Gemini and returns Markdown. This includes file explanations, test suites, refactoring, semantic search, architecture linting, dependency auditing, and API route extraction.
 6. **API Documentation** — `ApiDocsPortal` uses `aiExtractEndpoints` to scan for REST routes and presents an interactive documentation workspace with live request testing
 7. **Rendering** — All AI responses are rendered by a shared `formatMarkdown()` utility that produces syntax-highlighted code blocks with copy buttons
+
+---
+
+## 🔒 Security, Privacy & Error Handling
+
+CodeGraph is engineered with a strict client-side architecture to safeguard proprietary codebases, secure configuration keys, and deliver clean, descriptive error states.
+
+### 1. Proprietary Code Privacy
+- **Direct-to-Endpoint Communications:** All source code parsing and structural graph indexing happen **entirely in your local browser sandbox**.
+- **No Third-Party Intermediaries:** There are no backend database servers or server-side relays intercepting your files.
+- **AI Requests Scope:** CodeGraph only sends file summaries (names, sizes, languages) or isolated active file contents (limited to 15,000 characters) directly to the Google Gemini API (via `https://generativelanguage.googleapis.com`) when you explicitly request AI explanations, test suites, or reports.
+
+### 2. Token & API Key Protection
+- **Local Browser Persistence:** Your Gemini API Key and GitHub Personal Access Token (PAT) are stored exclusively in the browser's local sandbox (`localStorage`).
+- **Zero Remote Exfiltration:** CodeGraph never transmits your keys or tokens to any external servers other than the official Google Gemini and GitHub endpoints.
+- **Token Best Practices:** When loading private repositories, we recommend using scope-restricted GitHub Personal Access Tokens (classic PAT with only `repo` read permission or fine-grained token with read-only contents access).
+
+### 3. Content Security Policy (CSP)
+To prevent unauthorized script execution and guard against data exfiltration, the app enforces a strict Content Security Policy meta-tag inside `index.html`:
+```html
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: https: blob:;
+  connect-src 'self' https://api.github.com https://generativelanguage.googleapis.com;
+" />
+```
+This restricts outbound network calls exclusively to local assets, Google Fonts, GitHub API, and Google's Gemini API endpoints.
+
+### 4. Quota Limits & Rate Limit Error Handling
+- **Dynamic Error Decoders:** If your Gemini API Key experiences a connection error, CodeGraph catches it and formats it into user-friendly markdown notices:
+  - **Rate Limit (429 ResourceExhausted):** Recognizes rate limits and displays a custom warnings banner containing recommendations to wait 1-2 minutes or switch API keys.
+  - **Invalid Key (API_KEY_INVALID):** Alerts the user if the key configured in the settings panel is invalid, providing direct links to get a new key from Google AI Studio.
+- **Offline Fallbacks:** All features—such as Dependency Risk Auditing, Database Schema Audits, API route detection, and onboarding summaries—automatically revert to robust static offline analysis if the API key is missing or quota is exhausted.
 
 ---
 
