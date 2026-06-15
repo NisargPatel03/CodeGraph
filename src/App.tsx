@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2 } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2, Activity } from 'lucide-react';
 import JSZip from 'jszip';
 import type { ParsedFile } from './utils/repoParser';
 import { fetchGitHubRepo } from './utils/repoParser';
@@ -20,7 +20,8 @@ import {
   lintCodebaseRules, 
   runDependencyAudit,
   explainEntireFolderStream,
-  suggestCrossFileRefactorStream
+  suggestCrossFileRefactorStream,
+  getCacheTelemetry
 } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
@@ -110,6 +111,13 @@ export default function App() {
   const [isLinting, setIsLinting] = useState(false);
   const [linterError, setLinterError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [telemetry, setTelemetry] = useState(() => getCacheTelemetry());
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setTelemetry(getCacheTelemetry());
+    }
+  }, [isSettingsOpen]);
 
   const handleRunLinter = async (rule: string) => {
     if (!repoData || !graphData) return;
@@ -1349,6 +1357,59 @@ export default function App() {
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
                 The application reads the Gemini API Key securely from the build environment variables (`VITE_GEMINI_API_KEY`). Users cannot view, modify, or extract the key from this settings screen.
               </p>
+            </div>
+
+            {/* AI Cache & Token Telemetry Dashboard */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '0.8rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <Activity size={14} />
+                AI Cache & Token Telemetry
+              </h4>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                {/* Cache Hit Rate */}
+                <div className="glass-panel" style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)' }}>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Cache Hit Rate</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--color-secondary)' }}>{telemetry.hitRate}%</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>({telemetry.cacheHits} / {telemetry.totalRequests} reqs)</span>
+                  </div>
+                </div>
+
+                {/* Dev Savings */}
+                <div className="glass-panel" style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)' }}>
+                  <span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dev Time Saved</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>~{telemetry.timeSavedMinutes}m</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>(${telemetry.costSaved.toFixed(4)} saved)</span>
+                  </div>
+                </div>
+
+                {/* Tokens Saved */}
+                <div className="glass-panel" style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', gridColumn: 'span 2' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    <span>Tokens Processed vs Saved</span>
+                    <span style={{ color: 'var(--color-primary)' }}>{(telemetry.savedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1) * 100).toFixed(0)}% Offloaded</span>
+                  </div>
+                  
+                  {/* Progress bar visual */}
+                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', marginTop: '8px', overflow: 'hidden', display: 'flex' }}>
+                    <div style={{ 
+                      width: `${(telemetry.processedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`, 
+                      background: 'var(--color-primary)' 
+                    }} />
+                    <div style={{ 
+                      width: `${(telemetry.savedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`, 
+                      background: '#10b981' 
+                    }} />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.65rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Processed: <strong>{telemetry.processedTokens.toLocaleString()}</strong></span>
+                    <span style={{ color: 'var(--text-secondary)' }}>Saved (Cached): <strong style={{ color: '#10b981' }}>{telemetry.savedTokens.toLocaleString()}</strong></span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
