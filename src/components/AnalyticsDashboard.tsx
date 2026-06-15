@@ -432,9 +432,9 @@ const RiskQuadrantChart: React.FC<{
     .sort((a, b) => b.riskScore - a.riskScore)
     .slice(0, 5);
 
-  const svgWidth = 550;
-  const svgHeight = 320;
-  const padding = { top: 25, right: 25, bottom: 45, left: 55 };
+  const svgWidth = 850;
+  const svgHeight = 350;
+  const padding = { top: 30, right: 30, bottom: 45, left: 60 };
 
   const chartWidth = svgWidth - padding.left - padding.right;
   const chartHeight = svgHeight - padding.top - padding.bottom;
@@ -452,20 +452,33 @@ const RiskQuadrantChart: React.FC<{
   const xThreshold = padding.left + (avgSqrtComp / maxSqrtComp) * chartWidth;
   const yThreshold = padding.top + chartHeight - (avgChurn / maxChurn) * chartHeight;
 
+  // Tooltip dynamic transform alignments to prevent edge clipping
+  const xRatio = tooltipPos.x / svgWidth;
+  const yRatio = tooltipPos.y / svgHeight;
+  
+  let transformX = '-50%';
+  if (xRatio < 0.2) transformX = '10px';
+  else if (xRatio > 0.8) transformX = 'calc(-100% - 10px)';
+
+  let transformY = '-110%';
+  if (yRatio < 0.15) transformY = '15px';
+
   return (
-    <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-        <Activity size={15} style={{ color: 'var(--color-alert)' }} />
-        Churn vs. Complexity: Risk Quadrants
-      </h4>
-      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
-        This quadrant plot identifies architectural hotspots. Files in the **Top-Right (High Churn + High Complexity)** quadrant represent high-maintenance code debt.
-      </p>
+    <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div>
+        <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <Activity size={15} style={{ color: 'var(--color-alert)' }} />
+          Churn vs. Complexity: Risk Quadrants
+        </h4>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+          This quadrant plot identifies architectural hotspots. Files in the **Top-Right (High Churn + High Complexity)** quadrant represent high-maintenance code debt.
+        </p>
+      </div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', marginTop: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
-        {/* Left column: Interactive SVG Scatter Plot */}
-        <div style={{ position: 'relative', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', border: '1px solid var(--panel-border)', overflow: 'hidden' }}>
+        {/* Full-Width: Interactive SVG Scatter Plot */}
+        <div style={{ position: 'relative', background: 'rgba(0,0,0,0.15)', borderRadius: '8px', border: '1px solid var(--panel-border)', overflow: 'visible' }}>
           <svg 
             viewBox={`0 0 ${svgWidth} ${svgHeight}`} 
             style={{ width: '100%', height: 'auto', display: 'block' }}
@@ -474,8 +487,8 @@ const RiskQuadrantChart: React.FC<{
               const scaleX = svgWidth / rect.width;
               const scaleY = svgHeight / rect.height;
               setTooltipPos({
-                x: (e.clientX - rect.left) * scaleX + 12,
-                y: (e.clientY - rect.top) * scaleY - 12
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
               });
             }}
             onMouseLeave={() => setHoveredNode(null)}
@@ -551,10 +564,10 @@ const RiskQuadrantChart: React.FC<{
             />
 
             {/* Quadrant Labels */}
-            <text x={padding.left + 10} y={padding.top + 18} fill="#a855f7" fontSize="9" fontWeight="600" opacity="0.8">🔄 Frequent Churn</text>
-            <text x={svgWidth - padding.right - 10} y={padding.top + 18} fill="#ef4444" fontSize="9" fontWeight="600" textAnchor="end" opacity="0.8">⚠️ Hotspots</text>
-            <text x={padding.left + 10} y={svgHeight - padding.bottom - 10} fill="#10b981" fontSize="9" fontWeight="600" opacity="0.8">✅ Stable & Simple</text>
-            <text x={svgWidth - padding.right - 10} y={svgHeight - padding.bottom - 10} fill="#f97316" fontSize="9" fontWeight="600" textAnchor="end" opacity="0.8">📦 Complex Core</text>
+            <text x={padding.left + 12} y={padding.top + 20} fill="#a855f7" fontSize="10" fontWeight="600" opacity="0.8">🔄 Frequent Churn</text>
+            <text x={svgWidth - padding.right - 12} y={padding.top + 20} fill="#ef4444" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.8">⚠️ Hotspots</text>
+            <text x={padding.left + 12} y={svgHeight - padding.bottom - 12} fill="#10b981" fontSize="10" fontWeight="600" opacity="0.8">✅ Stable & Simple</text>
+            <text x={svgWidth - padding.right - 12} y={svgHeight - padding.bottom - 12} fill="#f97316" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.8">📦 Complex Core</text>
 
             {/* Axes Ticks and Labels */}
             {/* X-Axis: Complexity (LOC) */}
@@ -563,13 +576,13 @@ const RiskQuadrantChart: React.FC<{
             </text>
             {/* Y-Axis: Churn (Commits) */}
             <text 
-              x={14} 
+              x={16} 
               y={padding.top + chartHeight / 2} 
               fill="var(--text-muted)" 
               fontSize="9" 
               textAnchor="middle" 
               fontWeight="500"
-              transform={`rotate(-90, 14, ${padding.top + chartHeight / 2})`}
+              transform={`rotate(-90, 16, ${padding.top + chartHeight / 2})`}
             >
               Churn (Commit Count)
             </text>
@@ -628,7 +641,7 @@ const RiskQuadrantChart: React.FC<{
                 position: 'absolute',
                 left: `${(tooltipPos.x / svgWidth) * 100}%`,
                 top: `${(tooltipPos.y / svgHeight) * 100}%`,
-                transform: 'translate(-20%, -110%)',
+                transform: `translate(${transformX}, ${transformY})`,
                 background: 'rgba(10, 10, 15, 0.95)',
                 border: '1px solid var(--panel-border)',
                 borderRadius: '6px',
@@ -638,7 +651,8 @@ const RiskQuadrantChart: React.FC<{
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
                 pointerEvents: 'none',
                 whiteSpace: 'nowrap',
-                zIndex: 10
+                zIndex: 10,
+                transition: 'transform 0.05s ease-out'
               }}
             >
               <div style={{ fontWeight: 600, color: 'var(--color-primary)', marginBottom: '3px' }}>
@@ -655,20 +669,20 @@ const RiskQuadrantChart: React.FC<{
           )}
         </div>
 
-        {/* Right column: Top 5 Hotspots Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Bottom Panel: Top 5 Hotspots Panel laid out horizontally */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px dashed var(--panel-border)', paddingTop: '16px' }}>
           <h5 style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', margin: 0, letterSpacing: '0.05em' }}>
             Top Refactoring Hotspots (Debt)
           </h5>
           
           {hotspots.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--panel-border)', borderRadius: '8px', padding: '16px', background: 'rgba(255,255,255,0.01)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+            <div style={{ border: '1px dashed var(--panel-border)', borderRadius: '8px', padding: '16px', background: 'rgba(255,255,255,0.01)', textAlign: 'center' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 No files in the high-risk quadrant! Codebase is stable.
               </span>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
               {hotspots.map((item, idx) => (
                 <div
                   key={item.node.id}
@@ -698,7 +712,7 @@ const RiskQuadrantChart: React.FC<{
                       #{idx + 1} {item.node.name}
                     </span>
                     <span style={{ fontSize: '0.65rem', padding: '1px 6px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', borderRadius: '4px', fontWeight: 600 }}>
-                      Risk Index: {item.riskScore}
+                      Risk: {item.riskScore}
                     </span>
                   </div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
