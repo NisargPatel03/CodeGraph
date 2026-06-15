@@ -4,6 +4,7 @@ import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebaseStream, generateTestSuite } from '../utils/aiHelper';
 import type { LinterViolation, AuditReport } from '../utils/aiHelper';
+import Editor from '@monaco-editor/react';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -327,6 +328,48 @@ interface InspectorProps {
   repoName: string;
 }
 
+const getEditorLanguage = (filePath: string): string => {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'js':
+    case 'jsx':
+      return 'javascript';
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'py':
+      return 'python';
+    case 'json':
+      return 'json';
+    case 'html':
+      return 'html';
+    case 'css':
+      return 'css';
+    case 'sql':
+      return 'sql';
+    case 'md':
+      return 'markdown';
+    case 'rs':
+      return 'rust';
+    case 'go':
+      return 'go';
+    case 'sh':
+      return 'shell';
+    case 'yml':
+    case 'yaml':
+      return 'yaml';
+    case 'java':
+      return 'java';
+    case 'cpp':
+    case 'h':
+    case 'hpp':
+    case 'cc':
+      return 'cpp';
+    default:
+      return 'plaintext';
+  }
+};
+
 export const Inspector: React.FC<InspectorProps> = ({
   selectedFile,
   allFiles,
@@ -475,6 +518,35 @@ export const Inspector: React.FC<InspectorProps> = ({
     similar: false
   });
   const codePreviewRef = useRef<HTMLPreElement>(null);
+  const editorRef = useRef<any>(null);
+
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    editorRef.current = editor;
+
+    // Define a custom cyber theme matching CodeGraph
+    monaco.editor.defineTheme('cyberglow', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '64748b', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '6366f1', fontStyle: 'bold' },
+        { token: 'string', foreground: '10b981' },
+        { token: 'number', foreground: 'f59e0b' },
+        { token: 'regexp', foreground: 'ec4899' },
+        { token: 'type', foreground: 'a855f7' },
+      ],
+      colors: {
+        'editor.background': '#09090e',
+        'editor.foreground': '#f1f5f9',
+        'editorLineNumber.foreground': '#475569',
+        'editorLineNumber.activeForeground': '#6366f1',
+        'editor.lineHighlightBackground': '#1e1b4b33',
+        'editor.selectionBackground': '#6366f133',
+        'editorCursor.foreground': '#6366f1',
+      }
+    });
+    monaco.editor.setTheme('cyberglow');
+  };
 
   // Writable Workspace Editor States
   const [isEditingCode, setIsEditingCode] = useState(false);
@@ -615,6 +687,15 @@ export const Inspector: React.FC<InspectorProps> = ({
   };
 
   const scrollToLine = (line: number) => {
+    if (editorRef.current) {
+      editorRef.current.revealLineInCenter(line);
+      editorRef.current.setPosition({ lineNumber: line, column: 1 });
+      editorRef.current.focus();
+      setToastMessage(`Navigated to line ${line}`);
+      setTimeout(() => setToastMessage(null), 1500);
+      return;
+    }
+
     const element = codePreviewRef.current;
     if (!element) return;
     const lines = selectedFile ? selectedFile.content.split('\n') : [];
@@ -1516,30 +1597,43 @@ export const Inspector: React.FC<InspectorProps> = ({
                       </div>
                     )}
                   </div>
-                  {isEditingCode ? (
-                    <textarea
-                      className="cyber-input"
-                      value={editedCode}
-                      onChange={(e) => setEditedCode(e.target.value)}
-                      style={{
-                        width: '100%',
-                        height: '250px',
-                        padding: '12px',
-                        background: 'rgba(0,0,0,0.5)',
-                        border: '1px solid var(--color-primary)',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-primary)',
+                  <div style={{
+                    width: '100%',
+                    height: '350px',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    background: '#09090e',
+                    marginTop: '8px'
+                  }}>
+                    <Editor
+                      height="100%"
+                      theme="cyberglow"
+                      language={getEditorLanguage(selectedFile.path)}
+                      value={isEditingCode ? editedCode : selectedFile.content}
+                      options={{
+                        readOnly: !isEditingCode,
+                        minimap: { enabled: true },
+                        wordWrap: 'on',
+                        fontSize: 12,
                         fontFamily: 'var(--font-mono)',
-                        resize: 'vertical',
-                        boxSizing: 'border-box'
+                        lineNumbers: 'on',
+                        automaticLayout: true,
+                        scrollbar: {
+                          vertical: 'visible',
+                          horizontal: 'visible',
+                        },
+                        cursorBlinking: 'smooth',
+                        cursorSmoothCaretAnimation: 'on',
                       }}
+                      onChange={(value) => {
+                        if (isEditingCode && value !== undefined) {
+                          setEditedCode(value);
+                        }
+                      }}
+                      onMount={handleEditorDidMount}
                     />
-                  ) : (
-                    <pre ref={codePreviewRef} style={{ margin: 0, padding: '12px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--panel-border)', borderRadius: '6px', overflowX: 'auto', maxHeight: '250px', fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                      {selectedFile.content}
-                    </pre>
-                  )}
+                  </div>
                 </div>
               </>
             )}

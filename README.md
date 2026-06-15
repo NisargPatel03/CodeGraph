@@ -153,8 +153,10 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Action Shortcuts** — Trigger dependency risk audits, database schema audits, cycle application themes (`Alt + T`), or toggle the AI Chat Assistant (`Alt + A`) instantly.
 - **Full Keyboard Accessibility** — Move selection with arrow keys, activate commands with Enter, and dismiss with Escape.
 
-### 🛠️ Live-Writable Workspace Editor
-- **In-Browser Inline Code Editing** — Edit any selected file directly in the file inspector sidebar.
+### 🛠️ Live-Writable Monaco IDE Editor
+- **Embedded Monaco Engine** — Houses a fully-featured Monaco Editor (powering VS Code) directly in the sidebar for code previewing and editing.
+- **Precision Line Navigation** — Clicking any parsed function or code smell scrolls, highlights, and places the cursor on the exact line dynamically.
+- **In-Browser Inline Code Editing** — Edit any selected file directly in the editor and click **Save** to commit changes to the workspace memory.
 - **Dynamic Telemetry Recalculation** — Saving changes triggers the static analysis engine to instantly recalculate codebase metrics, import graphs, circular dependencies, and duplicate functions.
 
 ### 🕒 Recent Workspaces History
@@ -380,8 +382,10 @@ To support codebases exceeding 500+ files without lagging or crashing the browse
 
 A right-sidebar panel that activates when a file node or folder node is selected in the graph or file tree.
 
-#### Writable Workspace & Inline Code Editor
-- **Inline Code Editor** — Switch from read-only mode to full editor mode in the **Code Preview** section. Edit file content directly in the browser and click **Save** to update.
+#### Writable Workspace & Inline Monaco Editor
+- **Monaco Editor Integration** — High-fidelity Monaco Editor instance handles syntax highlighting, code folding, scrollbar maps, and VS Code keyboard shortcuts.
+- **Precision Scrolling** — Clicking any function in the accordion list immediately centers the editor onto the declaration line and positions the cursor.
+- **In-Browser Inline Code Editing** — Switch from read-only mode to full editor mode. Edit file content directly in the browser and click **Save** to update.
 - **Live Graph Updates** — Saving code updates the repository state in the parent workspace, which automatically re-runs the static analysis pipeline, updating dependency edges, function listings, and quality metrics instantly.
 
 #### Branch / PR Diff Mode
@@ -397,13 +401,13 @@ When a branch comparison is active and a modified node is selected, the inspecto
 | **File Metadata** | Path, size, language, complexity score, estimated commit count |
 | **Quick Actions** | Copy path, Open in VS Code (via `vscode://file/` URI scheme) |
 | **Circular Dependency Alert** | Red banner if the file participates in any detected cycle |
-| **Functions** | Parsed function list (name + line number), clickable to scroll code preview |
+| **Functions** | Parsed function list (name + line number), clickable to scroll/focus code editor |
 | **Who Calls This File** | Reverse dependency list — which files import this one |
 | **Similar Files** | Top 3 files scored by language, folder proximity, and shared imports |
 | **Imports** | List of all resolved import paths from this file |
 | **AI Code Summary** | Gemini-powered plain-English explanation of the file |
 | **AI Test Suite** | Gemini-generated complete Jest/Vitest unit test file |
-| **Code Preview & Editor** | Scrollable raw code block with inline text editor support |
+| **Code Preview & Editor** | High-fidelity Monaco Editor panel with inline edit and save triggers |
 
 ---
 
