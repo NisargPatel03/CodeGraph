@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2 } from 'lucide-react';
 import JSZip from 'jszip';
 import type { ParsedFile } from './utils/repoParser';
+import { fetchGitHubRepo } from './utils/repoParser';
 import { analyzeCodebase } from './utils/codeAnalyzer';
 import type { CodebaseGraph } from './utils/codeAnalyzer';
-import { RepoSelector } from './components/RepoSelector';
+import { RepoSelector, GET_DEMO_FILES } from './components/RepoSelector';
 import { GraphCanvas } from './components/GraphCanvas';
 import { Inspector } from './components/Inspector';
 import { AiChatDrawer } from './components/AiChatDrawer';
@@ -33,8 +34,12 @@ interface FileTreeItem {
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('app_theme');
+    const queryParams = new URLSearchParams(window.location.search);
+    const urlTheme = queryParams.get('theme');
     const validThemes = ['cyberpunk', 'midnight-green', 'solar-amber', 'arctic-light', 'rose-gold', 'synthwave'];
+    if (urlTheme && validThemes.includes(urlTheme)) return urlTheme;
+
+    const saved = localStorage.getItem('app_theme');
     if (saved && validThemes.includes(saved)) return saved;
     return 'cyberpunk';
   });
@@ -48,20 +53,44 @@ export default function App() {
     commits?: import('./utils/repoParser').GitHubCommitInfo[];
   } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'docs' | 'dbSchema'>('dependency');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    return queryParams.get('node');
+  });
+  const [viewMode, setViewMode] = useState<'dependency' | 'cluster' | 'call' | 'hierarchy' | 'analytics' | 'docs' | 'dbSchema'>(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const view = queryParams.get('view');
+    const validViews = ['dependency', 'cluster', 'call', 'hierarchy', 'analytics', 'docs', 'dbSchema'];
+    if (view && validViews.includes(view)) return view as any;
+    return 'dependency';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    return queryParams.get('search') || '';
+  });
   const [diffData, setDiffData] = useState<any | null>(null);
   const [semanticSearchResults, setSemanticSearchResults] = useState<SemanticSearchResult[] | null>(null);
   const [isSearchingSemantically, setIsSearchingSemantically] = useState(false);
   const [semanticSearchError, setSemanticSearchError] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ 'root': true });
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-  const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(null);
-  const [depthFilter, setDepthFilter] = useState<number>(-1); // -1 means All/no limit
+  const [activeTraceNodeId, setActiveTraceNodeId] = useState<string | null>(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    return queryParams.get('trace');
+  });
+  const [depthFilter, setDepthFilter] = useState<number>(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const depth = queryParams.get('depth');
+    return depth ? parseInt(depth, 10) : -1;
+  }); // -1 means All/no limit
   const [isEvolutionMode, setIsEvolutionMode] = useState(false);
   const [currentEvolutionStep, setCurrentEvolutionStep] = useState(0);
   const [dbAuditTrigger, setDbAuditTrigger] = useState(0);
+
+  // URL Import/Share states
+  const [isLoadingRepo, setIsLoadingRepo] = useState(false);
+  const [repoLoadError, setRepoLoadError] = useState<string | null>(null);
+  const isInitialUrlLoadRef = useRef(true);
 
   // Multi-File AI Analysis States
   const [isMultiSelectActive, setIsMultiSelectActive] = useState(false);
@@ -155,6 +184,118 @@ export default function App() {
 
   const lastRepoNameRef = useRef<string | null>(null);
 
+  // Fetch shareable repo on mount
+  useEffect(() => {
+    const fetchSharedRepo = async () => {
+      const queryParams = new URLSearchParams(window.location.search);
+      const repo = queryParams.get('repo');
+      if (!repo) return;
+
+      setIsLoadingRepo(true);
+      setRepoLoadError(null);
+      try {
+        if (repo === 'demo' || repo === 'CodeGraph-Demo-Project') {
+          // Load demo files
+          setRepoData({
+            files: GET_DEMO_FILES(),
+            repoName: 'CodeGraph-Demo-Project'
+          });
+        } else {
+          // Fetch GitHub repo
+          const token = localStorage.getItem('gh_token') || '';
+          const result = await fetchGitHubRepo(repo, token);
+          setRepoData(result);
+        }
+      } catch (err: any) {
+        console.error('Failed to load shared workspace:', err);
+        setRepoLoadError(err.message || 'An error occurred while loading the shared repository.');
+      } finally {
+        setIsLoadingRepo(false);
+      }
+    };
+
+    fetchSharedRepo();
+  }, []);
+
+  // Sync state changes back to URL
+  useEffect(() => {
+    if (isLoadingRepo) return;
+
+    const queryParams = new URLSearchParams(window.location.search);
+
+    if (repoData) {
+      queryParams.set('repo', repoData.repoName);
+      queryParams.set('view', viewMode);
+
+      if (selectedNodeId) {
+        queryParams.set('node', selectedNodeId);
+      } else {
+        queryParams.delete('node');
+      }
+
+      if (searchQuery) {
+        queryParams.set('search', searchQuery);
+      } else {
+        queryParams.delete('search');
+      }
+
+      if (activeTraceNodeId) {
+        queryParams.set('trace', activeTraceNodeId);
+      } else {
+        queryParams.delete('trace');
+      }
+
+      if (depthFilter !== -1) {
+        queryParams.set('depth', String(depthFilter));
+      } else {
+        queryParams.delete('depth');
+      }
+      
+      queryParams.set('theme', theme);
+    } else {
+      queryParams.delete('repo');
+      queryParams.delete('view');
+      queryParams.delete('node');
+      queryParams.delete('search');
+      queryParams.delete('trace');
+      queryParams.delete('depth');
+      if (theme !== 'cyberpunk') {
+        queryParams.set('theme', theme);
+      } else {
+        queryParams.delete('theme');
+      }
+    }
+
+    const newUrl = queryParams.toString() 
+      ? `${window.location.pathname}?${queryParams.toString()}` 
+      : window.location.pathname;
+
+    window.history.replaceState(null, '', newUrl);
+  }, [repoData, viewMode, selectedNodeId, searchQuery, activeTraceNodeId, depthFilter, theme, isLoadingRepo]);
+
+  const handleCopyShareLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    
+    // Show toast
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.background = 'var(--color-secondary, #00f2fe)';
+    toast.style.color = '#000';
+    toast.style.padding = '8px 16px';
+    toast.style.borderRadius = '6px';
+    toast.style.fontSize = '0.75rem';
+    toast.style.fontWeight = 'bold';
+    toast.style.zIndex = '9999999';
+    toast.style.boxShadow = '0 0 15px rgba(0, 242, 254, 0.4)';
+    toast.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    toast.innerText = 'Shareable URL copied to clipboard!';
+    document.body.appendChild(toast);
+    setTimeout(() => document.body.removeChild(toast), 2500);
+  };
+
   // Run analysis when files are loaded
   useEffect(() => {
     if (repoData) {
@@ -162,12 +303,16 @@ export default function App() {
       setGraphData(result);
       if (lastRepoNameRef.current !== repoData.repoName) {
         lastRepoNameRef.current = repoData.repoName;
-        setSelectedNodeId(null);
-        setDiffData(null);
-        setIsEvolutionMode(false);
-        setCurrentEvolutionStep(0);
-        setLinterViolations(null);
-        setAuditReport(null);
+        if (!isInitialUrlLoadRef.current) {
+          setSelectedNodeId(null);
+          setDiffData(null);
+          setIsEvolutionMode(false);
+          setCurrentEvolutionStep(0);
+          setLinterViolations(null);
+          setAuditReport(null);
+        } else {
+          isInitialUrlLoadRef.current = false;
+        }
       }
     } else {
       lastRepoNameRef.current = null;
@@ -177,6 +322,7 @@ export default function App() {
       setCurrentEvolutionStep(0);
       setLinterViolations(null);
       setAuditReport(null);
+      isInitialUrlLoadRef.current = false;
     }
   }, [repoData]);
 
@@ -652,6 +798,15 @@ export default function App() {
                 <Download size={14} />
                 Export ZIP
               </button>
+              <button 
+                className="cyber-button secondary" 
+                style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
+                onClick={handleCopyShareLink}
+                title="Copy shareable link with current view state"
+              >
+                <Share2 size={14} />
+                Share View
+              </button>
               <button className="cyber-button secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={handleResetRepo}>
                 <ArrowLeft size={14} style={{ marginRight: '6px' }} />
                 Reset Workspace
@@ -703,7 +858,58 @@ export default function App() {
       </header>
 
       {/* Main Content Area */}
-      {!repoData ? (
+      {isLoadingRepo ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: 1,
+          gap: '20px',
+          color: 'var(--text-primary)'
+        }}>
+          <div className="search-spinner" style={{ width: '40px', height: '40px', borderWidth: '3px', borderTopColor: 'var(--color-primary)' }} />
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 600 }}>Loading Shareable Workspace</h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Fetching codebase data for <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>{new URLSearchParams(window.location.search).get('repo')}</span>...
+            </p>
+          </div>
+        </div>
+      ) : repoLoadError ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flex: 1,
+          gap: '20px',
+          color: 'var(--text-primary)',
+          maxWidth: '500px',
+          margin: '0 auto',
+          padding: '20px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '3rem' }}>⚠️</div>
+          <div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-alert)' }}>Failed to Load Workspace</h3>
+            <p style={{ margin: '0 0 16px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              {repoLoadError}
+            </p>
+            <button 
+              className="cyber-button" 
+              style={{ margin: '0 auto' }}
+              onClick={() => {
+                setRepoLoadError(null);
+                const cleanUrl = `${window.location.pathname}`;
+                window.history.replaceState(null, '', cleanUrl);
+              }}
+            >
+              Go to Workspace Setup
+            </button>
+          </div>
+        </div>
+      ) : !repoData ? (
         <RepoSelector 
           onDataLoaded={handleDataLoaded} 
         />
