@@ -4421,7 +4421,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               onChange={(e) => setFilterFolderPath(e.target.value)}
               style={{
                 width: '100%',
-                background: 'rgba(255,255,255,0.02)',
+                background: 'var(--input-bg)',
                 border: '1px solid var(--panel-border)',
                 borderRadius: '6px',
                 padding: '6px 8px',
@@ -4441,7 +4441,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                 onChange={(e) => setFilterLanguage(e.target.value)}
                 style={{
                   width: '100%',
-                  background: 'rgba(10, 15, 30, 0.95)',
+                  background: 'var(--input-bg)',
                   border: '1px solid var(--panel-border)',
                   borderRadius: '6px',
                   padding: '6px 8px',
@@ -4451,12 +4451,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   cursor: 'pointer'
                 }}
               >
-                <option value="all">All Languages</option>
-                <option value="typescript">TypeScript (.ts, .tsx)</option>
-                <option value="javascript">JavaScript (.js, .jsx)</option>
-                <option value="python">Python (.py)</option>
-                <option value="css">CSS</option>
-                <option value="json">JSON / Config</option>
+                <option value="all" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>All Languages</option>
+                <option value="typescript" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>TypeScript (.ts, .tsx)</option>
+                <option value="javascript" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>JavaScript (.js, .jsx)</option>
+                <option value="python" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>Python (.py)</option>
+                <option value="css" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>CSS</option>
+                <option value="json" style={{ background: 'var(--panel-bg)', color: 'var(--text-primary)' }}>JSON / Config</option>
               </select>
             </div>
           )}
