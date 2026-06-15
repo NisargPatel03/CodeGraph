@@ -253,6 +253,26 @@ function formatMarkdown(text: string): string {
     `;
   }
 
+  // Parse database tables/models wrapped in backticks (e.g. `User`, `StudentStats`)
+  processedText = processedText.replace(/\`([A-Z][a-zA-Z0-9_]+)\`/g, (match, tableName, offset, string) => {
+    const before = string.slice(Math.max(0, offset - 8), offset);
+    if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'")) {
+      return match;
+    }
+    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${tableName}')" title="Locate ${tableName} Table on Canvas">📊 ${tableName}</button>`;
+  });
+
+  // Parse file paths wrapped in backticks or raw file paths
+  const fileRegex = /\`?((?:[a-zA-Z0-9_\-\/]*\/)?[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json|go|py|rs|md|yaml|yml|sh|sql))\`?/gi;
+  processedText = processedText.replace(fileRegex, (match, filePath, offset, string) => {
+    const before = string.slice(Math.max(0, offset - 8), offset);
+    if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'") || before.endsWith('`')) {
+      return match;
+    }
+    const fileName = filePath.split('/').pop() || filePath;
+    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+  });
+
   // Parse remaining block-level and inline markdown
   processedText = processedText
     // 2. Headings
@@ -267,13 +287,6 @@ function formatMarkdown(text: string): string {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
     .replace(/\`(.*?)\`/g, '<code>$1</code>');
-
-  // Parse file paths and convert them to interactive buttons (before restoring code blocks)
-  const fileRegex = /\b(?:src|components|utils|pages)\/[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json)\b/gi;
-  processedText = processedText.replace(fileRegex, (filePath) => {
-    const fileName = filePath.split('/').pop() || filePath;
-    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
-  });
 
   // Restore code blocks
   codeBlocks.forEach((html, index) => {

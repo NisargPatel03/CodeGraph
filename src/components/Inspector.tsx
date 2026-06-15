@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FileText, Code, Sparkles, Send, Bot, User, HelpCircle, Terminal, AlertTriangle, Folder, Copy, ExternalLink, Activity, ChevronDown, ChevronRight, List } from 'lucide-react';
 import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
-import { getFileExplanation, askQuestionAboutCodebase, generateTestSuite } from '../utils/aiHelper';
+import { getFileExplanation, askQuestionAboutCodebaseStream, generateTestSuite } from '../utils/aiHelper';
 import type { LinterViolation, AuditReport } from '../utils/aiHelper';
 
 function formatMarkdown(text: string): string {
@@ -119,6 +119,26 @@ function formatMarkdown(text: string): string {
     `;
   }
 
+  // Parse database tables/models wrapped in backticks (e.g. `User`, `StudentStats`)
+  processedText = processedText.replace(/\`([A-Z][a-zA-Z0-9_]+)\`/g, (match, tableName, offset, string) => {
+    const before = string.slice(Math.max(0, offset - 8), offset);
+    if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'")) {
+      return match;
+    }
+    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${tableName}')" title="Locate ${tableName} Table on Canvas">📊 ${tableName}</button>`;
+  });
+
+  // Parse file paths wrapped in backticks or raw file paths
+  const fileRegex = /\`?((?:[a-zA-Z0-9_\-\/]*\/)?[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json|go|py|rs|md|yaml|yml|sh|sql))\`?/gi;
+  processedText = processedText.replace(fileRegex, (match, filePath, offset, string) => {
+    const before = string.slice(Math.max(0, offset - 8), offset);
+    if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'") || before.endsWith('`')) {
+      return match;
+    }
+    const fileName = filePath.split('/').pop() || filePath;
+    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+  });
+
   // Parse remaining block-level and inline markdown
   processedText = processedText
     // 2. Headings
@@ -133,13 +153,6 @@ function formatMarkdown(text: string): string {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     // 5. Inline Code
     .replace(/\`(.*?)\`/g, '<code>$1</code>');
-
-  // Parse file paths and convert them to interactive buttons (before restoring code blocks)
-  const fileRegex = /\b(?:src|components|utils|pages)\/[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json)\b/gi;
-  processedText = processedText.replace(fileRegex, (filePath) => {
-    const fileName = filePath.split('/').pop() || filePath;
-    return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
-  });
 
   // Restore code blocks
   codeBlocks.forEach((html, index) => {
@@ -351,12 +364,13 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, chatLoading]);
+  }, [chatMessages, chatLoading, isStreaming]);
 
   // Extended File Inspector States
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -565,7 +579,7 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || chatLoading) return;
+    if (!chatInput.trim() || chatLoading || isStreaming) return;
 
     const userText = chatInput;
     setChatMessages((prev) => [...prev, { sender: 'user', text: userText }]);
@@ -583,12 +597,39 @@ export const Inspector: React.FC<InspectorProps> = ({
         ? { path: selectedFile.path, content: selectedFile.content }
         : null;
 
-      const aiResponse = await askQuestionAboutCodebase(userText, activeContext, filesSummary, apiKey);
-      setChatMessages((prev) => [...prev, { sender: 'ai', text: aiResponse }]);
+      // Append empty model message for streaming text
+      setChatMessages((prev) => [...prev, { sender: 'ai', text: '' }]);
+      setChatLoading(false);
+      setIsStreaming(true);
+
+      await askQuestionAboutCodebaseStream(
+        userText,
+        activeContext,
+        filesSummary,
+        apiKey,
+        (cumulativeText) => {
+          setChatMessages((prev) => {
+            const copy = [...prev];
+            if (copy.length > 0 && copy[copy.length - 1].sender === 'ai') {
+              copy[copy.length - 1] = { sender: 'ai', text: cumulativeText };
+            }
+            return copy;
+          });
+        }
+      );
     } catch (err: any) {
-      setChatMessages((prev) => [...prev, { sender: 'ai', text: `Failed to get reply: ${err.message}` }]);
+      setChatMessages((prev) => {
+        const copy = [...prev];
+        if (copy.length > 0 && copy[copy.length - 1].sender === 'ai') {
+          copy[copy.length - 1] = { sender: 'ai', text: `Failed to get reply: ${err.message || err}` };
+        } else {
+          copy.push({ sender: 'ai', text: `Failed to get reply: ${err.message || err}` });
+        }
+        return copy;
+      });
     } finally {
       setChatLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -1383,9 +1424,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     {msg.sender === 'user' ? 'You' : 'Gemini'}
                   </div>
                   <div style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ 
-                    __html: msg.text
-                      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                      .replace(/\`(.*?)\`/g, '<code style="font-family:var(--font-mono); background:rgba(0,0,0,0.3); padding:2px 4px; border-radius:3px;">$1</code>')
+                    __html: formatMarkdown(msg.text) + (isStreaming && index === chatMessages.length - 1 && msg.sender === 'ai' ? ' <span class="typing-cursor"></span>' : '')
                   }} />
                 </div>
               ))}
@@ -1408,9 +1447,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 style={{ padding: '10px 14px', fontSize: '0.85rem' }}
-                disabled={chatLoading}
+                disabled={chatLoading || isStreaming}
               />
-              <button type="submit" className="cyber-button" style={{ padding: '10px' }} disabled={chatLoading || !chatInput.trim()}>
+              <button type="submit" className="cyber-button" style={{ padding: '10px' }} disabled={chatLoading || isStreaming || !chatInput.trim()}>
                 <Send size={16} />
               </button>
             </form>

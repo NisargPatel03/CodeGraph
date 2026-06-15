@@ -180,6 +180,30 @@ export default function App() {
     }
   }, [repoData]);
 
+  // Global file/schema node locator handler
+  useEffect(() => {
+    (window as any).locateFileNode = (filePath: string) => {
+      if (!filePath) return;
+      
+      const hasExtension = filePath.includes('.');
+      const isDbTable = !hasExtension && !filePath.includes('/') && !filePath.includes('\\');
+
+      if (isDbTable) {
+        setViewMode('dbSchema');
+        setSelectedNodeId(filePath);
+      } else {
+        if (viewMode === 'dbSchema' || viewMode === 'analytics' || viewMode === 'docs') {
+          setViewMode('dependency');
+        }
+        setSelectedNodeId(filePath);
+      }
+    };
+
+    return () => {
+      delete (window as any).locateFileNode;
+    };
+  }, [viewMode]);
+
   const handleUpdateFileContent = (filePath: string, newContent: string) => {
     if (!repoData) return;
     const updatedFiles = repoData.files.map((f) => {

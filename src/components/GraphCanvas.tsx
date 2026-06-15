@@ -2272,15 +2272,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       reset: () => svgElement.transition().duration(400).call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)),
     };
 
-    (window as any).locateFileNode = (filePath: string) => {
-      setSelectedNode(filePath);
-    };
-
     drawMinimap();
 
     return () => {
       simulation.stop();
-      delete (window as any).locateFileNode;
     };
   }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema]);
   useEffect(() => {
@@ -2803,6 +2798,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
     });
   }, [viewMode, hoveredDbTableId, selectedDbTableId, dbSchema.relationships, queryTokens]);
+
+  // Sync selectedDbTableId with selectedNode when in dbSchema mode
+  useEffect(() => {
+    if (viewMode === 'dbSchema' && selectedNode) {
+      const isTable = dbSchema.tables.some(t => t.id === selectedNode);
+      if (isTable) {
+        setSelectedDbTableId(selectedNode);
+      }
+    }
+  }, [selectedNode, viewMode, dbSchema.tables]);
 
   // Smoothly pan & zoom to the selected node or selected DB table when it changes
   useEffect(() => {
