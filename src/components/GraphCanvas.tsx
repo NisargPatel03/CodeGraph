@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles, Download, Filter, SlidersHorizontal } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles, Download, Filter, SlidersHorizontal, Box, Globe } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
@@ -261,6 +261,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [filterMinLoc, setFilterMinLoc] = useState<number>(0);
   const [filterFolderPath, setFilterFolderPath] = useState<string>('');
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
+
+  // 3D Canvas states & refs
+  const [is3DMode, setIs3DMode] = useState<boolean>(false);
+  const [autoRotate3D, setAutoRotate3D] = useState<boolean>(true);
+  const canvas3DRef = useRef<HTMLCanvasElement | null>(null);
+  const rotation3DRef = useRef<{ x: number; y: number }>({ x: -0.5, y: 0.5 });
+  const activeNodesRef = useRef<any[]>([]);
+  const activeLinksRef = useRef<any[]>([]);
+  const [zoomScale3D, setZoomScale3D] = useState<number>(0.85);
+  const [hoveredNode3D, setHoveredNode3D] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isExportDropdownOpen) return;
@@ -1783,6 +1793,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       links = activeLinks;
     }
 
+    activeNodesRef.current = nodes;
+    activeLinksRef.current = links;
+
     if (nodes.length === 0) {
       if (viewMode === 'dbSchema') {
         return;
@@ -2667,6 +2680,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
         }
       });
+      activeNodesRef.current = [...nodes];
+      activeLinksRef.current = [...links];
       if (viewMode === 'dbSchema') {
         link.attr('d', (d: any) => {
           const source = d.source;
@@ -3282,6 +3297,381 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       );
   }, [selectedNode, selectedDbTableId, viewMode]);
 
+  // Helper to get deterministic Z offset for 3D layout
+  const hashStringToFloat = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return (Math.abs(hash) % 240) - 120;
+  };
+
+  // 3D Canvas Rendering Hook
+  useEffect(() => {
+    if (!is3DMode || !canvas3DRef.current) return;
+    const canvas = canvas3DRef.current;
+    let animationFrameId: number;
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    
+    // Set canvas sizes
+    const resizeCanvas = () => {
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.clientWidth || 800;
+        canvas.height = parent.clientHeight || 500;
+      }
+    };
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Mouse drag handlers to rotate
+    const handleMouseDown = (e: MouseEvent) => {
+      isDragging = true;
+      previousMousePosition = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      if (isDragging) {
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+
+        rotation3DRef.current = {
+          x: rotation3DRef.current.x + deltaY * 0.008,
+          y: rotation3DRef.current.y + deltaX * 0.008
+        };
+
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      } else {
+        // Hover detection: find closest node in projected 2D space
+        const nodes3D = (canvas as any).__projectedNodes || [];
+        let closestNode: any = null;
+        let minDistance = 25; // max hover distance in pixels
+
+        nodes3D.forEach((n: any) => {
+          const dx = mouseX - n.projX;
+          const dy = mouseY - n.projY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < minDistance && dist < (n.projRadius + 12)) {
+            closestNode = n;
+            minDistance = dist;
+          }
+        });
+
+        if (closestNode) {
+          setHoveredNode3D(closestNode.id);
+        } else {
+          setHoveredNode3D(null);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      isDragging = false;
+    };
+
+    const handleMouseLeave = () => {
+      isDragging = false;
+      setHoveredNode3D(null);
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      setZoomScale3D(prev => Math.min(Math.max(prev * zoomFactor, 0.15), 4.0));
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const nodes3D = (canvas as any).__projectedNodes || [];
+      let closestNode: any = null;
+      let minDistance = 25;
+
+      nodes3D.forEach((n: any) => {
+        const dx = mouseX - n.projX;
+        const dy = mouseY - n.projY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDistance && dist < (n.projRadius + 12)) {
+          closestNode = n;
+          minDistance = dist;
+        }
+      });
+
+      if (closestNode) {
+        setSelectedNode(closestNode.id);
+      } else {
+        setSelectedNode(null);
+      }
+    };
+
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseLeave);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('click', handleClick);
+
+    // Particle state tracking
+    const particles: { linkId: string; progress: number; speed: number }[] = [];
+
+    // Main render loop
+    const render = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const width = canvas.width;
+      const height = canvas.height;
+
+      // Clear with dark space backdrop
+      ctx.fillStyle = '#030712';
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw faint background spatial grid circles/stars to enhance 3D effect
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.03)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, Math.min(width, height) * 0.4, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Retrieve nodes and links
+      const rawNodes = activeNodesRef.current || [];
+      const rawLinks = activeLinksRef.current || [];
+
+      // Handle auto rotation
+      if (autoRotate3D && !isDragging) {
+        rotation3DRef.current.y += 0.003; // spin slowly
+      }
+
+      const rotX = rotation3DRef.current.x;
+      const rotY = rotation3DRef.current.y;
+
+      const cosX = Math.cos(rotX);
+      const sinX = Math.sin(rotX);
+      const cosY = Math.cos(rotY);
+      const sinY = Math.sin(rotY);
+
+      const fov = 700;
+
+      // Project Nodes
+      const projectedNodes = rawNodes.map((n: any) => {
+        // Ensure z coordinate exists
+        if (n.z === undefined) {
+          n.z = hashStringToFloat(n.id);
+        }
+
+        // Standard center offsets (subtract center of gravity)
+        const ox = n.x !== undefined ? n.x : 0;
+        const oy = n.y !== undefined ? n.y : 0;
+        const oz = n.z;
+
+        // Apply 3D Rotation
+        // Rotate around X axis
+        let x1 = ox;
+        let y1 = oy * cosX - oz * sinX;
+        let z1 = oy * sinX + oz * cosX;
+
+        // Rotate around Y axis
+        let rx = x1 * cosY + z1 * sinY;
+        let ry = y1;
+        let rz = -x1 * sinY + z1 * cosY;
+
+        // Apply Zoom scale
+        rx *= zoomScale3D;
+        ry *= zoomScale3D;
+        rz *= zoomScale3D;
+
+        // Perspective projection mapping
+        const scaleFactor = fov / (fov + rz);
+        const projX = rx * scaleFactor + width / 2;
+        const projY = ry * scaleFactor + height / 2;
+
+        // Node base radius
+        let baseRadius = 8;
+        if (n.isFolder) baseRadius = 16;
+        else if (n.isNpm) baseRadius = 6;
+        else if (viewMode === 'dbSchema') baseRadius = 24; // Schema card
+        else {
+          const complexity = n.complexity || 10;
+          baseRadius = 6 + Math.log10(complexity) * 4;
+        }
+
+        const projRadius = Math.max(2, baseRadius * scaleFactor);
+
+        return {
+          ...n,
+          ox, oy, oz,
+          rx, ry, rz,
+          projX, projY, projRadius,
+          scaleFactor
+        };
+      });
+
+      // Cache projected nodes on canvas element for click and hover detection
+      (canvas as any).__projectedNodes = projectedNodes;
+
+      // Map node ID to projected node for quick link lookup
+      const nodeMap = new Map<string, any>();
+      projectedNodes.forEach(pn => nodeMap.set(pn.id, pn));
+
+      // Draw Links
+      rawLinks.forEach((link: any) => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        const sNode = nodeMap.get(sId);
+        const tNode = nodeMap.get(tId);
+
+        if (!sNode || !tNode) return;
+
+        // Average depth of source and target for link visibility sorting
+        const avgDepth = (sNode.rz + tNode.rz) / 2;
+        const opacity = Math.min(0.8, Math.max(0.04, (fov - avgDepth) / (fov * 1.5)));
+
+        // Select color based on status or cycles
+        let strokeColor = 'rgba(99, 102, 241, ' + opacity + ')';
+        if (link.isAggregated) {
+          strokeColor = 'rgba(236, 72, 153, ' + opacity + ')';
+        }
+
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = Math.max(0.5, (link.isAggregated ? 3 : 1) * ((sNode.scaleFactor + tNode.scaleFactor) / 2));
+        ctx.beginPath();
+        ctx.moveTo(sNode.projX, sNode.projY);
+        ctx.lineTo(tNode.projX, tNode.projY);
+        ctx.stroke();
+      });
+
+      // Spawn new particles occasionally
+      if (rawLinks.length > 0 && Math.random() < 0.15 && particles.length < 80) {
+        const randomLink = rawLinks[Math.floor(Math.random() * rawLinks.length)];
+        const linkId = `${typeof randomLink.source === 'object' ? randomLink.source.id : randomLink.source}->${typeof randomLink.target === 'object' ? randomLink.target.id : randomLink.target}`;
+        particles.push({
+          linkId,
+          progress: 0,
+          speed: 0.008 + Math.random() * 0.012
+        });
+      }
+
+      // Render active particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.progress += p.speed;
+
+        if (p.progress >= 1) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        const [sId, tId] = p.linkId.split('->');
+        const sNode = nodeMap.get(sId);
+        const tNode = nodeMap.get(tId);
+
+        if (sNode && tNode) {
+          // Linear interpolation in 2D space
+          const px = sNode.projX + (tNode.projX - sNode.projX) * p.progress;
+          const py = sNode.projY + (tNode.projY - sNode.projY) * p.progress;
+          const pScale = sNode.scaleFactor + (tNode.scaleFactor - sNode.scaleFactor) * p.progress;
+
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(px, py, Math.max(1.5, 3 * pScale), 0, 2 * Math.PI);
+          ctx.fill();
+
+          // Particle outer glow
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.3)';
+          ctx.beginPath();
+          ctx.arc(px, py, Math.max(3, 6 * pScale), 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+
+      // Sort Nodes by Depth (z-order sorting) to ensure correct layering
+      const sortedNodes = [...projectedNodes].sort((a, b) => b.rz - a.rz);
+
+      sortedNodes.forEach((n: any) => {
+        const isHovered = n.id === hoveredNode3D;
+        const isSelected = n.id === selectedNode;
+
+        // Draw node body (Shiny Sphere using Radial Gradient)
+        const rad = n.projRadius;
+        
+        let colorTheme = {
+          core: '#6366f1',
+          glow: 'rgba(99, 102, 241, 0.4)',
+          highlight: '#ffffff'
+        };
+
+        if (n.isFolder) {
+          colorTheme = { core: '#f59e0b', glow: 'rgba(245, 158, 11, 0.3)', highlight: '#fef3c7' };
+        } else if (n.isNpm) {
+          colorTheme = { core: '#ec4899', glow: 'rgba(236, 72, 153, 0.3)', highlight: '#fbcfe8' };
+        } else if (isSelected) {
+          colorTheme = { core: '#10b981', glow: 'rgba(16, 185, 129, 0.6)', highlight: '#ffffff' };
+        } else if (isHovered) {
+          colorTheme = { core: '#3b82f6', glow: 'rgba(59, 130, 246, 0.6)', highlight: '#ffffff' };
+        }
+
+        // Draw outer depth/glow
+        ctx.fillStyle = colorTheme.glow;
+        ctx.beginPath();
+        ctx.arc(n.projX, n.projY, rad * (isHovered || isSelected ? 1.6 : 1.2), 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Node sphere base
+        const grad = ctx.createRadialGradient(
+          n.projX - rad * 0.2, n.projY - rad * 0.2, rad * 0.1,
+          n.projX, n.projY, rad
+        );
+        grad.addColorStop(0, colorTheme.highlight);
+        grad.addColorStop(0.2, colorTheme.core);
+        grad.addColorStop(1, '#050510');
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(n.projX, n.projY, rad, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Node borders
+        ctx.strokeStyle = isSelected ? '#10b981' : (isHovered ? '#60a5fa' : 'rgba(255,255,255,0.08)');
+        ctx.lineWidth = isSelected || isHovered ? 2 : 0.5;
+        ctx.stroke();
+
+        // Render Labels
+        const showLabel = isHovered || isSelected || projectedNodes.length < 45 || (n.isFolder && n.scaleFactor > 0.8);
+        if (showLabel) {
+          ctx.fillStyle = isSelected ? '#10b981' : (isHovered ? '#ffffff' : 'var(--text-secondary)');
+          const fontSize = Math.max(8, Math.min(13, Math.round(10 * n.scaleFactor)));
+          ctx.font = `${isSelected || isHovered ? 'bold' : 'normal'} ${fontSize}px sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(n.name, n.projX + rad + 6, n.projY);
+        }
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', resizeCanvas);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mouseleave', handleMouseLeave);
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('click', handleClick);
+    };
+  }, [is3DMode, autoRotate3D, zoomScale3D, viewMode, selectedNode, hoveredNode3D]);
+
   return (
     <div 
       ref={containerRef} 
@@ -3801,6 +4191,38 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             width: 'auto', 
             padding: '0 8px', 
             gap: '4px', 
+            background: is3DMode ? 'var(--color-primary-glow)' : 'transparent',
+            borderColor: is3DMode ? 'var(--color-primary)' : 'var(--panel-border)'
+          }} 
+          title="Toggle 3D WebGL Graph" 
+          onClick={(e) => { e.stopPropagation(); setIs3DMode(!is3DMode); }}
+        >
+          <Box size={14} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{is3DMode ? '2D View' : '3D View'}</span>
+        </button>
+        {is3DMode && (
+          <button 
+            className="control-btn" 
+            style={{ 
+              width: 'auto', 
+              padding: '0 8px', 
+              gap: '4px', 
+              background: autoRotate3D ? 'rgba(0, 242, 254, 0.15)' : 'transparent',
+              borderColor: autoRotate3D ? 'var(--color-secondary)' : 'var(--panel-border)'
+            }} 
+            title="Auto-Rotate 3D Graph" 
+            onClick={(e) => { e.stopPropagation(); setAutoRotate3D(!autoRotate3D); }}
+          >
+            <Globe size={14} />
+            <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Spin</span>
+          </button>
+        )}
+        <button 
+          className="control-btn" 
+          style={{ 
+            width: 'auto', 
+            padding: '0 8px', 
+            gap: '4px', 
             background: isFilterPanelOpen ? 'var(--color-primary-glow)' : 'transparent',
             borderColor: isFilterPanelOpen ? 'var(--color-primary)' : 'var(--panel-border)'
           }} 
@@ -4094,7 +4516,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         </div>
       )}
 
-      <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <svg ref={svgRef} style={{ width: '100%', height: '100%', display: is3DMode ? 'none' : 'block' }} />
+      {is3DMode && (
+        <canvas ref={canvas3DRef} style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }} />
+      )}
 
       {viewMode === 'dbSchema' && dbSchema.tables.length === 0 && (
         <div style={{
