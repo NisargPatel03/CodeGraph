@@ -1268,7 +1268,17 @@ export default function App() {
             e.currentTarget.style.borderColor = 'var(--panel-border)';
           }}
         >
-          <Sparkles size={22} style={{ color: 'var(--color-primary)' }} />
+          <img 
+            src="/ai-logo.png" 
+            alt="CodeGraph AI" 
+            style={{ 
+              width: '30px', 
+              height: '30px', 
+              borderRadius: '50%',
+              boxShadow: '0 0 10px var(--color-primary-glow)',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }} 
+          />
         </button>
       )}
 

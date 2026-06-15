@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Bot, Sparkles, MessageSquare, Trash2, HelpCircle } from 'lucide-react';
+import { Send, X, Bot, Sparkles, Trash2, HelpCircle } from 'lucide-react';
 import { askQuestionAboutCodebaseStream } from '../utils/aiHelper';
 import type { ParsedFile } from '../utils/repoParser';
 
