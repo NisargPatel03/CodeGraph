@@ -254,6 +254,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isExportDropdownOpen) return;
+    const handleCloseDropdown = () => {
+      setIsExportDropdownOpen(false);
+    };
+    window.addEventListener('click', handleCloseDropdown);
+    return () => {
+      window.removeEventListener('click', handleCloseDropdown);
+    };
+  }, [isExportDropdownOpen]);
+
   const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
   const [pathSource, setPathSource] = useState<string | null>(null);
   const [pathTarget, setPathTarget] = useState<string | null>(null);
@@ -304,6 +317,163 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       console.error('Error reading stylesheets:', e);
     }
     return cssText;
+  };
+
+  const generateMermaid = (): string => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return '';
+
+    const activeNodes: any[] = d3.select(svgEl).selectAll('.node-element').data();
+    const activeLinks: any[] = d3.select(svgEl).selectAll('.link-element').data();
+
+    if (activeNodes.length === 0) return '%% No active nodes in visualization';
+
+    // Map to store safe IDs to prevent invalid Mermaid characters (like slash, dots, dashes, spaces)
+    const idMap = new Map<string, string>();
+    activeNodes.forEach((n, idx) => {
+      idMap.set(n.id, `n_${idx}`);
+    });
+
+    let code = '';
+    
+    if (viewMode === 'dbSchema') {
+      code += 'flowchart LR\n'; // Left-to-right looks better for DB schemas
+      // Render tables
+      activeNodes.forEach((n) => {
+        const safeId = idMap.get(n.id);
+        let label = `"${n.id}`;
+        if (n.fields && Array.isArray(n.fields)) {
+          n.fields.forEach((f: any) => {
+            let prefix = '  ';
+            if (f.isPrimaryKey) prefix = '🔑 ';
+            else if (f.isForeignKey) prefix = '🔗 ';
+            label += `<br/>${prefix}${f.name} : ${f.type}`;
+          });
+        }
+        label += '"';
+        code += `  ${safeId}[${label}]\n`;
+      });
+
+      // Render relationships
+      activeLinks.forEach((l) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceSafe = idMap.get(sId);
+        const targetSafe = idMap.get(tId);
+        if (sourceSafe && targetSafe) {
+          const relationshipLabel = l.sourceField && l.targetField ? `|"${l.sourceField} ➔ ${l.targetField}"| ` : '';
+          code += `  ${sourceSafe} -->${relationshipLabel}${targetSafe}\n`;
+        }
+      });
+
+    } else if (viewMode === 'call') {
+      code += 'flowchart TD\n';
+      // Render functions
+      activeNodes.forEach((n) => {
+        const safeId = idMap.get(n.id);
+        const funcName = n.name || n.id.split('::')[1] || n.id;
+        const fileName = n.file || n.id.split('::')[0] || '';
+        code += `  ${safeId}["⚡ ${funcName}<br/><small style='opacity:0.6'>${fileName}</small>"]\n`;
+      });
+
+      // Render links
+      activeLinks.forEach((l) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceSafe = idMap.get(sId);
+        const targetSafe = idMap.get(tId);
+        if (sourceSafe && targetSafe) {
+          code += `  ${sourceSafe} --> ${targetSafe}\n`;
+        }
+      });
+
+    } else if (viewMode === 'hierarchy') {
+      code += 'flowchart TD\n';
+      // Render classes/components
+      activeNodes.forEach((n) => {
+        const safeId = idMap.get(n.id);
+        const name = n.name || n.id.split('::')[1] || n.id;
+        const typeLabel = n.type === 'component' ? '⚛️' : '📦';
+        code += `  ${safeId}["${typeLabel} ${name}"]\n`;
+      });
+
+      // Render links
+      activeLinks.forEach((l) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceSafe = idMap.get(sId);
+        const targetSafe = idMap.get(tId);
+        if (sourceSafe && targetSafe) {
+          code += `  ${sourceSafe} --> ${targetSafe}\n`;
+        }
+      });
+
+    } else {
+      // dependency or cluster mode
+      code += 'flowchart TD\n';
+
+      // Group files by folder
+      const folderGroups = new Map<string, any[]>();
+      const rootNodes: any[] = [];
+
+      activeNodes.forEach((n) => {
+        if (n.isFolder) {
+          rootNodes.push(n); // Collapsed folder node at root
+        } else if (n.folder) {
+          if (!folderGroups.has(n.folder)) {
+            folderGroups.set(n.folder, []);
+          }
+          folderGroups.get(n.folder)!.push(n);
+        } else {
+          rootNodes.push(n); // Root file
+        }
+      });
+
+      // Render folder subgraphs
+      let subgraphIdx = 0;
+      folderGroups.forEach((nodesInFolder, folderPath) => {
+        const cleanFolderName = folderPath.replace(/['"`]/g, '');
+        const subgraphId = `sub_${subgraphIdx++}`;
+        code += `  subgraph ${subgraphId} ["📁 ${cleanFolderName}"]\n`;
+        nodesInFolder.forEach((n) => {
+          const safeId = idMap.get(n.id);
+          const emoji = n.language === 'typescript' || n.language === 'javascript' ? '⚛️' : '📄';
+          code += `    ${safeId}["${emoji} ${n.name}"]\n`;
+        });
+        code += '  end\n\n';
+      });
+
+      // Render root nodes
+      rootNodes.forEach((n) => {
+        const safeId = idMap.get(n.id);
+        const emoji = n.isFolder ? '📁' : '📄';
+        code += `  ${safeId}["${emoji} ${n.name}"]\n`;
+      });
+
+      // Render links
+      activeLinks.forEach((l) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const sourceSafe = idMap.get(sId);
+        const targetSafe = idMap.get(tId);
+        if (sourceSafe && targetSafe) {
+          code += `  ${sourceSafe} --> ${targetSafe}\n`;
+        }
+      });
+    }
+
+    return code;
+  };
+
+  const copyMermaidCode = () => {
+    try {
+      const code = generateMermaid();
+      navigator.clipboard.writeText(code);
+      showExportToast('Copied Mermaid.js code to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy Mermaid code:', err);
+      showExportToast('Failed to copy Mermaid code.');
+    }
   };
 
   const exportGraph = (format: 'svg' | 'png') => {
@@ -3550,24 +3720,143 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <button className="control-btn" title="Reset View" onClick={(e) => { e.stopPropagation(); (window as any).graphZoom?.reset(); }}>
           <RotateCcw size={16} />
         </button>
-        <button 
-          className="control-btn" 
-          style={{ width: 'auto', padding: '0 8px', gap: '4px' }} 
-          title="Export Graph as SVG" 
-          onClick={(e) => { e.stopPropagation(); exportGraph('svg'); }}
-        >
-          <Download size={14} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>SVG</span>
-        </button>
-        <button 
-          className="control-btn" 
-          style={{ width: 'auto', padding: '0 8px', gap: '4px' }} 
-          title="Export Graph as PNG" 
-          onClick={(e) => { e.stopPropagation(); exportGraph('png'); }}
-        >
-          <Download size={14} />
-          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>PNG</span>
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button 
+            className="control-btn" 
+            style={{ 
+              width: 'auto', 
+              padding: '0 8px', 
+              gap: '4px', 
+              background: isExportDropdownOpen ? 'var(--color-primary-glow)' : 'transparent',
+              borderColor: isExportDropdownOpen ? 'var(--color-primary)' : 'var(--panel-border)'
+            }} 
+            title="Export Visualization" 
+            onClick={(e) => { e.stopPropagation(); setIsExportDropdownOpen(!isExportDropdownOpen); }}
+          >
+            <Download size={14} />
+            <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Export</span>
+          </button>
+          {isExportDropdownOpen && (
+            <div 
+              className="glass-panel"
+              style={{
+                position: 'absolute',
+                bottom: '100%',
+                right: 0,
+                marginBottom: '8px',
+                minWidth: '150px',
+                padding: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                zIndex: 1000,
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '8px',
+                background: 'rgba(10, 15, 30, 0.95)',
+                backdropFilter: 'blur(12px)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 500,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+                onClick={() => {
+                  setIsExportDropdownOpen(false);
+                  exportGraph('svg');
+                }}
+              >
+                <span>🖼️ Download SVG</span>
+              </button>
+              <button
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 500,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+                onClick={() => {
+                  setIsExportDropdownOpen(false);
+                  exportGraph('png');
+                }}
+              >
+                <span>🖼️ Download PNG</span>
+              </button>
+              <button
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 500,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                }}
+                onClick={() => {
+                  setIsExportDropdownOpen(false);
+                  copyMermaidCode();
+                }}
+              >
+                <span>🔌 Copy Mermaid.js</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
