@@ -329,6 +329,9 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
               Supports JS, TS, Python, Go, Rust, Java, C++, and more.
             </p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--color-secondary)', marginTop: '6px', opacity: 0.85 }}>
+              ⚡ Large archives (100+ files) will automatically run optimized static warm-up modes.
+            </p>
           </div>
         </div>
 

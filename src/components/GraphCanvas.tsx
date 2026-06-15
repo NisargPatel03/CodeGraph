@@ -1709,7 +1709,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         }
         const baseRad = viewMode === 'hierarchy' ? 14 : 15;
         return baseRad + Math.sqrt(d.size || 0) * 0.05 + 5;
-      }))
+      }).strength(nodes.length > 300 ? 0.45 : 0.7))
       .force('center', d3.forceCenter(0, 0));
 
     if (viewMode === 'hierarchy') {
@@ -2416,7 +2416,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       node.append('text').attr('class', 'node-label').attr('dx', 14).attr('dy', 4).text((d) => d.name);
     }
 
-    simulation.on('tick', () => {
+    const handleTickUpdate = () => {
       nodes.forEach(n => {
         if (n.id && n.x !== undefined && n.y !== undefined) {
           nodePositionsRef.current.set(n.id, { x: n.x, y: n.y });
@@ -2453,7 +2453,22 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       node.attr('transform', (d) => `translate(${d.x}, ${d.y})`);
       if (viewMode === 'cluster' || viewMode === 'call') updateHulls();
       drawMinimap();
-    });
+    };
+
+    // Warm up the simulation synchronously to avoid browser tab freezing
+    // during the initial chaotic settling phase on larger graphs.
+    const nodeCount = nodes.length;
+    if (nodeCount > 100) {
+      simulation.stop();
+      const warmupTicks = Math.min(180, Math.max(100, Math.floor(nodeCount / 3.5)));
+      for (let i = 0; i < warmupTicks; ++i) {
+        simulation.tick();
+      }
+      // Apply the pre-calculated positions immediately
+      handleTickUpdate();
+    }
+
+    simulation.on('tick', handleTickUpdate);
 
     (window as any).graphZoom = {
       zoomIn: () => svgElement.transition().duration(300).call(zoomBehavior.scaleBy, 1.3),
