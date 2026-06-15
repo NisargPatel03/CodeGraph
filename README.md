@@ -694,7 +694,7 @@ CodeGraph is engineered with a strict client-side architecture to safeguard prop
 - **AI Requests Scope:** CodeGraph only sends file summaries (names, sizes, languages) or isolated active file contents (limited to 15,000 characters) directly to the Google Gemini API (via `https://generativelanguage.googleapis.com`) when you explicitly request AI explanations, test suites, or reports.
 
 ### 2. Token & API Key Protection
-- **Local Browser Persistence:** Your Gemini API Key and GitHub Personal Access Token (PAT) are stored exclusively in the browser's local sandbox (`localStorage`).
+- **Build-time Environment Configuration:** Your Gemini API Key is loaded securely from the build environment variables (`VITE_GEMINI_API_KEY`) at build/dev time and is never saved in the browser's `localStorage` or shown on screen. Your GitHub Personal Access Token (PAT) is stored exclusively in the browser's local sandbox (`localStorage`).
 - **Zero Remote Exfiltration:** CodeGraph never transmits your keys or tokens to any external servers other than the official Google Gemini and GitHub endpoints.
 - **Token Best Practices:** When loading private repositories, we recommend using scope-restricted GitHub Personal Access Tokens (classic PAT with only `repo` read permission or fine-grained token with read-only contents access).
 
@@ -713,10 +713,10 @@ To prevent unauthorized script execution and guard against data exfiltration, th
 This restricts outbound network calls exclusively to local assets, Google Fonts, GitHub API, and Google's Gemini API endpoints.
 
 ### 4. Quota Limits & Rate Limit Error Handling
-- **Dynamic Error Decoders:** If your Gemini API Key experiences a connection error, CodeGraph catches it and formats it into user-friendly markdown notices:
-  - **Rate Limit (429 ResourceExhausted):** Recognizes rate limits and displays a custom warnings banner containing recommendations to wait 1-2 minutes or switch API keys.
-  - **Invalid Key (API_KEY_INVALID):** Alerts the user if the key configured in the settings panel is invalid, providing direct links to get a new key from Google AI Studio.
-- **Offline Fallbacks:** All features—such as Dependency Risk Auditing, Database Schema Audits, API route detection, and onboarding summaries—automatically revert to robust static offline analysis if the API key is missing or quota is exhausted.
+- **Dynamic Error Decoders:** If the environment Gemini API Key experiences a connection error, CodeGraph catches it and formats it into user-friendly markdown notices:
+  - **Rate Limit (429 ResourceExhausted):** Recognizes rate limits and displays a custom warnings banner containing recommendations to wait 1-2 minutes.
+  - **Invalid Key (API_KEY_INVALID):** Alerts the user if the environment-configured key is invalid, providing direct links to get a new key from Google AI Studio.
+- **Offline Fallbacks:** All features—such as Dependency Risk Auditing, Database Schema Audits, API route detection, and onboarding summaries—automatically revert to robust static offline analysis if the API key is missing from the build environment or quota is exhausted.
 
 ---
 

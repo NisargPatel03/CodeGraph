@@ -43,8 +43,8 @@ export default function App() {
     if (saved && validThemes.includes(saved)) return saved;
     return 'cyberpunk';
   });
-  const [apiKey, setApiKey] = useState(() => {
-    return localStorage.getItem('gemini_api_key') || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  const [apiKey] = useState(() => {
+    return (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
   });
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [repoData, setRepoData] = useState<{ 
@@ -147,6 +147,10 @@ export default function App() {
     }
   };
 
+  // Cleanup old local storage API key (now loaded exclusively from environment)
+  useEffect(() => {
+    localStorage.removeItem('gemini_api_key');
+  }, []);
 
   // Sync theme to root element
   useEffect(() => {
@@ -1329,23 +1333,21 @@ export default function App() {
                 </p>
               </div>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Gemini API Key</label>
-              <input
-                type="password"
-                className="cyber-input"
-                placeholder="Enter your VITE_GEMINI_API_KEY..."
-                value={apiKey}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setApiKey(val);
-                  localStorage.setItem('gemini_api_key', val);
-                }}
-                style={{ padding: '10px 14px', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ 
+                  width: '10px', 
+                  height: '10px', 
+                  borderRadius: '50%', 
+                  background: apiKey ? '#10b981' : '#ef4444',
+                  boxShadow: apiKey ? '0 0 8px #10b981' : '0 0 8px #ef4444'
+                }} />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {apiKey ? 'Status: Active (API Key Loaded from Environment)' : 'Status: Offline (No API Key Detected)'}
+                </span>
+              </div>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
-                Your API key is stored securely in your browser's local storage and is only used to connect to Google Generative AI (Gemini) services directly.
+                The application reads the Gemini API Key securely from the build environment variables (`VITE_GEMINI_API_KEY`). Users cannot view, modify, or extract the key from this settings screen.
               </p>
             </div>
 
