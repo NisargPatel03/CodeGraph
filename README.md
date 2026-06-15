@@ -38,6 +38,7 @@
   - [Static Analysis Engine](#8-static-analysis-engine)
   - [Markdown & LaTeX Formatting Pipeline](#9-markdown--latex-formatting-pipeline)
   - [Command Palette & Keyboard Controls](#10-global-command-palette--keyboard-controls)
+  - [Shareable URLs & Deep-Linking State](#11-shareable-urls--deep-linking-state)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 
@@ -148,6 +149,20 @@ Six built-in visual themes, switchable with an animated ripple effect:
 
 ### ⚙️ Glassmorphic Settings Console
 - **Gemini API Configuration** — Secure panel to configure the Google Gemini API key to activate advanced explanations, linter rules, test suites, and schema audit features.
+
+### 🔗 Shareable URL & Deep-Linking State
+- **URL-Based State Persistence** — Automatically syncs the active visualization state (`repo`, `view`, `node`, `search`, `trace`, `depth`, `theme`) with browser query parameters in real-time using `window.history.replaceState`.
+- **Deep-Linking Workspace Loading** — Direct URL loading of public GitHub repositories (e.g. `?repo=owner/repo`) or the sandbox demo project (`?repo=demo`) with glassmorphic loading/error overlays.
+- **Share Link Tool** — A single-click "Share View" header button copies the exact deep-linked visualization state directly to your clipboard.
+
+### 🖼️ Graph Visualizations Export (SVG/PNG)
+- **High-Fidelity Canvas Capture** — Capture the active D3 graph layout directly from the browser window.
+- **Embedded Stylesheet Parser** — Extracts CSS custom properties, theme tokens, marker definitions, and component styling, rendering a perfect vector SVG or high-resolution PNG.
+- **Integrated Canvas Controls** — Sleek export triggers built right next to the zoom and reset HUD in the canvas corner.
+
+### ⚡ D3 Performance Optimizations (Large Codebases)
+- **Synchronous Offline Simulation Warming** — Bypasses 60 FPS visual rendering cycles during initial chaotic layout settling on repositories with $>100$ files. Runs `100 - 180` force ticks synchronously in memory, instantly placing nodes in their stable coordinate configurations.
+- **Dynamic Quadtree Friction Tuning** — Lowers collision strength to `0.45` on large graphs ($>300$ nodes) to prevent bouncing oscillations and speed up simulation convergence.
 
 ---
 
@@ -311,6 +326,18 @@ The graph engine is built on **D3.js v7** and renders four distinct view modes o
 - **Double Click to Focus** — Resets viewport zoom and centers on the targeted table card.
 - **File Inspector Sync** — Click a database table card to highlight the source file and view the raw schema code side-by-side.
 - **Interactive Sandbox Onboarding** — Automatically loads a multi-table e-commerce mock schema (User, Order, OrderItem, Product, Category) if no database files are present, allowing immediate visual exploration.
+
+#### 📤 Graph Export Controls (SVG/PNG)
+- **Automatic Style Sheet Scanning** — CodeGraph scans document style sheets on export to capture and inline all vector colors, line widths, and font properties.
+- **Transparent and Theme Background support** — Exports with solid or transparent configurations corresponding to the user's active theme.
+- **Vector SVG Export** — Generates lightweight, scalable vectors (`.svg`) ideal for insertion into technical manuals, architectures documents, or READMEs.
+- **High-Resolution PNG Export** — Rasterizes the SVG elements to an off-screen HTML5 Canvas and triggers a direct image download (`.png`).
+
+#### ⚡ High-Performance D3 Optimization Suite
+To support codebases exceeding 500+ files without lagging or crashing the browser tab, CodeGraph implements three distinct optimization layers:
+1. **Synchronous Simulation Warming (Offline Ticking)**: When entering a large codebase ($>100$ nodes), the renderer disables D3 visual frame ticks, runs `100 - 180` layout computations entirely in memory, and settles the nodes instantly. This avoids up to 5 seconds of intensive DOM reflows and repaints.
+2. **Dynamic Quadtree Collision Force tuning**: Sets collision strength to `0.45` on large graphs ($>300$ nodes) to prevent nodes from bouncing around indefinitely, speeding up layout stabilization.
+3. **Responsive Minimap**: Employs an optimized HTML5 Canvas-based mini-viewport tracker instead of heavy SVG replicas, keeping panning smooth.
 
 ---
 
@@ -531,6 +558,19 @@ Accessible via `Ctrl + K` or `Cmd + K`, the command palette offers keyboard-firs
 - **Fuzzy File Search** — Type any part of a file path (e.g. `App.tsx` or `aiHelper`) to instantly search and highlight the file node on the D3 canvas.
 - **Action Shortcuts** — Trigger audits (e.g. DB Schema Audit, Instability coupling audit) or cycle themes instantly using global shortcuts (e.g. `Alt + T` to cycle themes, `Alt + A` to toggle AI chat).
 - **Keyboard-Accessible HUD** — Full list navigation support via Arrow keys, Enter to select, and Escape to dismiss.
+
+---
+
+### 11. Shareable URLs & Deep-Linking State
+
+CodeGraph supports full serialization of the application's visual configurations directly into the browser URL query string. This enables sharing a specific codebase analysis state with other team members.
+
+- **Real-Time State Serialization**: Whenever you change view modes, select a node, type a search query, run a function trace, or toggle themes, the changes are written immediately to the browser's address bar (`window.history.replaceState`) without forcing a page reload.
+- **Bi-directional State Sync**:
+  - **`repo`**: Loads the target GitHub repository (e.g., `?repo=NisargPatel03/CodeGraph`) or triggers the sample mock sandbox setup (`?repo=demo`).
+  - **`view`**: Restores the active visualization pane (e.g., `dependency`, `cluster`, `call`, `dbSchema`, `apiDocs`, `analytics`).
+  - **`node`, `search`, `trace`, `depth`, `theme`**: Restores the selected file path, search text, function trace ID, depth layout level, and interface color theme automatically on load.
+- **Glassmorphic Loading States**: Includes dedicated initialization screens that fetch resources via the GitHub REST API or load the local ZIP parser dynamically, rendering smooth loading transitions and error modals for broken parameters.
 
 ---
 
