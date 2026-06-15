@@ -398,8 +398,6 @@ const RiskQuadrantChart: React.FC<{
   const points = useMemo(() => {
     if (!nodes || nodes.length === 0) return [];
     
-    const maxComp = Math.max(...nodes.map(n => n.complexity || 0), 100);
-    const maxChurn = Math.max(...nodes.map(n => n.churn || 0), 10);
     const avgComp = nodes.reduce((sum, n) => sum + (n.complexity || 0), 0) / nodes.length;
     const avgChurn = nodes.reduce((sum, n) => sum + (n.churn || 0), 0) / nodes.length;
 
@@ -1463,6 +1461,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   );
                 })}
               </div>
+            </div>
           </div>
 
           <RiskQuadrantChart 
