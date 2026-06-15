@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Key, Sparkles, AlertCircle } from 'lucide-react';
+import { UploadCloud, Key, Sparkles, AlertCircle, History, Trash2 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import { fetchGitHubRepo, parseZipFile } from '../utils/repoParser';
 import logoImg from '../assets/logo.png';
@@ -207,6 +207,13 @@ const GithubIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
+interface RecentRepo {
+  repoName: string;
+  type: 'github' | 'zip' | 'demo';
+  gitUrl?: string;
+  timestamp: number;
+}
+
 interface RepoSelectorProps {
   onDataLoaded: (data: { files: ParsedFile[]; repoName: string }) => void;
 }
@@ -219,6 +226,57 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>(() => {
+    try {
+      const saved = localStorage.getItem('recent_repos_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addToHistory = (name: string, type: 'github' | 'zip' | 'demo', url?: string) => {
+    let currentHistory: RecentRepo[] = [];
+    try {
+      const saved = localStorage.getItem('recent_repos_history');
+      currentHistory = saved ? JSON.parse(saved) : [];
+    } catch {
+      currentHistory = [];
+    }
+    const filtered = currentHistory.filter(r => !(r.type === type && (type === 'github' ? r.gitUrl === url : r.repoName === name)));
+    const updated = [{ repoName: name, type, gitUrl: url, timestamp: Date.now() }, ...filtered].slice(0, 5);
+    localStorage.setItem('recent_repos_history', JSON.stringify(updated));
+    setRecentRepos(updated);
+  };
+
+  const handleRecentClick = async (repo: RecentRepo) => {
+    if (loading) return;
+    setError(null);
+    if (repo.type === 'github' && repo.gitUrl) {
+      setGitUrl(repo.gitUrl);
+      setLoading(true);
+      try {
+        const result = await fetchGitHubRepo(repo.gitUrl, gitToken);
+        addToHistory(result.repoName, 'github', repo.gitUrl);
+        onDataLoaded(result);
+      } catch (err: any) {
+        setError(err.message || 'An error occurred while fetching the GitHub repository.');
+      } finally {
+        setLoading(false);
+      }
+    } else if (repo.type === 'demo') {
+      addToHistory('CodeGraph-Demo-Project', 'demo');
+      onDataLoaded({ files: GET_DEMO_FILES(), repoName: 'CodeGraph-Demo-Project' });
+    } else if (repo.type === 'zip') {
+      setError(`Local ZIP Archive "${repo.repoName}" cannot be reloaded automatically. Please upload or drag-and-drop the ZIP file again.`);
+    }
+  };
+
+  const clearHistory = () => {
+    setRecentRepos([]);
+    localStorage.removeItem('recent_repos_history');
+  };
+
   const handleGitFetch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gitUrl) return;
@@ -226,6 +284,7 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
     setLoading(true);
     try {
       const result = await fetchGitHubRepo(gitUrl, gitToken);
+      addToHistory(result.repoName, 'github', gitUrl);
       onDataLoaded(result);
     } catch (err: any) {
       setError(err.message || 'An error occurred while fetching the GitHub repository.');
@@ -246,7 +305,9 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
       if (files.length === 0) {
         throw new Error('No readable code files found in the ZIP archive.');
       }
-      onDataLoaded({ files, repoName: file.name.replace('.zip', '') });
+      const repoName = file.name.replace('.zip', '');
+      addToHistory(repoName, 'zip');
+      onDataLoaded({ files, repoName });
     } catch (err: any) {
       setError(err.message || 'Error parsing ZIP file.');
     } finally {
@@ -272,6 +333,7 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
   };
 
   const handleLoadDemo = () => {
+    addToHistory('CodeGraph-Demo-Project', 'demo');
     onDataLoaded({ files: GET_DEMO_FILES(), repoName: 'CodeGraph-Demo-Project' });
   };
 
@@ -357,9 +419,95 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
           </div>
         </div>
 
+        {/* Recent Workspaces History */}
+        {recentRepos.length > 0 && (
+          <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600 }}>
+                <History size={16} style={{ color: 'var(--color-secondary)' }} />
+                <span>Recent Workspaces</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={clearHistory} 
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '4px', transition: 'color 0.2s, background 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-alert)'; e.currentTarget.style.background = 'rgba(244, 63, 94, 0.08)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}
+              >
+                <Trash2 size={12} />
+                <span>Clear History</span>
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {recentRepos.map((repo, idx) => {
+                const badgeColor = repo.type === 'github' ? 'rgba(99, 102, 241, 0.15)' : repo.type === 'zip' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+                const badgeBorder = repo.type === 'github' ? 'rgba(99, 102, 241, 0.3)' : repo.type === 'zip' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+                const badgeText = repo.type === 'github' ? '#818cf8' : repo.type === 'zip' ? '#fbbf24' : '#34d399';
+                const label = repo.type === 'github' ? 'GitHub' : repo.type === 'zip' ? 'ZIP Archive' : 'Demo Sandbox';
+
+                return (
+                  <div 
+                    key={idx}
+                    onClick={() => handleRecentClick(repo)}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between',
+                      padding: '10px 14px', 
+                      background: 'rgba(255, 255, 255, 0.02)', 
+                      border: '1px solid rgba(255, 255, 255, 0.05)', 
+                      borderRadius: '8px', 
+                      cursor: 'pointer', 
+                      transition: 'transform 0.2s, border-color 0.2s, background 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.borderColor = 'var(--color-secondary)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.transform = 'none';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
+                      <span style={{ 
+                        fontSize: '0.7rem', 
+                        fontWeight: 600, 
+                        padding: '2px 8px', 
+                        borderRadius: '12px', 
+                        background: badgeColor, 
+                        border: `1px solid ${badgeBorder}`,
+                        color: badgeText,
+                        textTransform: 'uppercase',
+                        flexShrink: 0
+                      }}>
+                        {label}
+                      </span>
+                      <span style={{ 
+                        color: 'var(--text-primary)', 
+                        fontSize: '0.85rem', 
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {repo.repoName}
+                      </span>
+                    </div>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                      {new Date(repo.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-alert)', background: 'rgba(244, 63, 94, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)', fontSize: '0.85rem', textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-alert)', background: 'rgba(244, 63, 94, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(244, 63, 94, 0.2)', fontSize: '0.85rem', textAlign: 'left', marginTop: '16px' }}>
             <AlertCircle size={16} style={{ flexShrink: 0 }} />
             <span>{error}</span>
           </div>
