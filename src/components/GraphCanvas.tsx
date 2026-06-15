@@ -3386,6 +3386,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     };
 
     const handleClick = (e: MouseEvent) => {
+      e.stopPropagation();
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
