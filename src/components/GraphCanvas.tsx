@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles, Download } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, ChevronUp, ChevronDown, Maximize2, Minimize2, Database, Sparkles, Download, Filter, SlidersHorizontal } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
@@ -255,6 +255,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  // Dynamic filter states
+  const [filterLanguage, setFilterLanguage] = useState<string>('all');
+  const [filterMinLoc, setFilterMinLoc] = useState<number>(0);
+  const [filterFolderPath, setFilterFolderPath] = useState<string>('');
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isExportDropdownOpen) return;
@@ -1486,6 +1492,31 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         });
       }
 
+      // Apply Dynamic Filters
+      if (filterLanguage !== 'all') {
+        activeNodes = activeNodes.filter(n => n.isFolder || n.isNpm || (n.language && n.language.toLowerCase() === filterLanguage.toLowerCase()));
+      }
+      if (filterMinLoc > 0) {
+        // Average 40 characters per line of code
+        activeNodes = activeNodes.filter(n => n.isFolder || n.isNpm || !n.size || (n.size / 40) >= filterMinLoc);
+      }
+      if (filterFolderPath.trim() !== '') {
+        const cleanPath = filterFolderPath.trim().toLowerCase();
+        activeNodes = activeNodes.filter(n => 
+          n.isNpm || 
+          n.id.toLowerCase().includes(cleanPath) || 
+          (n.folder && n.folder.toLowerCase().includes(cleanPath))
+        );
+      }
+
+      // Cleanup dangling links
+      const activeNodeIds = new Set(activeNodes.map(n => n.id));
+      activeLinks = activeLinks.filter(l => {
+        const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+        const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+        return activeNodeIds.has(s) && activeNodeIds.has(t);
+      });
+
       const getCollapsedAncestor = (nodeFolder: string): string | null => {
         if (!nodeFolder) return null;
         const sortedCollapsed = Array.from(collapsedFolders).sort((a, b) => a.length - b.length);
@@ -1606,6 +1637,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
       let activeLinks = graphData.callLinks.map((l) => ({ ...l }));
 
+      if (filterFolderPath.trim() !== '') {
+        const cleanPath = filterFolderPath.trim().toLowerCase();
+        activeNodes = activeNodes.filter(n => n.file && n.file.toLowerCase().includes(cleanPath));
+        
+        // Clean links
+        const activeNodeIds = new Set(activeNodes.map(n => n.id));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          return activeNodeIds.has(s) && activeNodeIds.has(t);
+        });
+      }
+
       if (isEvolutionMode && activeEvolutionFiles) {
         activeNodes = activeNodes.filter(n => activeEvolutionFiles.has(n.file));
         activeLinks = activeLinks.filter(l => {
@@ -1673,6 +1717,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       });
       let activeLinks = graphData.classLinks.map((l) => ({ ...l }));
 
+      if (filterFolderPath.trim() !== '') {
+        const cleanPath = filterFolderPath.trim().toLowerCase();
+        activeNodes = activeNodes.filter(n => n.file && n.file.toLowerCase().includes(cleanPath));
+        
+        // Clean links
+        const activeNodeIds = new Set(activeNodes.map(n => n.id));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          return activeNodeIds.has(s) && activeNodeIds.has(t);
+        });
+      }
+
       if (isEvolutionMode && activeEvolutionFiles) {
         activeNodes = activeNodes.filter(n => activeEvolutionFiles.has(n.id) || activeEvolutionFiles.has(n.file || ''));
         activeLinks = activeLinks.filter(l => {
@@ -1684,7 +1741,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       nodes = activeNodes;
       links = activeLinks;
     } else if (viewMode === 'dbSchema') {
-      nodes = dbSchema.tables.map((table) => {
+      let activeNodes = dbSchema.tables.map((table) => {
         const cached = nodePositionsRef.current.get(table.id);
         const cardHeight = 60 + table.fields.length * 24;
         return {
@@ -1699,13 +1756,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         };
       });
 
-      links = dbSchema.relationships.map((rel) => ({
+      let activeLinks = dbSchema.relationships.map((rel) => ({
         id: rel.id,
         source: rel.source,
         target: rel.target,
         sourceField: rel.sourceField,
         targetField: rel.targetField
       }));
+
+      if (filterFolderPath.trim() !== '') {
+        const cleanPath = filterFolderPath.trim().toLowerCase();
+        activeNodes = activeNodes.filter(n => n.id.toLowerCase().includes(cleanPath));
+        
+        const activeNodeIds = new Set(activeNodes.map(n => n.id));
+        activeLinks = activeLinks.filter(l => {
+          const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+          const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+          return activeNodeIds.has(s) && activeNodeIds.has(t);
+        });
+      }
+
+      nodes = activeNodes;
+      links = activeLinks;
     }
 
     if (nodes.length === 0) {
@@ -3073,7 +3145,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport, filterLanguage, filterMinLoc, filterFolderPath]);
 
   // Fast hover and selection highlighting for DB Schema
   useEffect(() => {
@@ -3720,6 +3792,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         <button className="control-btn" title="Reset View" onClick={(e) => { e.stopPropagation(); (window as any).graphZoom?.reset(); }}>
           <RotateCcw size={16} />
         </button>
+        <button 
+          className="control-btn" 
+          style={{ 
+            width: 'auto', 
+            padding: '0 8px', 
+            gap: '4px', 
+            background: isFilterPanelOpen ? 'var(--color-primary-glow)' : 'transparent',
+            borderColor: isFilterPanelOpen ? 'var(--color-primary)' : 'var(--panel-border)'
+          }} 
+          title="Filter Nodes" 
+          onClick={(e) => { e.stopPropagation(); setIsFilterPanelOpen(!isFilterPanelOpen); }}
+        >
+          <Filter size={14} />
+          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>Filter</span>
+        </button>
         <div style={{ position: 'relative' }}>
           <button 
             className="control-btn" 
@@ -3858,6 +3945,151 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           )}
         </div>
       </div>
+
+      {isFilterPanelOpen && (
+        <div 
+          className="glass-panel"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            width: '280px',
+            borderRadius: '10px',
+            border: '1px solid var(--panel-border)',
+            background: 'var(--panel-bg)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            zIndex: 100,
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <SlidersHorizontal size={14} style={{ color: 'var(--color-primary)' }} />
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Graph Filters
+              </span>
+            </div>
+            <button 
+              onClick={() => setIsFilterPanelOpen(false)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Folder Path Search */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+              {viewMode === 'dbSchema' ? 'Table Name Filter' : 'Folder / Path Regex'}
+            </label>
+            <input 
+              type="text" 
+              placeholder={viewMode === 'dbSchema' ? "e.g. Users..." : "e.g. src/components..."} 
+              value={filterFolderPath}
+              onChange={(e) => setFilterFolderPath(e.target.value)}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '6px',
+                padding: '6px 8px',
+                fontSize: '0.75rem',
+                color: 'var(--text-primary)',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          {/* Language Selection */}
+          {viewMode !== 'dbSchema' && viewMode !== 'call' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Programming Language</label>
+              <select
+                value={filterLanguage}
+                onChange={(e) => setFilterLanguage(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(10, 15, 30, 0.95)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">All Languages</option>
+                <option value="typescript">TypeScript (.ts, .tsx)</option>
+                <option value="javascript">JavaScript (.js, .jsx)</option>
+                <option value="python">Python (.py)</option>
+                <option value="css">CSS</option>
+                <option value="json">JSON / Config</option>
+              </select>
+            </div>
+          )}
+
+          {/* Minimum Lines of Code */}
+          {(viewMode === 'dependency' || viewMode === 'cluster') && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Min complexity (lines of code)</label>
+                <span style={{ fontSize: '0.7rem', color: 'var(--color-secondary)', fontWeight: 600 }}>{filterMinLoc} LOC</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="500" 
+                step="10"
+                value={filterMinLoc}
+                onChange={(e) => setFilterMinLoc(parseInt(e.target.value))}
+                style={{
+                  width: '100%',
+                  cursor: 'pointer',
+                  accentColor: 'var(--color-primary)'
+                }}
+              />
+            </div>
+          )}
+
+          {/* Clear Filters Button */}
+          {(filterLanguage !== 'all' || filterMinLoc > 0 || filterFolderPath !== '') && (
+            <button
+              onClick={() => {
+                setFilterLanguage('all');
+                setFilterMinLoc(0);
+                setFilterFolderPath('');
+              }}
+              style={{
+                width: '100%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                padding: '8px',
+                fontSize: '0.7rem',
+                color: '#ef4444',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
+            >
+              Reset All Filters
+            </button>
+          )}
+        </div>
+      )}
 
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
