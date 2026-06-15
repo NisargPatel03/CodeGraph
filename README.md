@@ -85,6 +85,12 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Virtual Deleted Node Support** — Support for inspecting placeholder nodes of files that have been deleted in the head branch, preventing crashes and offering full deleted patch history.
 - **Dual-View Interface** — Toggle sub-tab interface allowing reviewers to switch between the visual patch changeset and traditional file metrics.
 
+### 🗂️ Multi-File Refactor (Cross-File Suggestions)
+- **Interactive Multi-Select Mode** — Toggle checkboxes next to all workspace files inside the files panel.
+- **Cross-File Code Analysis** — Selecting two or more files allows triggering a shared architectural evaluation using Gemini.
+- **Intelligent Refactoring Console** — Streams modular decoupling blueprints, shared helper suggestions, interface integrations, and step-by-step code edits to consolidate duplicate patterns or smells across multiple files.
+
+
 ### 🔍 File Inspector
 - **Code Review Diff / General Metrics Sub-tabs** — Toggle between code review diff patches and general file metrics
 - **Function List** — Auto-parses and lists all functions with scroll-to-line navigation
@@ -171,7 +177,9 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Comprehensive API Coverage** — Wraps all 12 promise-based AI methods and 5 streaming generators with token-saving caching guards.
 
 ### ⚙️ Glassmorphic Settings Console
-- **Gemini API Configuration** — Secure panel to configure the Google Gemini API key to activate advanced explanations, linter rules, test suites, and schema audit features.
+- **Automated API Key Verification** — Automatically detects and verifies the Google Gemini API key loaded from environment variables (`VITE_GEMINI_API_KEY`).
+- **Telemetry & Status Monitor** — Renders the real-time cache diagnostic panel, token metrics, and API health status directly in the settings drawer.
+
 
 ### 🔗 Shareable URL & Deep-Linking State
 - **URL-Based State Persistence** — Automatically syncs the active visualization state (`repo`, `view`, `node`, `search`, `trace`, `depth`, `theme`) with browser query parameters in real-time using `window.history.replaceState`.
@@ -394,6 +402,11 @@ When a branch comparison is active and a modified node is selected, the inspecto
 - **Git Patch Viewer** — A line-by-line syntax-highlighted git diff patch (green for `+`, red for `-`, blue/indigo for hunk markers).
 - **Sub-Tab Navigation** — Toggle buttons to switch between **Code Review Diff** and **General Metrics**.
 - **Virtual Node Support** — Handles deleted file placeholder nodes, rendering the deletion patch without crashing.
+
+#### Multi-File Refactoring Suggestions (Multi-Select)
+- **Checkboxed Selection** — Toggle the `☑️ Multi-File Refactor` option in the sidebar to display checkboxes next to all items in the file tree.
+- **Cross-File Code Analysis** — Selecting two or more files displays a floating trigger at the bottom of the files panel: `✨ Refactor Selected Files`.
+- **Intelligent Architectural Decoupling** — Queries the Gemini AI engine to perform cross-file structural comparisons. Streams a detailed refactoring recommendation outlining common patterns, code consolidation, API layout adjustments, and file structure changes.
 
 #### Info Tab Sections (Metrics View)
 | Section | Description |
@@ -793,14 +806,16 @@ To prevent unauthorized script execution and guard against data exfiltration, th
 ```html
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval';
-  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data: https: blob:;
   connect-src 'self' https://api.github.com https://generativelanguage.googleapis.com;
+  worker-src 'self' blob:;
+  child-src 'self' blob:;
 " />
 ```
-This restricts outbound network calls exclusively to local assets, Google Fonts, GitHub API, and Google's Gemini API endpoints.
+This restricts outbound network calls exclusively to local assets, trusted script CDNs, Google Fonts, GitHub API, and Google's Gemini API endpoints, while allowing Monaco Editor's background syntax-checking workers to spawn.
 
 ### 4. Quota Limits & Rate Limit Error Handling
 - **Dynamic Error Decoders:** If the environment Gemini API Key experiences a connection error, CodeGraph catches it and formats it into user-friendly markdown notices:
