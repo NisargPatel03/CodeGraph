@@ -2726,7 +2726,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return () => {
       simulation.stop();
     };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath]);
   useEffect(() => {
     if (!svgRef.current) return;
     if (viewMode === 'dbSchema') return;
