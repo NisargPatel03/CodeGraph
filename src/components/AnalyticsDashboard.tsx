@@ -465,14 +465,24 @@ const RiskQuadrantChart: React.FC<{
 
   return (
     <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div>
-        <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-          <Activity size={15} style={{ color: 'var(--color-alert)' }} />
-          Churn vs. Complexity: Risk Quadrants
-        </h4>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-          This quadrant plot identifies architectural hotspots. Files in the **Top-Right (High Churn + High Complexity)** quadrant represent high-maintenance code debt.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ flex: '1 1 300px' }}>
+          <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+            <Activity size={15} style={{ color: 'var(--color-alert)' }} />
+            Churn vs. Complexity: Risk Quadrants
+          </h4>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+            This quadrant plot identifies architectural hotspots. Files in the **Top-Right (High Churn + High Complexity)** quadrant represent high-maintenance code debt.
+          </p>
+        </div>
+        
+        {/* Horizontal Legend Row */}
+        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '0.72rem', background: 'rgba(255,255,255,0.02)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--panel-border)', alignSelf: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef444480' }} /> <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>⚠️ Hotspots</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#a855f7', boxShadow: '0 0 6px #a855f780' }} /> <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>🔄 Frequent Churn</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316', boxShadow: '0 0 6px #f9731680' }} /> <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>📦 Complex Core</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b98180' }} /> <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>✅ Stable & Simple</span></div>
+        </div>
       </div>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -563,11 +573,11 @@ const RiskQuadrantChart: React.FC<{
               strokeDasharray="4 4"
             />
 
-            {/* Quadrant Labels */}
-            <text x={padding.left + 12} y={padding.top + 20} fill="#a855f7" fontSize="10" fontWeight="600" opacity="0.8">🔄 Frequent Churn</text>
-            <text x={svgWidth - padding.right - 12} y={padding.top + 20} fill="#ef4444" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.8">⚠️ Hotspots</text>
-            <text x={padding.left + 12} y={svgHeight - padding.bottom - 12} fill="#10b981" fontSize="10" fontWeight="600" opacity="0.8">✅ Stable & Simple</text>
-            <text x={svgWidth - padding.right - 12} y={svgHeight - padding.bottom - 12} fill="#f97316" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.8">📦 Complex Core</text>
+            {/* Quadrant Watermark Labels */}
+            <text x={padding.left + 12} y={padding.top + 20} fill="#a855f7" fontSize="10" fontWeight="600" opacity="0.2">🔄 Frequent Churn</text>
+            <text x={svgWidth - padding.right - 12} y={padding.top + 20} fill="#ef4444" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.2">⚠️ Hotspots</text>
+            <text x={padding.left + 12} y={svgHeight - padding.bottom - 12} fill="#10b981" fontSize="10" fontWeight="600" opacity="0.2">✅ Stable & Simple</text>
+            <text x={svgWidth - padding.right - 12} y={svgHeight - padding.bottom - 12} fill="#f97316" fontSize="10" fontWeight="600" textAnchor="end" opacity="0.2">📦 Complex Core</text>
 
             {/* Axes Ticks and Labels */}
             {/* X-Axis: Complexity (LOC) */}
