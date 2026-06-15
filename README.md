@@ -45,6 +45,8 @@
   - [Dynamic Filter System](#15-dynamic-filter-system)
   - [3D WebGL-Style Graph Canvas](#16-3d-webgl-style-graph-canvas)
   - [AI Caching & Token Telemetry Dashboard](#17-ai-caching--token-telemetry-dashboard)
+  - [Churn vs. Complexity Risk Quadrant Chart](#18-churn-vs-complexity-risk-quadrant-chart)
+  - [Mermaid.js UML Diagram Exporter](#19-mermaidjs-uml-diagram-exporter)
 - [Architecture](#architecture)
 - [Security & Privacy](#-security-privacy--error-handling)
 - [Contributing](#contributing)
@@ -475,8 +477,12 @@ A bottom panel for quick codebase telemetry checks:
 
 #### 📊 Full-Screen Analytics Dashboard (`AnalyticsDashboard.tsx`)
 A premium, multi-tab intelligence command center featuring:
-- **Tab 1: Codebase Health Metrics** — Complete KPI dashboard with module complexity heatmaps, file import leaders, codebase smell distribution charts, and interactive circular cycle lists.
+- **Tab 1: Codebase Health Metrics** — Complete KPI dashboard featuring:
+  - **Churn vs. Complexity "Risk Quadrant" Chart**: A 2D scatter plot mapping code modifications against file complexity. It categorizes files into four color-coded quadrants: `🚨 Refactor Candidate` (Red), `⚡ Active / Changing` (Purple), `⚙️ Stable / Complex` (Orange), and `Healthy / Low Risk` (Gray). Includes interactive tooltips and click-to-focus inspector sidebar sync.
+  - **Module Complexity Heatmaps**: Visualizes file sizes and functions count distribution.
+  - **Metrics Leaders**: Displays top imported files and code smell distributions.
 - **Tab 2: UML & Architecture** — Side-by-side workspace displaying a rendered, dynamic **UML Graph TD** diagram (built using Mermaid.js) and an AI-authored Architectural Guide.
+  - **UML Export Controls**: Direct client-side download buttons to export the rendered Mermaid diagram as a Scalable Vector Graphics file (`Export SVG`) or a high-DPI raster image (`Export PNG`).
 - **Tab 3: Onboarding Exporter** — Developer onboarding wizard allowing direct Markdown download, Notion clipboard copy, and print-optimized PDF generation.
 - **Tab 4: Restructuring & Contracts** (AI Simulator Suite):
   - **Folder Restructure Simulator**: Evaluates coupling limits and generates a clean folder/file structural blueprint. Includes a **📄 PDF Export** button that renders a printable light-mode document.
@@ -676,6 +682,33 @@ An analytical instrumentation dashboard embedded inside the Settings slide-out p
 - **Token Counters:** Displays cumulative tokens processed by Gemini versus total tokens saved (retrieved from cache hits). Token estimates are calculated using standard character-to-token multipliers.
 - **Financial Savings Estimate:** Translates saved tokens into US dollar estimates based on standard Gemini 3.5 API pricing models ($0.15 per million input tokens).
 - **Engineering Hours Saved:** Translates cache hits into time saved, based on a developer onboarding velocity estimate (approx. 2 minutes of comprehension time saved per AI request cache hit).
+
+---
+
+### 18. Churn vs. Complexity Risk Quadrant Chart
+
+**File:** `src/components/AnalyticsDashboard.tsx`
+
+The Churn vs. Complexity Scatter Plot is an interactive SVG-rendered graph layout designed to automatically highlight refactoring hot spots and technical debt in the active workspace:
+- **Axis Metrics:** The X-axis maps file line counts (complexity metric scaled using a square root scale to prevent layout outliers), and the Y-axis maps git changesets (file churn metric).
+- **Interactive Scatter Points:** Each file node in the graph is plotted as a circular point. Points are colored based on risk level: Red for candidate targets, Purple for active files, Orange for stable-complex components, and Gray for low-risk elements.
+- **Dynamic Watermark Dividers:** Computes average churn and average complexity dynamically across all files to draw division threshold lines, splitting the canvas into four risk segments:
+  1. **🚨 Refactor Candidate (Top-Right):** Highly complex files that are frequently modified. These represent priority targets for architectural decoupling or component splitting.
+  2. **⚡ Active / Changing (Top-Left):** Low complexity files that change frequently (e.g. entry configurations or route indexes).
+  3. **⚙️ Stable / Complex (Bottom-Right):** Large helper libraries or core calculation engines that have high LOC but rarely require modifications.
+  4. **Healthy / Low Risk (Bottom-Left):** Standard, simple utility files that represent healthy codebase architecture.
+- **Node Highlighting and Navigation:** Hovering any scatter node reveals a floating tooltip showing the exact file path, LOC complexity count, commit churn level, and calculated risk score product ($LOC \times Churn$). Clicking a node automatically pans the D3 canvas and selects the file in the workspace.
+
+---
+
+### 19. Mermaid.js UML Diagram Exporter
+
+**Files:** `src/components/AnalyticsDashboard.tsx` and `src/components/Reports.tsx`
+
+An integrated technical exporter that allows exporting the Gemini-generated Mermaid.js class/folder diagrams:
+- **Export SVG:** Grabs the DOM elements of the rendered Mermaid chart, attaches explicit SVG namespaces, injects dark-mode styling properties (`#0a0a0f` background color, rounded borders, and padding), compiles a standardized XML string, and downloads it directly as a `.svg` vector file.
+- **Export PNG:** Instantiates an off-screen HTML5 Canvas. Loads the SVG data URL onto the canvas using a scaling factor of `2.0` (delivering high-DPI retina rendering resolution), draws a dark solid background, and compiles it into a high-quality `.png` download file.
+- **Regenerate Operations:** Includes a quick action trigger that queries the Gemini model to reconstruct and redraw the Mermaid UML code.
 
 ---
 
