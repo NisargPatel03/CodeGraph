@@ -324,6 +324,7 @@ interface InspectorProps {
   auditError: string | null;
   onRunAudit: () => void;
   onUpdateFileContent?: (filePath: string, newContent: string) => void;
+  repoName: string;
 }
 
 export const Inspector: React.FC<InspectorProps> = ({
@@ -353,6 +354,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   auditError,
   onRunAudit,
   onUpdateFileContent,
+  repoName,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter' | 'audit'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -371,6 +373,99 @@ export const Inspector: React.FC<InspectorProps> = ({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading, isStreaming]);
+
+  interface GitHubFileMetadata {
+    lastModified: string | null;
+    author: string | null;
+    commitMessage: string | null;
+    commitCount: number | null;
+    loading: boolean;
+  }
+
+  const [githubMetadata, setGithubMetadata] = useState<GitHubFileMetadata | null>(null);
+
+  useEffect(() => {
+    if (!selectedFile || !repoName || repoName === 'CodeGraph-Demo-Project' || !repoName.includes('/')) {
+      setGithubMetadata(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const fetchGithubFileMetadata = async () => {
+      setGithubMetadata({
+        lastModified: null,
+        author: null,
+        commitMessage: null,
+        commitCount: null,
+        loading: true
+      });
+
+      const token = localStorage.getItem('gh_token') || '';
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `token ${token}`;
+      }
+
+      try {
+        const url = `https://api.github.com/repos/${repoName}/commits?path=${selectedFile.path}&per_page=1`;
+        const res = await fetch(url, { headers });
+        if (isCancelled) return;
+
+        if (!res.ok) {
+          throw new Error(`Status ${res.status}`);
+        }
+
+        const data = await res.json();
+        if (isCancelled) return;
+
+        if (Array.isArray(data) && data.length > 0) {
+          const latestCommit = data[0];
+          const author = latestCommit.commit?.author?.name || latestCommit.author?.login || 'Anonymous';
+          const date = latestCommit.commit?.author?.date 
+            ? new Date(latestCommit.commit.author.date).toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            : 'Unknown';
+          const commitMessage = latestCommit.commit?.message || '';
+
+          // Parse total commit count from Link header
+          let commitCount = 1;
+          const linkHeader = res.headers.get('Link') || res.headers.get('link');
+          if (linkHeader) {
+            const lastMatch = linkHeader.match(/page=(\d+)>;\s*rel="last"/);
+            if (lastMatch) {
+              commitCount = parseInt(lastMatch[1], 10);
+            }
+          }
+
+          setGithubMetadata({
+            lastModified: date,
+            author,
+            commitMessage,
+            commitCount,
+            loading: false
+          });
+        } else {
+          setGithubMetadata(null);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch file commit metadata:', err);
+        if (!isCancelled) {
+          setGithubMetadata(null);
+        }
+      }
+    };
+
+    fetchGithubFileMetadata();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedFile, repoName]);
 
   // Extended File Inspector States
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -981,9 +1076,15 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
                           {(activeInspectorFile.size / 1024).toFixed(2)} KB
                         </span>
-                        <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Simulated Git Commit Frequency">
-                          🔥 {Math.floor(((activeInspectorFile.size + activeInspectorFile.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 55) + 5)} commits
-                        </span>
+                        {githubMetadata && githubMetadata.commitCount !== null ? (
+                          <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Real GitHub Commit Count">
+                            🔥 {githubMetadata.commitCount} commits
+                          </span>
+                        ) : (
+                          <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(245, 158, 11, 0.08)', color: 'var(--color-warning)', borderColor: 'rgba(245, 158, 11, 0.2)' }} title="Simulated Git Commit Frequency">
+                            🔥 {Math.floor(((activeInspectorFile.size + activeInspectorFile.path.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 55) + 5)} commits
+                          </span>
+                        )}
                         <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }} title="Lines of Code Complexity">
                           ⏱️ {activeInspectorFile.content ? activeInspectorFile.content.split('\n').length : 0} LOC
                         </span>
@@ -1019,6 +1120,48 @@ export const Inspector: React.FC<InspectorProps> = ({
                               transition: 'width 0.4s ease'
                             }} />
                           </div>
+                        </div>
+                      )}
+
+                      {/* GitHub Metadata HUD (Real Author & Date) */}
+                      {githubMetadata && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '10px 12px',
+                          background: 'rgba(255, 255, 255, 0.02)',
+                          border: '1px solid var(--panel-border)',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-secondary)'
+                        }}>
+                          {githubMetadata.loading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                              <Bot size={13} className="spin-slow" />
+                              <span>Fetching real Git metadata...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Last Modified:</span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{githubMetadata.lastModified || 'N/A'}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>Last Author:</span>
+                                <span style={{ fontWeight: 600, color: 'var(--color-secondary)' }}>{githubMetadata.author || 'N/A'}</span>
+                              </div>
+                              {githubMetadata.commitMessage && (
+                                <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px', marginTop: '2px' }}>
+                                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Last Commit Message:</span>
+                                  <span style={{ fontStyle: 'italic', color: 'var(--text-secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={githubMetadata.commitMessage}>
+                                    "{githubMetadata.commitMessage}"
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       )}
 

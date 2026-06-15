@@ -1203,6 +1203,7 @@ export default function App() {
             {viewMode !== 'docs' && (
               <Inspector
                 selectedFile={activeFile}
+                repoName={repoData.repoName}
                 allFiles={repoData.files}
                 apiKey={apiKey}
                 cycles={graphData.cycles}
