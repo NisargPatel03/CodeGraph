@@ -47,6 +47,8 @@
   - [AI Caching & Token Telemetry Dashboard](#ai-caching-token-telemetry-dashboard)
   - [Churn vs. Complexity Risk Quadrant Chart](#churn-vs-complexity-risk-quadrant-chart)
   - [Mermaid.js UML Diagram Exporter](#mermaidjs-uml-diagram-exporter)
+  - [Visual API-to-Database Mapping & Drift Analysis](#visual-api-to-database-mapping-drift-analysis)
+  - [One-Click AI-Patch Applicator](#one-click-ai-patch-applicator)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -90,7 +92,6 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Cross-File Code Analysis** — Selecting two or more files allows triggering a shared architectural evaluation using Gemini.
 - **Intelligent Refactoring Console** — Streams modular decoupling blueprints, shared helper suggestions, interface integrations, and step-by-step code edits to consolidate duplicate patterns or smells across multiple files.
 
-
 ### 🔍 File Inspector
 - **Code Review Diff / General Metrics Sub-tabs** — Toggle between code review diff patches and general file metrics
 - **Function List** — Auto-parses and lists all functions with scroll-to-line navigation
@@ -104,7 +105,6 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Real Git Metadata HUD** — Dynamically queries the GitHub API to render the file's last modified timestamp, author, last commit message (with multiline wrap), and exact total commit count (parsed from HTTP pagination headers). Gracefully falls back to size-based simulated commit estimates for ZIP/sandbox workspaces.
 
 ### 🤖 AI Code Intelligence Suite
-
 - **⚡ Real-Time Streaming AI Responses** — Renders response text token-by-token directly in the browser. Utilises Google Gemini's `generateContentStream` API to stream answers for the AI Chat Assistant, Folder Explanations, Refactoring suggestions, Folder Restructure Simulation, and API-Database Contract Drift analysis. Accompanied by a neon typing cursor indicator to signal active processing.
 - **Semantic Code Search** — `semanticSearchCodebase` — AI-powered natural language query parser mapping user queries (e.g. "where we validate API keys") to the top matching files with relevance scores and match reasons.
 - **AI Mermaid Diagram Generator** — `generateMermaidDiagram` — Automatically structures top-level folder subgraphs and file dependencies into a beautiful, visual Mermaid.js diagram.
@@ -180,7 +180,6 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Automated API Key Verification** — Automatically detects and verifies the Google Gemini API key loaded from environment variables (`VITE_GEMINI_API_KEY`).
 - **Telemetry & Status Monitor** — Renders the real-time cache diagnostic panel, token metrics, and API health status directly in the settings drawer.
 
-
 ### 🔗 Shareable URL & Deep-Linking State
 - **URL-Based State Persistence** — Automatically syncs the active visualization state (`repo`, `view`, `node`, `search`, `trace`, `depth`, `theme`) with browser query parameters in real-time using `window.history.replaceState`.
 - **Deep-Linking Workspace Loading** — Direct URL loading of public GitHub repositories (e.g. `?repo=owner/repo`) or the sandbox demo project (`?repo=demo`) with glassmorphic loading/error overlays.
@@ -206,6 +205,16 @@ Six built-in visual themes, switchable with an animated ripple effect:
 
 ### ⚡ AI Cache Savings & Token Telemetry Dashboard
 - **Live Cache Diagnostics Panel** — A telemetry dashboard inside the Settings drawer displaying cache hit ratios, cumulative processed vs. saved tokens, and real-time developer financial cost/time savings metrics.
+
+### 🎯 Visual API-to-Database Mapping & Drift Analysis
+- **Unified Controller-to-Schema Connection** — Automatically detects and visually overlays REST API endpoint routes onto their corresponding database tables.
+- **Orphan Database Table Isolation** — Instantly flags database schema tables that are isolated from routing controller logic.
+- **Data Contract Drift Analysis** — Inspects route parameter structures against schema column definitions, alerting developers to schema drift or type casting discrepancies.
+
+### ⚡ One-Click AI-Patch Applicator
+- **Instant Code Refactoring** — A single-click patch trigger embedded inside the Code Smells reports and dashboards.
+- **Automated Regex Extractor** — Asynchronously fetches recommendations from Gemini, extracts raw code segments from code blocks, and replaces file content seamlessly in memory.
+- **Hot-Reloaded Telemetry Recalculation** — Applying a patch instantly updates the repository workspace state and re-triggers codebase health evaluations, clearing resolved code smells on the fly.
 
 ---
 
@@ -325,7 +334,8 @@ When loading a GitHub repository, CodeGraph accepts an optional **GitHub Persona
 
 ## Feature Deep Dives
 
-### <a id="graph-visualization-engine"></a>1. Graph Visualization Engine
+<a id="graph-visualization-engine"></a>
+### 1. Graph Visualization Engine
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -384,7 +394,8 @@ To support codebases exceeding 500+ files without lagging or crashing the browse
 
 ---
 
-### <a id="file-inspector"></a>2. File Inspector & PR Diff Inspector
+<a id="file-inspector"></a>
+### 2. File Inspector & PR Diff Inspector
 
 **File:** `src/components/Inspector.tsx`
 
@@ -424,7 +435,8 @@ When a branch comparison is active and a modified node is selected, the inspecto
 
 ---
 
-### <a id="ai-code-intelligence-suite"></a>3. AI Code Intelligence Suite
+<a id="ai-code-intelligence-suite"></a>
+### 3. AI Code Intelligence Suite
 
 **File:** `src/utils/aiHelper.ts`
 
@@ -478,7 +490,8 @@ For interactive components, CodeGraph uses asynchronous streaming generators to 
 
 ---
 
-### <a id="reports-analytics-dashboard"></a>4. Reports & Analytics Dashboard
+<a id="reports-analytics-dashboard"></a>
+### 4. Reports & Analytics Dashboard
 
 **Files:** `src/components/Reports.tsx` (Bottom Drawer) and `src/components/AnalyticsDashboard.tsx` (Full-screen view)
 
@@ -507,7 +520,8 @@ A premium, multi-tab intelligence command center featuring:
 
 ---
 
-### <a id="api-documentation-portal"></a>5. API Documentation Portal
+<a id="api-documentation-portal"></a>
+### 5. API Documentation Portal
 
 **File:** `src/components/ApiDocsPortal.tsx`
 
@@ -529,7 +543,8 @@ A full-featured, interactive REST API documentation explorer accessible from the
 
 ---
 
-### <a id="kpi-ribbon"></a>6. KPI Ribbon
+<a id="kpi-ribbon"></a>
+### 6. KPI Ribbon
 
 **File:** `src/components/KpiRibbon.tsx`
 
@@ -541,7 +556,8 @@ A compact, sticky summary bar rendered directly below the graph tabs (visible in
 
 ---
 
-### <a id="theme-system"></a>7. Theme System
+<a id="theme-system"></a>
+### 7. Theme System
 
 Themes are controlled by a `data-theme` attribute on `<html>` and a set of CSS custom properties:
 
@@ -561,7 +577,8 @@ Theme selection persists in `localStorage`. Switching themes triggers a CSS-anim
 
 ---
 
-### <a id="static-analysis-engine"></a>8. Static Analysis Engine
+<a id="static-analysis-engine"></a>
+### 8. Static Analysis Engine
 
 **File:** `src/utils/codeAnalyzer.ts`
 
@@ -592,7 +609,8 @@ A fully client-side, zero-dependency static analysis engine that parses source f
 
 ---
 
-### <a id="markdown-latex-formatting-pipeline"></a>9. Markdown & LaTeX Formatting Pipeline
+<a id="markdown-latex-formatting-pipeline"></a>
+### 9. Markdown & LaTeX Formatting Pipeline
 
 To guarantee visual elegance and technical correctness for all AI-generated contents (including the Chat Drawer, Inspector explanation, and Analytics reports), CodeGraph runs a multi-stage parser utility:
 
@@ -602,7 +620,8 @@ To guarantee visual elegance and technical correctness for all AI-generated cont
 
 ---
 
-### <a id="command-palette-keyboard-controls"></a>10. Global Command Palette & Keyboard Controls
+<a id="command-palette-keyboard-controls"></a>
+### 10. Global Command Palette & Keyboard Controls
 
 **File:** `src/components/CommandPalette.tsx`
 
@@ -615,7 +634,8 @@ Accessible via `Ctrl + K` or `Cmd + K`, the command palette offers keyboard-firs
 
 ---
 
-### <a id="shareable-urls-deep-linking-state"></a>11. Shareable URLs & Deep-Linking State
+<a id="shareable-urls-deep-linking-state"></a>
+### 11. Shareable URLs & Deep-Linking State
 
 CodeGraph supports full serialization of the application's visual configurations directly into the browser URL query string. This enables sharing a specific codebase analysis state with other team members.
 
@@ -628,7 +648,8 @@ CodeGraph supports full serialization of the application's visual configurations
 
 ---
 
-### <a id="recent-workspaces-history"></a>12. Recent Workspaces History
+<a id="recent-workspaces-history"></a>
+### 12. Recent Workspaces History
 
 **File:** `src/components/RepoSelector.tsx`
 
@@ -641,7 +662,8 @@ To make returning to previous codebases fast and seamless, CodeGraph features a 
 
 ---
 
-### <a id="ai-response-caching-layer"></a>13. AI Response Caching Layer
+<a id="ai-response-caching-layer"></a>
+### 13. AI Response Caching Layer
 
 **File:** `src/utils/aiHelper.ts`
 
@@ -652,7 +674,8 @@ To minimize API usage cost, prevent rate-limiting, and boost responsiveness, Cod
 
 ---
 
-### <a id="real-github-file-metadata-hud"></a>14. Real GitHub File Metadata HUD
+<a id="real-github-file-metadata-hud"></a>
+### 14. Real GitHub File Metadata HUD
 
 **File:** `src/components/Inspector.tsx`
 
@@ -664,7 +687,8 @@ When a GitHub repository is loaded, CodeGraph replaces simulated metadata calcul
 
 ---
 
-### <a id="dynamic-filter-system"></a>15. Dynamic Filter System
+<a id="dynamic-filter-system"></a>
+### 15. Dynamic Filter System
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -676,7 +700,8 @@ The Dynamic Graph Filtering panel floats on the main viewport, providing real-ti
 
 ---
 
-### <a id="3d-webgl-style-graph-canvas"></a>16. 3D WebGL-Style Graph Canvas
+<a id="3d-webgl-style-graph-canvas"></a>
+### 16. 3D WebGL-Style Graph Canvas
 
 **File:** `src/components/GraphCanvas.tsx`
 
@@ -690,7 +715,8 @@ A high-fidelity 3D visualization option built using lightweight, native HTML5 Ca
 
 ---
 
-### <a id="ai-caching-token-telemetry-dashboard"></a>17. AI Caching & Token Telemetry Dashboard
+<a id="ai-caching-token-telemetry-dashboard"></a>
+### 17. AI Caching & Token Telemetry Dashboard
 
 **Files:** `src/components/RepoSelector.tsx` and `src/utils/aiHelper.ts`
 
@@ -702,7 +728,8 @@ An analytical instrumentation dashboard embedded inside the Settings slide-out p
 
 ---
 
-### <a id="churn-vs-complexity-risk-quadrant-chart"></a>18. Churn vs. Complexity Risk Quadrant Chart
+<a id="churn-vs-complexity-risk-quadrant-chart"></a>
+### 18. Churn vs. Complexity Risk Quadrant Chart
 
 **File:** `src/components/AnalyticsDashboard.tsx`
 
@@ -718,7 +745,8 @@ The Churn vs. Complexity Scatter Plot is an interactive SVG-rendered graph layou
 
 ---
 
-### <a id="mermaidjs-uml-diagram-exporter"></a>19. Mermaid.js UML Diagram Exporter
+<a id="mermaidjs-uml-diagram-exporter"></a>
+### 19. Mermaid.js UML Diagram Exporter
 
 **Files:** `src/components/AnalyticsDashboard.tsx` and `src/components/Reports.tsx`
 
@@ -726,6 +754,30 @@ An integrated technical exporter that allows exporting the Gemini-generated Merm
 - **Export SVG:** Grabs the DOM elements of the rendered Mermaid chart, attaches explicit SVG namespaces, injects dark-mode styling properties (`#0a0a0f` background color, rounded borders, and padding), compiles a standardized XML string, and downloads it directly as a `.svg` vector file.
 - **Export PNG:** Instantiates an off-screen HTML5 Canvas. Loads the SVG data URL onto the canvas using a scaling factor of `2.0` (delivering high-DPI retina rendering resolution), draws a dark solid background, and compiles it into a high-quality `.png` download file.
 - **Regenerate Operations:** Includes a quick action trigger that queries the Gemini model to reconstruct and redraw the Mermaid UML code.
+
+---
+
+<a id="visual-api-to-database-mapping-drift-analysis"></a>
+### 20. Visual API-to-Database Mapping & Drift Analysis
+
+**Files:** `src/components/Inspector.tsx`, `src/components/GraphCanvas.tsx`
+
+- **Visual Connection Overlays**: Shows bidirectional mappings linking REST API controller definitions to corresponding database tables directly on the D3 network visualization graph.
+- **Orphan Database Analysis**: Identifies and flags tables that are completely isolated from routing controller endpoints, helping developers prune dead database schema assets.
+- **Field-Level Schema Inspector**: Selecting any database table node in the graph displays relational fields, data types, and primary key (`🔑`)/foreign key (`🔗`) attributes.
+- **Contract Drift Warnings**: Analyzes route parameters against database column types, exposing potential data drift or type casting vulnerabilities.
+
+---
+
+<a id="one-click-ai-patch-applicator"></a>
+### 21. One-Click AI-Patch Applicator
+
+**Files:** `src/components/AnalyticsDashboard.tsx`, `src/components/Reports.tsx`, `src/utils/aiHelper.ts`
+
+- **Inline Trigger Buttons**: Standardized "Auto-Apply" buttons placed inside code smell lists, dashboards, and modal inspectors.
+- **Background Patch Execution**: Bypasses manual copy-paste sequences by using an async pipeline that parses Gemini markdown response segments for code blocks.
+- **Seamless Local Memory Commits**: Invokes `onUpdateFileContent` synchronously to write updates directly to workspace memory.
+- **Automatic Health Re-evaluation**: Saving the patch instantly invokes `analyzeCodebase`, reloading import paths, complexity metrics, cycle indicators, and smell status dynamically.
 
 ---
 
@@ -784,10 +836,13 @@ An integrated technical exporter that allows exporting the Gemini-generated Merm
 5. **AI Augmentation** — Any AI action calls `aiHelper.ts` which talks to Gemini and returns Markdown. This includes file explanations, test suites, refactoring, semantic search, architecture linting, dependency auditing, and API route extraction.
 6. **API Documentation** — `ApiDocsPortal` uses `aiExtractEndpoints` to scan for REST routes and presents an interactive documentation workspace with live request testing
 7. **Rendering** — All AI responses are rendered by a shared `formatMarkdown()` utility that produces syntax-highlighted code blocks with copy buttons
+8. **API-to-Database Mapping & Drift** — The visual overlay engine correlates endpoints and databases, highlighting contract mismatches in the HUD.
+9. **One-Click Refactoring** — Auto-Apply commits parsed AI code block recommendations directly to the active file, triggering an automated re-analysis flow.
 
 ---
 
-## <a id="security-privacy-error-handling"></a>🔒 Security, Privacy & Error Handling
+<a id="security-privacy-error-handling"></a>
+## 🔒 Security, Privacy & Error Handling
 
 CodeGraph is engineered with a strict client-side architecture to safeguard proprietary codebases, secure configuration keys, and deliver clean, descriptive error states.
 
