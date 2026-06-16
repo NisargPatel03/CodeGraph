@@ -1,4 +1,5 @@
 import type { ParsedFile } from './repoParser';
+import * as parser from '@babel/parser';
 
 export interface DependencyNode {
   id: string; // File path (e.g. "src/components/Button.tsx")
@@ -81,6 +82,62 @@ export interface CodebaseGraph {
   stats: CodebaseStats;
 }
 
+// Fast, non-recursive AST walker to avoid stack overflows on large files
+function walkAST(node: any, visitor: (node: any) => void) {
+  const stack = [node];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') continue;
+    
+    visitor(current);
+    
+    for (const key in current) {
+      if (Object.prototype.hasOwnProperty.call(current, key)) {
+        const value = current[key];
+        if (Array.isArray(value)) {
+          for (let i = value.length - 1; i >= 0; i--) {
+            if (value[i] && typeof value[i] === 'object' && typeof value[i].type === 'string') {
+              stack.push(value[i]);
+            }
+          }
+        } else if (value && typeof value === 'object' && typeof value.type === 'string') {
+          stack.push(value);
+        }
+      }
+    }
+  }
+}
+
+// Caching helper to get or parse the AST of a JS/TS file
+function getOrParseAST(file: ParsedFile, astMap?: Map<string, any>): any {
+  if (!['typescript', 'javascript'].includes(file.language)) {
+    return null;
+  }
+  if (astMap && astMap.has(file.path)) {
+    return astMap.get(file.path);
+  }
+  try {
+    const ast = parser.parse(file.content, {
+      sourceType: 'module',
+      plugins: [
+        'typescript',
+        'jsx',
+        'decorators-legacy',
+        'classProperties',
+        'objectRestSpread'
+      ],
+      errorRecovery: true
+    });
+    if (astMap) {
+      astMap.set(file.path, ast);
+    }
+    return ast;
+  } catch (err) {
+    console.error('Babel parser failed for file:', file.path, err);
+    return null;
+  }
+}
+
 // Helper to get directory name
 function getDirectory(filePath: string): string {
   const parts = filePath.split('/');
@@ -150,75 +207,149 @@ function resolveImportPath(importerPath: string, importString: string, filePaths
   return null;
 }
 
-// Parses imports in JavaScript, TypeScript, Python, and other languages via RegExp
-function parseImports(file: ParsedFile, filePaths: Set<string>): { internal: { path: string; weight: number }[]; external: { name: string; weight: number }[] } {
+// Parses imports in JavaScript, TypeScript, Python, and other languages via AST/RegExp
+function parseImports(
+  file: ParsedFile, 
+  filePaths: Set<string>, 
+  astMap?: Map<string, any>
+): { internal: { path: string; weight: number }[]; external: { name: string; weight: number }[] } {
   const internalMap = new Map<string, number>();
   const externalMap = new Map<string, number>();
   const content = file.content;
   
   if (['typescript', 'javascript'].includes(file.language)) {
-    // 1. ES6 import/export from syntax
-    // matches: import ... from 'path'; or export ... from 'path';
-    const es6Regex = /(?:import|export)\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
-    let match;
-    while ((match = es6Regex.exec(content)) !== null) {
-      const imp = match[1];
-      let symbolCount = 1;
-      const braceMatch = match[0].match(/\{([\s\S]*?)\}/);
-      if (braceMatch) {
-        const symbols = braceMatch[1].split(',').map(s => s.trim()).filter(Boolean);
-        symbolCount = symbols.length || 1;
-      }
-      
-      const isRel = imp.startsWith('.') || imp.startsWith('@/');
-      if (isRel) {
-        const resolved = resolveImportPath(file.path, imp, filePaths);
-        if (resolved && resolved !== file.path) {
-          internalMap.set(resolved, (internalMap.get(resolved) || 0) + symbolCount);
-        }
-      } else {
-        let pkg = imp;
-        if (imp.startsWith('@')) {
-          const parts = imp.split('/');
-          if (parts.length >= 2) {
-            pkg = `${parts[0]}/${parts[1]}`;
+    const ast = getOrParseAST(file, astMap);
+    if (ast) {
+      const recordImport = (imp: string, symbolCount: number) => {
+        const isRel = imp.startsWith('.') || imp.startsWith('@/');
+        if (isRel) {
+          const resolved = resolveImportPath(file.path, imp, filePaths);
+          if (resolved && resolved !== file.path) {
+            internalMap.set(resolved, (internalMap.get(resolved) || 0) + symbolCount);
           }
         } else {
-          pkg = imp.split('/')[0];
+          let pkg = imp;
+          if (imp.startsWith('@')) {
+            const parts = imp.split('/');
+            if (parts.length >= 2) {
+              pkg = `${parts[0]}/${parts[1]}`;
+            }
+          } else {
+            pkg = imp.split('/')[0];
+          }
+          externalMap.set(pkg, (externalMap.get(pkg) || 0) + symbolCount);
         }
-        externalMap.set(pkg, (externalMap.get(pkg) || 0) + symbolCount);
+      };
+
+      try {
+        walkAST(ast, (node) => {
+          if (node.type === 'ImportDeclaration' && node.source && node.source.value) {
+            const imp = node.source.value;
+            const symbolCount = node.specifiers ? node.specifiers.length : 1;
+            recordImport(imp, symbolCount || 1);
+          } else if (node.type === 'ExportNamedDeclaration' && node.source && node.source.value) {
+            const imp = node.source.value;
+            const symbolCount = node.specifiers ? node.specifiers.length : 1;
+            recordImport(imp, symbolCount || 1);
+          } else if (node.type === 'ExportAllDeclaration' && node.source && node.source.value) {
+            const imp = node.source.value;
+            recordImport(imp, 1);
+          } else if (node.type === 'CallExpression') {
+            if (
+              node.callee && 
+              node.callee.type === 'Identifier' && 
+              node.callee.name === 'require' && 
+              node.arguments && 
+              node.arguments.length === 1
+            ) {
+              const arg = node.arguments[0];
+              if (arg && (arg.type === 'StringLiteral' || arg.type === 'Literal')) {
+                const imp = arg.value;
+                if (typeof imp === 'string') recordImport(imp, 1);
+              } else if (arg && arg.type === 'TemplateLiteral' && arg.quasis && arg.quasis.length === 1) {
+                const imp = arg.quasis[0].value.cooked;
+                if (typeof imp === 'string') recordImport(imp, 1);
+              }
+            } else if (
+              node.callee && 
+              node.callee.type === 'Import' && 
+              node.arguments && 
+              node.arguments.length === 1
+            ) {
+              const arg = node.arguments[0];
+              if (arg && (arg.type === 'StringLiteral' || arg.type === 'Literal')) {
+                const imp = arg.value;
+                if (typeof imp === 'string') recordImport(imp, 1);
+              } else if (arg && arg.type === 'TemplateLiteral' && arg.quasis && arg.quasis.length === 1) {
+                const imp = arg.quasis[0].value.cooked;
+                if (typeof imp === 'string') recordImport(imp, 1);
+              }
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Failed walking AST for imports, falling back to RegExp:', file.path, err);
       }
-    }
-    
-    // 2. ES6 dynamic import(...)
-    const dynamicRegex = /\bimport\((['"])([^'"]+)\1\)/g;
-    while ((match = dynamicRegex.exec(content)) !== null) {
-      const imp = match[2];
-      const isRel = imp.startsWith('.') || imp.startsWith('@/');
-      if (isRel) {
-        const resolved = resolveImportPath(file.path, imp, filePaths);
-        if (resolved && resolved !== file.path) {
-          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+    } else {
+      // Regexp fallback for JS/TS if AST parse fails
+      const es6Regex = /(?:import|export)\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
+      let match;
+      while ((match = es6Regex.exec(content)) !== null) {
+        const imp = match[1];
+        let symbolCount = 1;
+        const braceMatch = match[0].match(/\{([\s\S]*?)\}/);
+        if (braceMatch) {
+          const symbols = braceMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+          symbolCount = symbols.length || 1;
         }
-      } else {
-        const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
-        externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
+        const isRel = imp.startsWith('.') || imp.startsWith('@/');
+        if (isRel) {
+          const resolved = resolveImportPath(file.path, imp, filePaths);
+          if (resolved && resolved !== file.path) {
+            internalMap.set(resolved, (internalMap.get(resolved) || 0) + symbolCount);
+          }
+        } else {
+          let pkg = imp;
+          if (imp.startsWith('@')) {
+            const parts = imp.split('/');
+            if (parts.length >= 2) {
+              pkg = `${parts[0]}/${parts[1]}`;
+            }
+          } else {
+            pkg = imp.split('/')[0];
+          }
+          externalMap.set(pkg, (externalMap.get(pkg) || 0) + symbolCount);
+        }
       }
-    }
-    
-    // 3. CommonJS require('...')
-    const cjsRegex = /\brequire\((['"])([^'"]+)\1\)/g;
-    while ((match = cjsRegex.exec(content)) !== null) {
-      const imp = match[2];
-      const isRel = imp.startsWith('.') || imp.startsWith('@/');
-      if (isRel) {
-        const resolved = resolveImportPath(file.path, imp, filePaths);
-        if (resolved && resolved !== file.path) {
-          internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+      
+      const dynamicRegex = /\bimport\((['"])([^'"]+)\1\)/g;
+      while ((match = dynamicRegex.exec(content)) !== null) {
+        const imp = match[2];
+        const isRel = imp.startsWith('.') || imp.startsWith('@/');
+        if (isRel) {
+          const resolved = resolveImportPath(file.path, imp, filePaths);
+          if (resolved && resolved !== file.path) {
+            internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+          }
+        } else {
+          const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
+          externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
         }
-      } else {
-        const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
-        externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
+      }
+      
+      const cjsRegex = /\brequire\((['"])([^'"]+)\1\)/g;
+      while ((match = cjsRegex.exec(content)) !== null) {
+        const imp = match[2];
+        const isRel = imp.startsWith('.') || imp.startsWith('@/');
+        if (isRel) {
+          const resolved = resolveImportPath(file.path, imp, filePaths);
+          if (resolved && resolved !== file.path) {
+            internalMap.set(resolved, (internalMap.get(resolved) || 0) + 1);
+          }
+        } else {
+          const pkg = imp.startsWith('@') ? imp.split('/').slice(0, 2).join('/') : imp.split('/')[0];
+          externalMap.set(pkg, (externalMap.get(pkg) || 0) + 1);
+        }
       }
     }
   } else if (file.language === 'python') {
@@ -333,35 +464,100 @@ function getFolder(filePath: string): string {
 }
 
 // Function parser for call graphs
-function extractCallGraph(files: ParsedFile[]): { callNodes: CallNode[]; callLinks: CallLink[] } {
-  const functions: { name: string; file: string; id: string }[] = [];
+function extractCallGraph(
+  files: ParsedFile[],
+  astMap?: Map<string, any>,
+  dependencyLinks?: DependencyLink[]
+): { callNodes: CallNode[]; callLinks: CallLink[] } {
+  const functions: { name: string; file: string; id: string; body?: any; isAst: boolean }[] = [];
   const contentMap = new Map<string, string>();
   
   // 1. Find function declarations
   for (const file of files) {
     contentMap.set(file.path, file.content);
-    if (!['typescript', 'javascript', 'python'].includes(file.language)) continue;
+    if (!['typescript', 'javascript', 'python', 'go', 'rust'].includes(file.language)) continue;
     
-    let regex: RegExp;
-    if (file.language === 'python') {
-      regex = /def\s+(\w+)\s*\(/g;
+    if (['typescript', 'javascript'].includes(file.language)) {
+      const ast = getOrParseAST(file, astMap);
+      if (ast) {
+        try {
+          const seenNames = new Set<string>();
+          walkAST(ast, (node) => {
+            let name = '';
+            let bodyNode: any = null;
+            if (node.type === 'FunctionDeclaration' && node.id && node.id.name) {
+              name = node.id.name;
+              bodyNode = node.body;
+            } else if (node.type === 'ClassMethod' && node.key && node.key.type === 'Identifier') {
+              name = node.key.name;
+              bodyNode = node.body;
+            } else if (node.type === 'ObjectMethod' && node.key && node.key.type === 'Identifier') {
+              name = node.key.name;
+              bodyNode = node.body;
+            } else if (node.type === 'VariableDeclarator' && node.id && node.id.type === 'Identifier') {
+              const init = node.init;
+              if (init && (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression')) {
+                name = node.id.name;
+                bodyNode = init.body;
+              }
+            }
+            
+            if (name && !seenNames.has(name) && name.length > 2 && !name.startsWith('use')) {
+              seenNames.add(name);
+              functions.push({
+                name,
+                file: file.path,
+                id: `${file.path}::${name}`,
+                body: bodyNode || node,
+                isAst: true
+              });
+            }
+          });
+        } catch (err) {
+          console.error('Failed to parse functions for callgraph via AST:', file.path, err);
+        }
+      } else {
+        // Regex fallback if AST fails
+        const regex = /(?:function\s+(\w+)|const\s+(\w+)\s*=\s*(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>|(\w+)\s*\([^)]*\)\s*\{)/g;
+        let match;
+        const seenNames = new Set<string>();
+        while ((match = regex.exec(file.content)) !== null) {
+          const name = match[1] || match[2] || match[3];
+          if (name && !seenNames.has(name) && name.length > 2 && !name.startsWith('use')) {
+            seenNames.add(name);
+            functions.push({
+              name,
+              file: file.path,
+              id: `${file.path}::${name}`,
+              isAst: false
+            });
+          }
+        }
+      }
     } else {
-      // JS/TS functions, arrows, and class methods
-      regex = /(?:function\s+(\w+)|const\s+(\w+)\s*=\s*(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>|(\w+)\s*\([^)]*\)\s*\{)/g;
-    }
-    
-    let match;
-    const seenNames = new Set<string>();
-    while ((match = regex.exec(file.content)) !== null) {
-      const name = match[1] || match[2] || match[3];
-      // Skip generic variable assignments and React hook invocations (e.g. useState)
-      if (name && !seenNames.has(name) && name.length > 2 && !name.startsWith('use')) {
-        seenNames.add(name);
-        functions.push({
-          name,
-          file: file.path,
-          id: `${file.path}::${name}`,
-        });
+      // Python, Go, Rust fallbacks
+      let regex: RegExp;
+      if (file.language === 'python') {
+        regex = /def\s+(\w+)\s*\(/g;
+      } else if (file.language === 'rust') {
+        regex = /(?:pub\s+)?fn\s+(\w+)\s*\(/g;
+      } else { // go
+        regex = /func\s+(\w+)\s*\(/g;
+      }
+      
+      let match;
+      const seenNames = new Set<string>();
+      while ((match = regex.exec(file.content)) !== null) {
+        const name = match[1];
+        if (name && !seenNames.has(name) && name.length > 2 && !name.startsWith('use')) {
+          seenNames.add(name);
+          functions.push({
+            name,
+            file: file.path,
+            id: `${file.path}::${name}`,
+            isAst: false
+          });
+        }
       }
     }
   }
@@ -380,29 +576,84 @@ function extractCallGraph(files: ParsedFile[]): { callNodes: CallNode[]; callLin
     });
   }
 
-  // Scan file contents for invocations of these functions
+  // Build dependency sets for faster lookup
+  const fileDeps = new Map<string, Set<string>>();
+  if (dependencyLinks) {
+    for (const link of dependencyLinks) {
+      if (!fileDeps.has(link.source)) {
+        fileDeps.set(link.source, new Set());
+      }
+      fileDeps.get(link.source)!.add(link.target);
+    }
+  }
+
+  // Scan file contents/ASTs for invocations of these functions
   for (const sourceFn of functions) {
-    const sourceFileContent = contentMap.get(sourceFn.file) || '';
-    
-    // We isolate the search to lines in the source function body if possible,
-    // but a simpler high-performance proxy is checking if the function name appears in other files.
-    for (const targetFn of functions) {
-      if (sourceFn.id === targetFn.id) continue;
-      
-      // Look for the target function name inside the source file (e.g. calling it)
-      // Check if it's imported in the source file, or if the name is invoked
-      const callRegex = new RegExp(`\\b${targetFn.name}\\(`, 'g');
-      if (callRegex.test(sourceFileContent)) {
-        // Increment target call count
-        const node = callNodesMap.get(targetFn.id);
-        if (node) {
-          node.callCount++;
-        }
-        
-        callLinks.push({
-          source: sourceFn.id,
-          target: targetFn.id,
+    if (sourceFn.isAst && sourceFn.body) {
+      // Precise AST Walk inside source function body
+      const calledNames = new Set<string>();
+      try {
+        walkAST(sourceFn.body, (node) => {
+          if (node.type === 'CallExpression') {
+            const callee = node.callee;
+            if (callee.type === 'Identifier') {
+              calledNames.add(callee.name);
+            } else if (callee.type === 'MemberExpression' && callee.property && callee.property.type === 'Identifier') {
+              calledNames.add(callee.property.name);
+            }
+          }
         });
+      } catch (err) {
+        console.error('Failed walking source function body AST for calls:', sourceFn.id, err);
+      }
+
+      for (const targetFn of functions) {
+        if (sourceFn.id === targetFn.id) continue;
+        if (!calledNames.has(targetFn.name)) continue;
+
+        let isMatch = false;
+        if (sourceFn.file === targetFn.file) {
+          isMatch = true;
+        } else {
+          const deps = fileDeps.get(sourceFn.file);
+          if (deps && deps.has(targetFn.file)) {
+            isMatch = true;
+          } else {
+            const globalMatches = functions.filter(f => f.name === targetFn.name);
+            if (globalMatches.length === 1) {
+              isMatch = true;
+            }
+          }
+        }
+
+        if (isMatch) {
+          const node = callNodesMap.get(targetFn.id);
+          if (node) {
+            node.callCount++;
+          }
+          callLinks.push({
+            source: sourceFn.id,
+            target: targetFn.id,
+          });
+        }
+      }
+    } else {
+      // RegExp-based fallback for python, rust, go, and non-AST parsed JS/TS files
+      const sourceFileContent = contentMap.get(sourceFn.file) || '';
+      for (const targetFn of functions) {
+        if (sourceFn.id === targetFn.id) continue;
+        
+        const callRegex = new RegExp(`\\b${targetFn.name}\\(`, 'g');
+        if (callRegex.test(sourceFileContent)) {
+          const node = callNodesMap.get(targetFn.id);
+          if (node) {
+            node.callCount++;
+          }
+          callLinks.push({
+            source: sourceFn.id,
+            target: targetFn.id,
+          });
+        }
       }
     }
   }
@@ -413,42 +664,62 @@ function extractCallGraph(files: ParsedFile[]): { callNodes: CallNode[]; callLin
   };
 }
 
-function parseComponentDetails(content: string, name: string): { props: string[]; state: string[]; hooks: string[] } {
+function parseComponentDetailsFromAST(funcNode: any): { props: string[]; state: string[]; hooks: string[] } {
   const props: string[] = [];
   const state: string[] = [];
   const hooks: string[] = [];
-
-  // Find component definition to extract props
-  const defRegex = new RegExp(`(?:const|function)\\s+${name}\\s*(?:=\\s*)?\\(([^)]*)\\)`, 'i');
-  const defMatch = defRegex.exec(content);
-  if (defMatch) {
-    const params = defMatch[1];
-    const braceMatch = params.match(/\{([^}]+)\}/);
-    if (braceMatch) {
-      braceMatch[1]
-        .split(',')
-        .map(p => p.split(':')[0].trim())
-        .map(p => p.replace(/[{}()]/g, '').trim())
-        .filter(p => p && !p.startsWith('//') && !p.startsWith('/*'))
-        .forEach(p => props.push(p));
-    } else if (params.trim()) {
-      props.push(params.trim());
+  
+  if (funcNode.params && funcNode.params.length > 0) {
+    const firstParam = funcNode.params[0];
+    if (firstParam.type === 'ObjectPattern') {
+      for (const prop of firstParam.properties) {
+        if (prop.type === 'ObjectProperty' && prop.key && prop.key.type === 'Identifier') {
+          props.push(prop.key.name);
+        } else if (prop.type === 'RestElement' && prop.argument && prop.argument.type === 'Identifier') {
+          props.push(prop.argument.name);
+        }
+      }
+    } else if (firstParam.type === 'Identifier') {
+      props.push(firstParam.name);
     }
   }
 
-  // Extract state variables: matches useState(...)
-  const stateRegex = /const\s+\[\s*(\w+)\s*,\s*\w+\s*\]\s*=\s*useState/g;
-  let match;
-  while ((match = stateRegex.exec(content)) !== null) {
-    if (match[1]) state.push(match[1]);
-  }
-
-  // Extract hooks: matches useXYZ(...)
-  const hookRegex = /\b(use[A-Z]\w*)\b/g;
-  while ((match = hookRegex.exec(content)) !== null) {
-    if (match[1] && match[1] !== 'useState') {
-      hooks.push(match[1]);
-    }
+  if (funcNode.body) {
+    walkAST(funcNode.body, (node) => {
+      if (node.type === 'CallExpression') {
+        const callee = node.callee;
+        let hookName = '';
+        if (callee.type === 'Identifier') {
+          hookName = callee.name;
+        } else if (callee.type === 'MemberExpression' && callee.object.name === 'React' && callee.property.type === 'Identifier') {
+          hookName = callee.property.name;
+        }
+        
+        if (hookName && hookName.startsWith('use') && hookName !== 'useState') {
+          hooks.push(hookName);
+        }
+      } else if (node.type === 'VariableDeclarator') {
+        const init = node.init;
+        if (init && init.type === 'CallExpression') {
+          const callee = init.callee;
+          let hookName = '';
+          if (callee.type === 'Identifier') {
+            hookName = callee.name;
+          } else if (callee.type === 'MemberExpression' && callee.object.name === 'React' && callee.property.type === 'Identifier') {
+            hookName = callee.property.name;
+          }
+          if (hookName === 'useState') {
+            const id = node.id;
+            if (id && id.type === 'ArrayPattern') {
+              const firstElem = id.elements[0];
+              if (firstElem && firstElem.type === 'Identifier') {
+                state.push(firstElem.name);
+              }
+            }
+          }
+        }
+      }
+    });
   }
 
   return {
@@ -458,87 +729,173 @@ function parseComponentDetails(content: string, name: string): { props: string[]
   };
 }
 
+function returnsJSX(funcNode: any): boolean {
+  let hasJSX = false;
+  if (!funcNode.body) return false;
+  
+  if (funcNode.body.type === 'JSXElement' || funcNode.body.type === 'JSXFragment') {
+    return true;
+  }
+  
+  walkAST(funcNode.body, (node) => {
+    if (node.type === 'ReturnStatement') {
+      const arg = node.argument;
+      if (arg) {
+        if (arg.type === 'JSXElement' || arg.type === 'JSXFragment') {
+          hasJSX = true;
+        } else if (arg.type === 'ParenthesizedExpression' && (arg.expression.type === 'JSXElement' || arg.expression.type === 'JSXFragment')) {
+          hasJSX = true;
+        }
+      }
+    }
+  });
+  
+  return hasJSX;
+}
+
+function isPascalCase(str: string): boolean {
+  return /^[A-Z][a-zA-Z0-9_]*$/.test(str);
+}
+
+function findChildrenRenderedInJSX(bodyNode: any): string[] {
+  const children: string[] = [];
+  walkAST(bodyNode, (node) => {
+    if (node.type === 'JSXOpeningElement') {
+      const nameNode = node.name;
+      if (nameNode.type === 'JSXIdentifier') {
+        const name = nameNode.name;
+        if (isPascalCase(name)) {
+          children.push(name);
+        }
+      } else if (nameNode.type === 'JSXMemberExpression' && nameNode.property && nameNode.property.type === 'JSXIdentifier') {
+        const name = nameNode.property.name;
+        if (isPascalCase(name)) {
+          children.push(name);
+        }
+      }
+    }
+  });
+  return Array.from(new Set(children));
+}
+
 // React component hierarchy & Class hierarchy parser
-function extractClassHierarchy(files: ParsedFile[]): { classNodes: ClassNode[]; classLinks: ClassLink[] } {
+function extractClassHierarchy(
+  files: ParsedFile[],
+  astMap?: Map<string, any>
+): { classNodes: ClassNode[]; classLinks: ClassLink[] } {
   const classNodes: ClassNode[] = [];
   const classLinks: ClassLink[] = [];
   const classMap = new Map<string, ClassNode>();
+  const parentChildRenderMap = new Map<string, string[]>();
   
   // 1. Detect OOP classes and React Components
   for (const file of files) {
-    const content = file.content;
-    
-    // ES6/TS Classes: "class Button extends Component"
-    const classRegex = /class\s+(\w+)(?:\s+extends\s+(\w+))?/g;
-    let match;
-    while ((match = classRegex.exec(content)) !== null) {
-      const name = match[1];
-      const parent = match[2];
-      const id = `${file.path}::${name}`;
-      
-      const node: ClassNode = { id, name, file: file.path, type: 'class' };
-      classNodes.push(node);
-      classMap.set(name, node); // Map for simple linking
-      
-      if (parent) {
-        // Add inheritance link
-        const parentId = classMap.has(parent) ? classMap.get(parent)!.id : `external::${parent}`;
-        classLinks.push({
-          source: id,
-          target: parentId,
-        });
-        
-        // If parent node is external and not registered, add a mock node
-        if (parentId.startsWith('external::') && !classNodes.some(n => n.id === parentId)) {
-          classNodes.push({ id: parentId, name: parent, file: 'External Library', type: 'class' });
+    if (['typescript', 'javascript'].includes(file.language)) {
+      const ast = getOrParseAST(file, astMap);
+      if (ast) {
+        try {
+          walkAST(ast, (node) => {
+            // OOP class detection
+            if ((node.type === 'ClassDeclaration' || node.type === 'ClassExpression') && node.id && node.id.name) {
+              const name = node.id.name;
+              const parent = node.superClass && node.superClass.type === 'Identifier' ? node.superClass.name : null;
+              const id = `${file.path}::${name}`;
+              
+              const classNode: ClassNode = { id, name, file: file.path, type: 'class' };
+              classNodes.push(classNode);
+              classMap.set(name, classNode);
+              
+              if (parent) {
+                const parentId = classMap.has(parent) ? classMap.get(parent)!.id : `external::${parent}`;
+                classLinks.push({ source: id, target: parentId });
+                
+                if (parentId.startsWith('external::') && !classNodes.some(n => n.id === parentId)) {
+                  classNodes.push({ id: parentId, name: parent, file: 'External Library', type: 'class' });
+                }
+              }
+            }
+            
+            // React Functional component detection
+            let compNode: any = null;
+            let name = '';
+            
+            if (node.type === 'FunctionDeclaration' && node.id && node.id.name) {
+              name = node.id.name;
+              compNode = node;
+            } else if (node.type === 'VariableDeclarator' && node.id && node.id.type === 'Identifier') {
+              const init = node.init;
+              if (init && (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression')) {
+                name = node.id.name;
+                compNode = init;
+              }
+            }
+            
+            if (compNode && name && isPascalCase(name) && returnsJSX(compNode)) {
+              const id = `${file.path}::${name}`;
+              const { props, state, hooks } = parseComponentDetailsFromAST(compNode);
+              const componentNode: ClassNode = { 
+                id, 
+                name, 
+                file: file.path, 
+                type: 'component',
+                props,
+                state,
+                hooks
+              };
+              classNodes.push(componentNode);
+              classMap.set(name, componentNode);
+              
+              const children = findChildrenRenderedInJSX(compNode.body);
+              if (children.length > 0) {
+                parentChildRenderMap.set(id, children);
+              }
+            }
+          });
+        } catch (err) {
+          console.error('Failed to parse classes via AST:', file.path, err);
         }
       }
-    }
-
-    // React functional components: PascalCase functions returning jsx
-    if (['typescript', 'javascript'].includes(file.language) && (file.path.endsWith('.tsx') || file.path.endsWith('.jsx'))) {
-      const reactCompRegex = /(?:const\s+([A-Z]\w*)\s*=\s*(?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>|function\s+([A-Z]\w*)\s*\()/g;
-      const seenComp = new Set<string>();
-      while ((match = reactCompRegex.exec(content)) !== null) {
-        const name = match[1] || match[2];
-        if (name && !seenComp.has(name) && !classMap.has(name)) {
-          seenComp.add(name);
-          const id = `${file.path}::${name}`;
-          const { props, state, hooks } = parseComponentDetails(content, name);
-          const node: ClassNode = { 
-            id, 
-            name, 
-            file: file.path, 
-            type: 'component',
-            props,
-            state,
-            hooks
-          };
-          classNodes.push(node);
-          classMap.set(name, node);
+    } else {
+      // Fallback for non-JS/TS files (Python classes etc.)
+      const content = file.content;
+      const classRegex = /class\s+(\w+)(?:\s+extends\s+(\w+))?/g;
+      let match;
+      while ((match = classRegex.exec(content)) !== null) {
+        const name = match[1];
+        const parent = match[2];
+        const id = `${file.path}::${name}`;
+        
+        const node: ClassNode = { id, name, file: file.path, type: 'class' };
+        classNodes.push(node);
+        classMap.set(name, node);
+        
+        if (parent) {
+          const parentId = classMap.has(parent) ? classMap.get(parent)!.id : `external::${parent}`;
+          classLinks.push({
+            source: id,
+            target: parentId,
+          });
+          
+          if (parentId.startsWith('external::') && !classNodes.some(n => n.id === parentId)) {
+            classNodes.push({ id: parentId, name: parent, file: 'External Library', type: 'class' });
+          }
         }
       }
     }
   }
 
-  // 2. React Parent-Child Links: If component A renders component B (e.g. `<B ... />` or `<B>`)
-  const componentNodes = classNodes.filter(n => n.type === 'component');
-  for (const parentNode of componentNodes) {
-    const parentContent = files.find(f => f.path === parentNode.file)?.content || '';
-    
-    for (const childNode of componentNodes) {
-      if (parentNode.id === childNode.id) continue;
-      
-      // Look for JSX invocation: `<ComponentName`
-      const jsxRegex = new RegExp(`<${childNode.name}\\b`, 'g');
-      if (jsxRegex.test(parentContent)) {
+  // 2. React Parent-Child Links: If component A renders component B (e.g. `<B ... />`)
+  parentChildRenderMap.forEach((children, parentId) => {
+    children.forEach(childName => {
+      const childNode = classNodes.find(n => n.name === childName && n.type === 'component');
+      if (childNode) {
         classLinks.push({
-          source: parentNode.id,
+          source: parentId,
           target: childNode.id,
         });
       }
-    }
-  }
+    });
+  });
 
   return { classNodes, classLinks };
 }
@@ -591,11 +948,55 @@ interface ExtractedFunction {
   length: number;
 }
 
-function parseFunctionsInFile(content: string, language: string): ExtractedFunction[] {
+function parseFunctionsInFile(file: ParsedFile, astMap?: Map<string, any>): ExtractedFunction[] {
+  const content = file.content;
   if (!content) return [];
   const lines = content.split('\n');
   const functions: ExtractedFunction[] = [];
-  const lowerLang = language.toLowerCase();
+  const lowerLang = file.language.toLowerCase();
+
+  if (['javascript', 'typescript'].includes(lowerLang)) {
+    const ast = getOrParseAST(file, astMap);
+    if (ast) {
+      try {
+        const seenSpans = new Set<string>();
+        walkAST(ast, (node) => {
+          let name = '';
+          let loc = node.loc;
+          
+          if (node.type === 'FunctionDeclaration' && node.id && node.id.name) {
+            name = node.id.name;
+          } else if (node.type === 'FunctionExpression' && node.id && node.id.name) {
+            name = node.id.name;
+          } else if (node.type === 'ClassMethod' && node.key && node.key.type === 'Identifier') {
+            name = node.key.name;
+          } else if (node.type === 'ObjectMethod' && node.key && node.key.type === 'Identifier') {
+            name = node.key.name;
+          } else if (node.type === 'VariableDeclarator' && node.id && node.id.type === 'Identifier') {
+            const init = node.init;
+            if (init && (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression')) {
+              name = node.id.name;
+              loc = init.loc || node.loc;
+            }
+          }
+          
+          if (name && loc) {
+            const startLine = loc.start.line;
+            const endLine = loc.end.line;
+            const length = endLine - startLine + 1;
+            const spanKey = `${startLine}-${endLine}-${name}`;
+            if (!seenSpans.has(spanKey)) {
+              seenSpans.add(spanKey);
+              functions.push({ name, line: startLine, length });
+            }
+          }
+        });
+        return functions;
+      } catch (err) {
+        console.error('Failed to parse functions via AST:', file.path, err);
+      }
+    }
+  }
 
   lines.forEach((line, index) => {
     let name = '';
@@ -662,6 +1063,7 @@ function parseFunctionsInFile(content: string, language: string): ExtractedFunct
 
 // Main analyzer runner
 export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
+  const astMap = new Map<string, any>();
   const filePaths = new Set(files.map((f) => f.path));
   
   // 1. Build nodes
@@ -696,7 +1098,7 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   }
   
   for (const file of files) {
-    const { internal, external } = parseImports(file, filePaths);
+    const { internal, external } = parseImports(file, filePaths, astMap);
     
     for (const target of internal) {
       links.push({
@@ -733,10 +1135,10 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
   const cycles = findCircularDependencies(files.map((f) => f.path), adjList);
   
   // 4. Call Graph Extraction
-  const { callNodes, callLinks } = extractCallGraph(files);
+  const { callNodes, callLinks } = extractCallGraph(files, astMap, links);
   
   // 5. Class / React Component Hierarchies
-  const { classNodes, classLinks } = extractClassHierarchy(files);
+  const { classNodes, classLinks } = extractClassHierarchy(files, astMap);
 
   // --- CODE SMELL AND ADVANCED ANALYSIS ---
   const codeSmells: CodeSmellWarning[] = [];
@@ -764,7 +1166,7 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
     }
 
     // Parse functions in this file
-    const funcs = parseFunctionsInFile(file.content, file.language);
+    const funcs = parseFunctionsInFile(file, astMap);
     fileFunctionsMap.set(file.path, funcs);
     totalFunctions += funcs.length;
 
