@@ -6,7 +6,7 @@ import type { CodebaseGraph } from '../utils/codeAnalyzer';
 import { generateGitHistory, mapFilesToRealCommits } from '../utils/codeAnalyzer';
 import { EvolutionPlayer } from './EvolutionPlayer';
 import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
-import { auditDatabaseSchema } from '../utils/aiHelper';
+import { auditDatabaseSchema, extractEndpointsFromCodebase } from '../utils/aiHelper';
 import mermaid from 'mermaid';
 
 interface GraphCanvasProps {
@@ -242,6 +242,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
   // DB Schema States
   const [useDemoDbSchema, setUseDemoDbSchema] = useState(false);
+  const [showApiDbMapping, setShowApiDbMapping] = useState(false);
   const [selectedDbTableId, setSelectedDbTableId] = useState<string | null>(null);
   const [hoveredDbTableId, setHoveredDbTableId] = useState<string | null>(null);
   const [dbQueryString, setDbQueryString] = useState('');
@@ -654,6 +655,123 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .filter(t => lowerWords.includes(t.id.toLowerCase()))
       .map(t => t.id);
   }, [dbQueryString, dbSchema.tables]);
+
+  const apiEndpoints = useMemo(() => {
+    if (useDemoDbSchema) {
+      return [
+        { method: 'GET', path: '/api/users', filePath: 'routes/users.js', description: 'List all users.', line: 10 },
+        { method: 'POST', path: '/api/users', filePath: 'routes/users.js', description: 'Create user.', line: 25 },
+        { method: 'GET', path: '/api/users/:id', filePath: 'routes/users.js', description: 'Get user details.', line: 40 },
+        { method: 'POST', path: '/api/orders', filePath: 'routes/orders.js', description: 'Place a new order.', line: 15 },
+        { method: 'GET', path: '/api/orders/:id', filePath: 'routes/orders.js', description: 'Get order details with items.', line: 35 },
+        { method: 'GET', path: '/api/products', filePath: 'routes/products.js', description: 'Query products list.', line: 8 },
+        { method: 'POST', path: '/api/products', filePath: 'routes/products.js', description: 'Add a new product.', line: 20 },
+        { method: 'DELETE', path: '/api/products/:id', filePath: 'routes/products.js', description: 'Remove a product.', line: 45 }
+      ];
+    }
+    return extractEndpointsFromCodebase(files);
+  }, [files, useDemoDbSchema]);
+
+  const apiDbConnections = useMemo(() => {
+    if (useDemoDbSchema) {
+      return [
+        { endpointPath: '/api/users', method: 'GET', tableId: 'User', type: 'read' as const },
+        { endpointPath: '/api/users', method: 'POST', tableId: 'User', type: 'write' as const, isMismatch: true, mismatchReason: "Field 'phoneNumber' sent in POST payload is not defined in User table schema." },
+        { endpointPath: '/api/users/:id', method: 'GET', tableId: 'User', type: 'read' as const },
+        { endpointPath: '/api/orders', method: 'POST', tableId: 'Order', type: 'write' as const },
+        { endpointPath: '/api/orders', method: 'POST', tableId: 'OrderItem', type: 'write' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'Order', type: 'read' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'OrderItem', type: 'read' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'Product', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'GET', tableId: 'Product', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'GET', tableId: 'Category', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'POST', tableId: 'Product', type: 'write' as const },
+        { endpointPath: '/api/products/:id', method: 'DELETE', tableId: 'Product', type: 'write' as const }
+      ];
+    }
+
+    const connections: { endpointPath: string; method: string; tableId: string; type: 'read' | 'write'; isMismatch?: boolean; mismatchReason?: string }[] = [];
+    apiEndpoints.forEach(ep => {
+      const file = files.find(f => f.path === ep.filePath);
+      const content = file ? file.content : '';
+      
+      dbSchema.tables.forEach(table => {
+        const tableName = table.id;
+        const singularName = tableName.toLowerCase();
+        const pluralName = singularName.endsWith('s') ? singularName : singularName + 's';
+        
+        const hasRef = 
+          content.toLowerCase().includes(`db.${singularName}`) ||
+          content.toLowerCase().includes(`db.${pluralName}`) ||
+          content.toLowerCase().includes(`prisma.${singularName}`) ||
+          content.toLowerCase().includes(`prisma.${pluralName}`) ||
+          content.toLowerCase().includes(`from ${singularName}`) ||
+          content.toLowerCase().includes(`from ${pluralName}`) ||
+          content.toLowerCase().includes(`into ${singularName}`) ||
+          content.toLowerCase().includes(`into ${pluralName}`) ||
+          content.toLowerCase().includes(`update ${singularName}`) ||
+          content.toLowerCase().includes(`update ${pluralName}`) ||
+          content.includes(tableName);
+          
+        if (hasRef) {
+          const type = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(ep.method) ? 'write' : 'read';
+          
+          let isMismatch = false;
+          let mismatchReason = '';
+          const fieldAccesses = content.match(/(?:body|payload|json|data)\.(\w+)/gi) || [];
+          const accessedFields = fieldAccesses.map((fa: string) => fa.split('.').pop() || '');
+          
+          for (const af of accessedFields) {
+            const isBoilerplate = ['map', 'filter', 'length', 'id', 'status', 'name'].includes(af.toLowerCase());
+            if (!isBoilerplate && table.fields.length > 0) {
+              const existsInTable = table.fields.some(f => f.name.toLowerCase() === af.toLowerCase());
+              if (!existsInTable) {
+                isMismatch = true;
+                mismatchReason = `Field '${af}' referenced in payload is missing from Table schema.`;
+                break;
+              }
+            }
+          }
+          
+          connections.push({
+            endpointPath: ep.path,
+            method: ep.method,
+            tableId: tableName,
+            type,
+            isMismatch,
+            mismatchReason
+          });
+        }
+      });
+    });
+    
+    return connections;
+  }, [apiEndpoints, dbSchema, files, useDemoDbSchema]);
+
+  const orphanedTableIds = useMemo(() => {
+    if (!showApiDbMapping) return new Set<string>();
+    const referenced = new Set(apiDbConnections.map(c => c.tableId));
+    const orphaned = new Set<string>();
+    dbSchema.tables.forEach(t => {
+      if (!referenced.has(t.id)) {
+        orphaned.add(t.id);
+      }
+    });
+    return orphaned;
+  }, [showApiDbMapping, apiDbConnections, dbSchema.tables]);
+
+  const tableMismatches = useMemo(() => {
+    const mismatchesMap = new Map<string, string[]>();
+    apiDbConnections.forEach(c => {
+      if (c.isMismatch && c.mismatchReason) {
+        if (!mismatchesMap.has(c.tableId)) {
+          mismatchesMap.set(c.tableId, []);
+        }
+        mismatchesMap.get(c.tableId)!.push(c.mismatchReason);
+      }
+    });
+    return mismatchesMap;
+  }, [apiDbConnections]);
 
   const formatMarkdown = (text: string): string => {
     if (!text) return '';
@@ -1789,6 +1907,43 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         });
       }
 
+      if (showApiDbMapping) {
+        apiEndpoints.forEach((ep) => {
+          const apiNodeId = `api:${ep.method}:${ep.path}`;
+          const cached = nodePositionsRef.current.get(apiNodeId);
+          activeNodes.push({
+            id: apiNodeId,
+            name: `${ep.method} ${ep.path}`,
+            nodeType: 'api',
+            method: ep.method,
+            path: ep.path,
+            description: ep.description || '',
+            width: 200,
+            height: 40,
+            x: cached ? cached.x : undefined,
+            y: cached ? cached.y : undefined
+          } as any);
+        });
+
+        apiDbConnections.forEach((conn) => {
+          const apiNodeId = `api:${conn.method}:${conn.endpointPath}`;
+          const srcExists = activeNodes.some(n => n.id === apiNodeId);
+          const tgtExists = activeNodes.some(n => n.id === conn.tableId);
+          
+          if (srcExists && tgtExists) {
+            activeLinks.push({
+              id: `link:${apiNodeId}->${conn.tableId}`,
+              source: apiNodeId,
+              target: conn.tableId,
+              isApiConnection: true,
+              connectionType: conn.type,
+              isMismatch: conn.isMismatch,
+              mismatchReason: conn.mismatchReason
+            } as any);
+          }
+        });
+      }
+
       nodes = activeNodes;
       links = activeLinks;
     }
@@ -1946,13 +2101,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
     const simulation = d3.forceSimulation<any>(nodes)
       .force('link', d3.forceLink<any, any>(links).id((d) => d.id).distance(() => {
-        if (viewMode === 'dbSchema') return 240;
+        if (viewMode === 'dbSchema') return showApiDbMapping ? 320 : 240;
         if (viewMode === 'cluster') return 65;
         if (viewMode === 'hierarchy') return 70;
         return 100;
       }))
       .force('charge', d3.forceManyBody().strength(() => {
-        if (viewMode === 'dbSchema') return -600;
+        if (viewMode === 'dbSchema') return showApiDbMapping ? -800 : -600;
         if (viewMode === 'cluster') return -120;
         if (viewMode === 'hierarchy') return -160;
         return -220;
@@ -1969,6 +2124,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         return baseRad + Math.sqrt(d.size || 0) * 0.05 + 5;
       }).strength(nodes.length > 300 ? 0.45 : 0.7))
       .force('center', d3.forceCenter(0, 0));
+
+    if (viewMode === 'dbSchema' && showApiDbMapping) {
+      simulation.force('x', d3.forceX().x((d: any) => {
+        return d.nodeType === 'api' ? -350 : 250;
+      }).strength(1.2));
+      simulation.force('y', d3.forceY().y(0).strength(0.08));
+    }
 
     if (viewMode === 'hierarchy') {
       // Build parent-child tree hierarchy
@@ -2130,7 +2292,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         { id: 'arrow-violating', color: '#f97316' },
         { id: 'db-arrow', color: 'rgba(99, 102, 241, 0.6)' },
         { id: 'db-arrow-highlight', color: 'var(--color-secondary)' },
-        { id: 'db-arrow-query', color: '#10b981' }
+        { id: 'db-arrow-query', color: '#10b981' },
+        { id: 'db-arrow-read', color: 'rgba(16, 185, 129, 0.8)' },
+        { id: 'db-arrow-write', color: 'rgba(59, 130, 246, 0.8)' },
+        { id: 'db-arrow-mismatch', color: '#ef4444' }
       ])
       .enter().append('marker')
       .attr('id', (d) => d.id)
@@ -2313,6 +2478,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     const node = mainGroup.append('g').attr('class', 'nodes-container').selectAll('.node-element').data(nodes).enter().append('g')
       .attr('class', (d: any) => {
         let cls = 'node-element';
+        if (viewMode === 'dbSchema') {
+          cls += ' db-table-node';
+          if (d.nodeType === 'api') {
+            cls += ' api-endpoint-node';
+          }
+        }
         const isViolating = linterViolations?.violatingNodes.includes(d.id);
         if (isViolating) cls += ' linter-violating-node';
         const isAtRisk = auditReport?.risks.some(r => r.filePath === d.id);
@@ -2322,6 +2493,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       .on('click', (event, d) => {
         event.stopPropagation();
         if (viewMode === 'dbSchema') {
+          if (d.nodeType === 'api') {
+            setSelectedDbTableId(null);
+            setSelectedNode(d.id);
+            return;
+          }
           setSelectedDbTableId(d.id);
           if (d.sourceFile) {
             setSelectedNode(d.sourceFile);
@@ -2408,10 +2584,66 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           .attr('x', -d.width / 2)
           .attr('y', -d.height / 2);
 
+        if (d.nodeType === 'api') {
+          const methodColors: Record<string, { border: string; bg: string; text: string }> = {
+            GET: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: '#10b981' },
+            POST: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6' },
+            PUT: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: '#f59e0b' },
+            PATCH: { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)', text: '#8b5cf6' },
+            DELETE: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#ef4444' }
+          };
+          const colors = methodColors[d.method] || { border: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)', text: '#6366f1' };
+
+          const pillDiv = card.append('xhtml:div')
+            .style('width', '100%')
+            .style('height', '100%')
+            .style('border', `1px solid ${colors.border}`)
+            .style('border-radius', '24px')
+            .style('background', 'var(--panel-bg)')
+            .style('backdrop-filter', 'blur(6px)')
+            .style('box-shadow', '0 2px 10px rgba(0, 0, 0, 0.15)')
+            .style('display', 'flex')
+            .style('align-items', 'center')
+            .style('padding', '0 12px')
+            .style('gap', '8px')
+            .style('pointer-events', 'auto')
+            .style('user-select', 'none');
+
+          pillDiv.append('span')
+            .style('background', colors.bg)
+            .style('color', colors.text)
+            .style('font-size', '0.62rem')
+            .style('font-weight', '800')
+            .style('padding', '2px 6px')
+            .style('border-radius', '4px')
+            .style('font-family', 'var(--font-mono)')
+            .text(d.method);
+
+          pillDiv.append('span')
+            .style('font-weight', '600')
+            .style('color', 'var(--text-primary)')
+            .style('font-size', '0.7rem')
+            .style('overflow', 'hidden')
+            .style('text-overflow', 'ellipsis')
+            .style('white-space', 'nowrap')
+            .style('font-family', 'var(--font-mono)')
+            .style('flex-grow', '1')
+            .text(d.path);
+
+          pillDiv.on('mouseenter', () => {
+            pillDiv.style('box-shadow', `0 0 15px ${colors.border}44`);
+          }).on('mouseleave', () => {
+            pillDiv.style('box-shadow', '0 2px 10px rgba(0, 0, 0, 0.15)');
+          });
+
+          return; // Skip table fields drawing
+        }
+
+        const isOrphaned = orphanedTableIds.has(d.id);
         const cardDiv = card.append('xhtml:div')
           .style('width', '100%')
           .style('height', '100%')
-          .style('border', '1px solid var(--panel-border)')
+          .style('border', isOrphaned ? '1px dashed var(--color-alert)' : '1px solid var(--panel-border)')
           .style('border-radius', '8px')
           .style('background', 'var(--panel-bg)')
           .style('backdrop-filter', 'blur(6px)')
@@ -2424,16 +2656,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
         // Table Header
         cardDiv.append('div')
-          .style('background', 'rgba(99, 102, 241, 0.1)')
+          .style('background', isOrphaned ? 'rgba(239, 68, 68, 0.12)' : 'rgba(99, 102, 241, 0.1)')
           .style('border-bottom', '1px solid var(--panel-border)')
           .style('padding', '8px 12px')
           .style('display', 'flex')
           .style('align-items', 'center')
-          .style('gap', '8px')
+          .style('justify-content', 'space-between')
           .style('flex-shrink', '0')
           .html(() => `
-            <span style="color: var(--color-primary); font-size: 0.85rem;">🗃️</span>
-            <span style="font-weight: 700; color: var(--text-primary); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${d.id}</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: ${isOrphaned ? 'var(--color-alert)' : 'var(--color-primary)'}; font-size: 0.85rem;">🗃️</span>
+              <span style="font-weight: 700; color: var(--text-primary); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${d.id}</span>
+            </div>
+            ${isOrphaned ? `<span style="background: rgba(239, 68, 68, 0.2); color: var(--color-alert); font-size: 0.58rem; padding: 2px 5px; border-radius: 4px; font-weight: 600; font-family: var(--font-sans);">⚠️ Orphaned</span>` : ''}
           `);
 
         // Fields Container
@@ -2469,15 +2704,28 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             });
         });
 
+        // Schema Drift warning footer
+        const mismatches = tableMismatches.get(d.id);
+        if (mismatches && mismatches.length > 0) {
+          cardDiv.append('div')
+            .style('background', 'rgba(249, 115, 22, 0.15)')
+            .style('border-top', '1px solid rgba(249, 115, 22, 0.3)')
+            .style('padding', '6px 10px')
+            .style('font-size', '0.62rem')
+            .style('color', '#f97316')
+            .style('font-weight', '500')
+            .html(() => `⚠️ Schema Drift: ${mismatches[0]}`);
+        }
+
         // Hover styling updates
         cardDiv
           .on('mouseenter', () => {
-            cardDiv.style('border-color', 'var(--color-secondary)');
-            cardDiv.style('box-shadow', '0 0 15px rgba(0, 242, 254, 0.2)');
+            cardDiv.style('border-color', isOrphaned ? 'var(--color-alert)' : 'var(--color-secondary)');
+            cardDiv.style('box-shadow', isOrphaned ? '0 0 15px rgba(239, 68, 68, 0.25)' : '0 0 15px rgba(0, 242, 254, 0.2)');
           })
           .on('mouseleave', () => {
             const isSelected = selectedDbTableId === d.id;
-            cardDiv.style('border-color', isSelected ? 'var(--color-primary)' : 'var(--panel-border)');
+            cardDiv.style('border-color', isSelected ? 'var(--color-primary)' : (isOrphaned ? 'var(--color-alert)' : 'var(--panel-border)'));
             cardDiv.style('box-shadow', isSelected ? '0 0 10px rgba(99, 102, 241, 0.2)' : '0 4px 15px rgba(0,0,0,0.15)');
           });
 
@@ -2741,10 +2989,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     return () => {
       simulation.stop();
     };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath, showApiDbMapping]);
   useEffect(() => {
     if (!svgRef.current) return;
-    if (viewMode === 'dbSchema') return;
+    if (viewMode === 'dbSchema' && !showApiDbMapping) return;
     const activeId = hoveredNode || selectedNode;
     const query = searchQuery ? searchQuery.toLowerCase().trim() : '';
     const svgElement = d3.select(svgRef.current);
@@ -3010,6 +3258,48 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
         const line = d3.select(this);
+        
+        if (viewMode === 'dbSchema') {
+          const isRelated = sId === activeId || tId === activeId;
+          if (l.isApiConnection) {
+            let marker = 'url(#db-arrow)';
+            let stroke = 'rgba(99, 102, 241, 0.05)';
+            let opacity = isRelated ? 1.0 : 0.05;
+            
+            if (isRelated) {
+              if (l.isMismatch) {
+                marker = 'url(#db-arrow-mismatch)';
+                stroke = '#ef4444';
+              } else if (l.connectionType === 'write') {
+                marker = 'url(#db-arrow-write)';
+                stroke = 'rgba(59, 130, 246, 0.9)';
+              } else {
+                marker = 'url(#db-arrow-read)';
+                stroke = 'rgba(16, 185, 129, 0.9)';
+              }
+            } else if (l.isMismatch) {
+              stroke = 'rgba(239, 68, 68, 0.15)';
+              marker = 'url(#db-arrow-mismatch)';
+              opacity = 0.15;
+            }
+            
+            line.style('stroke', stroke)
+              .style('stroke-opacity', opacity)
+              .attr('stroke-dasharray', l.isMismatch ? '4,4' : null)
+              .attr('marker-end', marker);
+          } else {
+            const stroke = isRelated ? 'var(--color-secondary)' : 'rgba(99, 102, 241, 0.05)';
+            const opacity = isRelated ? 0.95 : 0.05;
+            const marker = isRelated ? 'url(#db-arrow-highlight)' : 'url(#db-arrow)';
+            
+            line.style('stroke', stroke)
+              .style('stroke-opacity', opacity)
+              .attr('stroke-dasharray', null)
+              .attr('marker-end', marker);
+          }
+          return;
+        }
+
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isFlowing = viewMode === 'dependency';
         let cls = 'link-element';
@@ -3125,6 +3415,38 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       nodesG.select('text').style('fill', 'var(--text-secondary)').style('font-weight', '500');
       linksLine.each(function (l: any) {
         const { sId, tId } = getLinkId(l);
+        
+        if (viewMode === 'dbSchema') {
+          if (l.isApiConnection) {
+            let stroke = 'rgba(99, 102, 241, 0.25)';
+            let marker = 'url(#db-arrow)';
+            let dash = null;
+            if (l.isMismatch) {
+              stroke = 'rgba(239, 68, 68, 0.45)';
+              marker = 'url(#db-arrow-mismatch)';
+              dash = '4,4';
+            } else if (l.connectionType === 'write') {
+              stroke = 'rgba(59, 130, 246, 0.3)';
+              marker = 'url(#db-arrow-write)';
+            } else {
+              stroke = 'rgba(16, 185, 129, 0.3)';
+              marker = 'url(#db-arrow-read)';
+            }
+            d3.select(this)
+              .style('stroke', stroke)
+              .style('stroke-opacity', 0.5)
+              .attr('stroke-dasharray', dash)
+              .attr('marker-end', marker);
+          } else {
+            d3.select(this)
+              .style('stroke', 'rgba(99, 102, 241, 0.4)')
+              .style('stroke-opacity', 0.5)
+              .attr('stroke-dasharray', null)
+              .attr('marker-end', 'url(#db-arrow)');
+          }
+          return;
+        }
+
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isFlowing = viewMode === 'dependency';
         let cls = isFlowing ? 'link-element flowing' : 'link-element';
@@ -3163,7 +3485,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       svgElement.selectAll('.flow-particle').remove();
     };
-  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport, filterLanguage, filterMinLoc, filterFolderPath]);
+  }, [hoveredNode, selectedNode, graphData, viewMode, searchQuery, cyclicLinks, heatmapMode, shortestPath, activeTraceNodeId, currentTraceStep, traceSteps, isMinimapExpanded, diffData, isEvolutionMode, currentEvolutionStep, gitHistory, linterViolations, auditReport, filterLanguage, filterMinLoc, filterFolderPath, showApiDbMapping]);
 
   // Fast hover and selection highlighting for DB Schema
   useEffect(() => {
@@ -3921,6 +4243,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                   </div>
                   <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
                     Toggle between real workspace database schemas and a complex e-commerce mock dataset.
+                  </div>
+                  
+                  <div className="toggle-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                    <span>Map REST API Endpoints</span>
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={showApiDbMapping} 
+                        onChange={(e) => {
+                          setShowApiDbMapping(e.target.checked);
+                          setSelectedDbTableId(null);
+                        }} 
+                      />
+                      <span className="slider round"></span>
+                    </label>
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                    Overlay API endpoints. Shows read/write connections, schema drift, and orphaned tables.
                   </div>
                   <button
                     className="cyber-button primary"

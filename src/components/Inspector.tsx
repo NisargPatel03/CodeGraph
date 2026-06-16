@@ -4,6 +4,8 @@ import { AiIcon } from './AiIcon';
 import type { ParsedFile } from '../utils/repoParser';
 import { getFileExplanation, askQuestionAboutCodebaseStream, generateTestSuite } from '../utils/aiHelper';
 import type { LinterViolation, AuditReport } from '../utils/aiHelper';
+import { extractEndpointsFromCodebase } from '../utils/aiHelper';
+import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
 import Editor from '@monaco-editor/react';
 
 function formatMarkdown(text: string): string {
@@ -404,6 +406,152 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [testSuites, setTestSuites] = useState<Record<string, string>>({});
   const [loadingTest, setLoadingTest] = useState(false);
+
+  const isDemo = repoName === 'demo' || repoName === 'sandbox' || allFiles.length === 0;
+
+  const apiEndpoints = useMemo(() => {
+    if (isDemo) {
+      return [
+        { method: 'GET', path: '/api/users', filePath: 'routes/users.js', description: 'List all users.', line: 10 },
+        { method: 'POST', path: '/api/users', filePath: 'routes/users.js', description: 'Create user.', line: 25 },
+        { method: 'GET', path: '/api/users/:id', filePath: 'routes/users.js', description: 'Get user details.', line: 40 },
+        { method: 'POST', path: '/api/orders', filePath: 'routes/orders.js', description: 'Place a new order.', line: 15 },
+        { method: 'GET', path: '/api/orders/:id', filePath: 'routes/orders.js', description: 'Get order details with items.', line: 35 },
+        { method: 'GET', path: '/api/products', filePath: 'routes/products.js', description: 'Query products list.', line: 8 },
+        { method: 'POST', path: '/api/products', filePath: 'routes/products.js', description: 'Add a new product.', line: 20 },
+        { method: 'DELETE', path: '/api/products/:id', filePath: 'routes/products.js', description: 'Remove a product.', line: 45 }
+      ];
+    }
+    return extractEndpointsFromCodebase(allFiles);
+  }, [allFiles, isDemo]);
+
+  const dbSchema = useMemo(() => {
+    if (isDemo) {
+      return GET_DEMO_SCHEMA();
+    }
+    return parseDatabaseSchemas(allFiles);
+  }, [allFiles, isDemo]);
+
+  const apiDbConnections = useMemo(() => {
+    if (isDemo) {
+      return [
+        { endpointPath: '/api/users', method: 'GET', tableId: 'User', type: 'read' as const },
+        { endpointPath: '/api/users', method: 'POST', tableId: 'User', type: 'write' as const, isMismatch: true, mismatchReason: "Field 'phoneNumber' sent in POST payload is not defined in User table schema." },
+        { endpointPath: '/api/users/:id', method: 'GET', tableId: 'User', type: 'read' as const },
+        { endpointPath: '/api/orders', method: 'POST', tableId: 'Order', type: 'write' as const },
+        { endpointPath: '/api/orders', method: 'POST', tableId: 'OrderItem', type: 'write' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'Order', type: 'read' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'OrderItem', type: 'read' as const },
+        { endpointPath: '/api/orders/:id', method: 'GET', tableId: 'Product', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'GET', tableId: 'Product', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'GET', tableId: 'Category', type: 'read' as const },
+        { endpointPath: '/api/products', method: 'POST', tableId: 'Product', type: 'write' as const },
+        { endpointPath: '/api/products/:id', method: 'DELETE', tableId: 'Product', type: 'write' as const }
+      ];
+    }
+
+    const connections: { endpointPath: string; method: string; tableId: string; type: 'read' | 'write'; isMismatch?: boolean; mismatchReason?: string }[] = [];
+    apiEndpoints.forEach(ep => {
+      const file = allFiles.find(f => f.path === ep.filePath);
+      const content = file ? file.content : '';
+      
+      dbSchema.tables.forEach(table => {
+        const tableName = table.id;
+        const singularName = tableName.toLowerCase();
+        const pluralName = singularName.endsWith('s') ? singularName : singularName + 's';
+        
+        const hasRef = 
+          content.toLowerCase().includes(`db.${singularName}`) ||
+          content.toLowerCase().includes(`db.${pluralName}`) ||
+          content.toLowerCase().includes(`prisma.${singularName}`) ||
+          content.toLowerCase().includes(`prisma.${pluralName}`) ||
+          content.toLowerCase().includes(`from ${singularName}`) ||
+          content.toLowerCase().includes(`from ${pluralName}`) ||
+          content.toLowerCase().includes(`into ${singularName}`) ||
+          content.toLowerCase().includes(`into ${pluralName}`) ||
+          content.toLowerCase().includes(`update ${singularName}`) ||
+          content.toLowerCase().includes(`update ${pluralName}`) ||
+          content.includes(tableName);
+          
+        if (hasRef) {
+          const type = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(ep.method) ? 'write' : 'read';
+          
+          let isMismatch = false;
+          let mismatchReason = '';
+          const fieldAccesses = content.match(/(?:body|payload|json|data)\.(\w+)/gi) || [];
+          const accessedFields = fieldAccesses.map(fa => fa.split('.').pop() || '');
+          
+          for (const af of accessedFields) {
+            const isBoilerplate = ['map', 'filter', 'length', 'id', 'status', 'name'].includes(af.toLowerCase());
+            if (!isBoilerplate && table.fields.length > 0) {
+              const existsInTable = table.fields.some(f => f.name.toLowerCase() === af.toLowerCase());
+              if (!existsInTable) {
+                isMismatch = true;
+                mismatchReason = `Field '${af}' referenced in payload is missing from Table schema.`;
+                break;
+              }
+            }
+          }
+          
+          connections.push({
+            endpointPath: ep.path,
+            method: ep.method,
+            tableId: tableName,
+            type,
+            isMismatch,
+            mismatchReason
+          });
+        }
+      });
+    });
+    
+    return connections;
+  }, [apiEndpoints, dbSchema, allFiles, isDemo]);
+
+  const orphanedTableIds = useMemo(() => {
+    const referenced = new Set(apiDbConnections.map(c => c.tableId));
+    const orphaned = new Set<string>();
+    dbSchema.tables.forEach(t => {
+      if (!referenced.has(t.id)) {
+        orphaned.add(t.id);
+      }
+    });
+    return orphaned;
+  }, [apiDbConnections, dbSchema.tables]);
+
+  const isApiNode = !!(selectedNodeId && selectedNodeId.startsWith('api:'));
+
+  const selectedApiNode = useMemo(() => {
+    if (!isApiNode || !selectedNodeId) return null;
+    const parts = selectedNodeId.split(':');
+    const method = parts[1];
+    const path = parts.slice(2).join(':');
+    
+    const endpoint = apiEndpoints.find(e => e.method === method && e.path === path) || {
+      method,
+      path,
+      filePath: 'routes/api.js',
+      description: 'REST Controller endpoint routing API requests.',
+      line: 1
+    };
+
+    const connections = apiDbConnections.filter(c => c.endpointPath === path && c.method === method);
+    
+    return {
+      ...endpoint,
+      connections
+    };
+  }, [isApiNode, selectedNodeId, apiEndpoints, apiDbConnections]);
+
+  const isDbTableNode = useMemo(() => {
+    if (!selectedNodeId) return false;
+    return dbSchema.tables.some(t => t.id === selectedNodeId);
+  }, [selectedNodeId, dbSchema.tables]);
+
+  const selectedDbTable = useMemo(() => {
+    if (!isDbTableNode || !selectedNodeId) return null;
+    return dbSchema.tables.find(t => t.id === selectedNodeId);
+  }, [isDbTableNode, selectedNodeId, dbSchema.tables]);
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([]);
@@ -515,7 +663,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     functions: false,
     relations: false,
-    similar: false
+    similar: false,
+    dbTables: false
   });
   const codePreviewRef = useRef<HTMLPreElement>(null);
   const editorRef = useRef<any>(null);
@@ -651,6 +800,11 @@ export const Inspector: React.FC<InspectorProps> = ({
         (f.content.includes('import') || f.content.includes('require'));
     });
   }, [activeInspectorFile, allFiles]);
+
+  const activeFileTables = useMemo(() => {
+    if (!activeInspectorFile) return [];
+    return dbSchema.tables.filter(t => t.sourceFile === activeInspectorFile.path);
+  }, [dbSchema.tables, activeInspectorFile]);
 
   const handleCopyPath = () => {
     if (!selectedFile) return;
@@ -946,6 +1100,203 @@ export const Inspector: React.FC<InspectorProps> = ({
                 >
                   📁 Expand Folder Cluster
                 </button>
+              </div>
+            ) : isApiNode && selectedApiNode ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{
+                      background: ['POST', 'PUT', 'PATCH', 'DELETE'].includes(selectedApiNode.method) ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                      color: ['POST', 'PUT', 'PATCH', 'DELETE'].includes(selectedApiNode.method) ? '#3b82f6' : '#10b981',
+                      fontSize: '0.75rem',
+                      fontWeight: '800',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {selectedApiNode.method}
+                    </span>
+                    <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', fontFamily: 'var(--font-mono)', margin: 0, color: 'var(--text-primary)' }}>
+                      {selectedApiNode.path}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                    {selectedApiNode.description}
+                  </p>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    Controller File: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-secondary)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setSelectedNodeId(selectedApiNode.filePath)}>
+                      {selectedApiNode.filePath}
+                    </span> (Line {selectedApiNode.line})
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Mapped Database Tables ({selectedApiNode.connections.length})
+                  </h4>
+                  {selectedApiNode.connections.length === 0 ? (
+                    <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.05)', border: '1px dashed rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#ef4444' }}>
+                      ⚠️ Direct database table reference not detected in controller source.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {selectedApiNode.connections.map((conn, idx) => (
+                        <div key={idx} style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.02)', border: conn.isMismatch ? '1px solid #ef4444' : '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <span style={{ fontWeight: '700', fontSize: '0.8rem', color: 'var(--text-primary)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => {
+                              const tableObj = dbSchema.tables.find(t => t.id === conn.tableId);
+                              if (tableObj && tableObj.sourceFile) {
+                                setSelectedNodeId(tableObj.sourceFile);
+                              } else {
+                                setSelectedNodeId(conn.tableId);
+                              }
+                            }}>
+                              🗃️ {conn.tableId}
+                            </span>
+                            <span style={{
+                              fontSize: '0.62rem',
+                              fontWeight: '600',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: conn.type === 'write' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                              color: conn.type === 'write' ? '#3b82f6' : '#10b981'
+                            }}>
+                              {conn.type === 'write' ? 'WRITE / MUTATE' : 'READ / QUERY'}
+                            </span>
+                          </div>
+                          {conn.isMismatch ? (
+                            <div style={{ marginTop: '6px', fontSize: '0.7rem', color: '#ef4444', background: 'rgba(239, 68, 68, 0.05)', padding: '6px', borderRadius: '4px' }}>
+                              ⚠️ <strong>Contract Drift Mismatch:</strong> {conn.mismatchReason}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '0.7rem', color: '#10b981', marginTop: '4px' }}>
+                              ✅ Contract matches schema.
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                    Drift Analysis Check
+                  </h4>
+                  {selectedApiNode.connections.some(c => c.isMismatch) ? (
+                    <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <AlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0 }} />
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)' }}>
+                        <strong style={{ color: '#ef4444' }}>Drift Mismatches Detected!</strong><br />
+                        The payload data structure does not align perfectly with database types.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '6px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ fontSize: '1rem' }}>✅</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-primary)' }}>
+                        <strong>Contract Intact.</strong> No model drift detected. Endpoint attributes fully conform to table definitions.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : isDbTableNode && selectedDbTable ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>🗃️</span>
+                    <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', margin: 0 }}>
+                      {selectedDbTable.id}
+                    </h3>
+                  </div>
+                  {selectedDbTable.sourceFile && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Schema Source: <span style={{ textDecoration: 'underline', color: 'var(--color-secondary)', cursor: 'pointer' }} onClick={() => setSelectedNodeId(selectedDbTable.sourceFile)}>
+                        {selectedDbTable.sourceFile}
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {orphanedTableIds.has(selectedDbTable.id) ? (
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                      ⚠️ Orphaned Table
+                    </span>
+                  ) : (
+                    <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(16, 185, 129, 0.08)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                      ⚡ Connected Table
+                    </span>
+                  )}
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
+                    {selectedDbTable.fields.length} Fields
+                  </span>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--color-secondary)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
+                    {apiDbConnections.filter(c => c.tableId === selectedDbTable.id).length} Mapped APIs
+                  </span>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Fields Schema Definition
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                    {selectedDbTable.fields.map((field) => (
+                      <div key={field.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', padding: '4px 8px', background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.02)', borderRadius: '4px' }}>
+                        <div>
+                          <span style={{ marginRight: '6px' }}>{field.isPrimaryKey ? '🔑' : field.isForeignKey ? '🔗' : '•'}</span>
+                          <span style={{ color: field.isPrimaryKey ? 'var(--color-secondary)' : field.isForeignKey ? '#a855f7' : 'var(--text-primary)', fontWeight: (field.isPrimaryKey || field.isForeignKey) ? 600 : 500 }}>
+                            {field.name}
+                          </span>
+                        </div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          {field.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Connected REST APIs
+                  </h4>
+                  {apiDbConnections.filter(c => c.tableId === selectedDbTable.id).length === 0 ? (
+                    <div style={{ padding: '10px', background: 'rgba(239, 68, 68, 0.05)', border: '1px dashed rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '0.72rem', color: '#ef4444' }}>
+                      ⚠️ <strong>Orphaned:</strong> No REST API routes query or mutate this table.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {apiDbConnections.filter(c => c.tableId === selectedDbTable.id).map((conn, idx) => (
+                        <div key={idx} style={{ padding: '8px 10px', background: 'rgba(255, 255, 255, 0.02)', border: conn.isMismatch ? '1px solid #ef4444' : '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '0.58rem',
+                                fontWeight: '800',
+                                padding: '2px 5px',
+                                borderRadius: '4px',
+                                background: conn.type === 'write' ? 'rgba(59, 130, 246, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                                color: conn.type === 'write' ? '#3b82f6' : '#10b981'
+                              }}>
+                                {conn.method}
+                              </span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-primary)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setSelectedNodeId(`api:${conn.method}:${conn.endpointPath}`)}>
+                                {conn.endpointPath}
+                              </span>
+                            </div>
+                          </div>
+                          {conn.isMismatch && (
+                            <div style={{ marginTop: '6px', fontSize: '0.7rem', color: '#ef4444', background: 'rgba(239, 68, 68, 0.05)', padding: '6px', borderRadius: '4px' }}>
+                              ⚠️ <strong>Payload Mismatch:</strong> {conn.mismatchReason}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : isSelectedNodeFunction ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
@@ -1290,6 +1641,98 @@ export const Inspector: React.FC<InspectorProps> = ({
                       <p style={{ fontWeight: 600 }}>Circular Dependency Loop Detected!</p>
                       <p style={{ opacity: 0.8, marginTop: '2px' }}>This file is imported in a cyclic loop. Check the circular dependencies report below.</p>
                     </div>
+                  </div>
+                )}
+
+                {/* Database Tables Accordion (Conditionally rendered) */}
+                {activeFileTables.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                    <button 
+                      onClick={() => toggleSection('dbTables')}
+                      style={{ width: '100%', background: 'none', border: 'none', padding: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                    >
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        <span style={{ color: 'var(--color-primary)' }}>🗃️</span>
+                        Database Schema Tables ({activeFileTables.length})
+                      </span>
+                      {collapsedSections.dbTables ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    
+                    {!collapsedSections.dbTables && (
+                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {activeFileTables.map(table => {
+                          const isOrphaned = orphanedTableIds.has(table.id);
+                          const tableConns = apiDbConnections.filter(c => c.tableId === table.id);
+                          const tableMismatches = tableConns.filter(c => c.isMismatch);
+                          
+                          return (
+                            <div key={table.id} style={{ padding: '10px', background: 'rgba(255, 255, 255, 0.02)', border: isOrphaned ? '1px dashed var(--color-alert)' : '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                <span style={{ fontWeight: '700', fontSize: '0.8rem', color: 'var(--text-primary)' }}>
+                                  🗃️ {table.id}
+                                </span>
+                                {isOrphaned ? (
+                                  <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--color-alert)', fontSize: '0.58rem', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>
+                                    ⚠️ Orphaned Table
+                                  </span>
+                                ) : (
+                                  <span style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', fontSize: '0.58rem', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>
+                                    🔗 {tableConns.length} API Calls
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '6px', marginBottom: '6px' }}>
+                                {table.fields.slice(0, 5).map(f => (
+                                  <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                                    <span>{f.isPrimaryKey ? '🔑' : f.isForeignKey ? '🔗' : '•'} {f.name}</span>
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)' }}>{f.type}</span>
+                                  </div>
+                                ))}
+                                {table.fields.length > 5 && (
+                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>
+                                    + {table.fields.length - 5} more fields
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Mapped APIs */}
+                              {tableConns.length > 0 && (
+                                <div style={{ marginTop: '6px' }}>
+                                  <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>Connected APIs:</div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    {tableConns.map((conn, idx) => (
+                                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.01)', padding: '4px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                          <span style={{
+                                            fontSize: '0.58rem',
+                                            fontWeight: '800',
+                                            padding: '1px 4px',
+                                            borderRadius: '3px',
+                                            background: conn.type === 'write' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                            color: conn.type === 'write' ? '#3b82f6' : '#10b981'
+                                          }}>{conn.method}</span>
+                                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-primary)' }}>{conn.endpointPath}</span>
+                                        </div>
+                                        {conn.isMismatch && (
+                                          <span title={conn.mismatchReason} style={{ cursor: 'help', fontSize: '0.65rem' }}>⚠️</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {tableMismatches.length > 0 && (
+                                <div style={{ marginTop: '6px', fontSize: '0.68rem', color: '#ef4444', background: 'rgba(239, 68, 68, 0.05)', padding: '6px', borderRadius: '4px' }}>
+                                  ⚠️ <strong>{tableMismatches.length} Mismatches / Drift:</strong> {tableMismatches[0].mismatchReason}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 

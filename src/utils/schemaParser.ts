@@ -606,6 +606,15 @@ export function GET_DEMO_SCHEMA(): DbSchemaReport {
           { name: 'name', type: 'String', isPrimaryKey: false, isForeignKey: false },
           { name: 'description', type: 'String', isPrimaryKey: false, isForeignKey: false }
         ]
+      },
+      {
+        id: 'AuditLog',
+        sourceFile: 'schema.prisma',
+        fields: [
+          { name: 'id', type: 'Int', isPrimaryKey: true, isForeignKey: false },
+          { name: 'action', type: 'String', isPrimaryKey: false, isForeignKey: false },
+          { name: 'timestamp', type: 'DateTime', isPrimaryKey: false, isForeignKey: false }
+        ]
       }
     ],
     relationships: [
