@@ -49,6 +49,7 @@
   - [Mermaid.js UML Diagram Exporter](#mermaidjs-uml-diagram-exporter)
   - [Visual API-to-Database Mapping & Drift Analysis](#visual-api-to-database-mapping-drift-analysis)
   - [One-Click AI-Patch Applicator](#one-click-ai-patch-applicator)
+  - [Keyboard Shortcut Reference Panel](#keyboard-shortcut-reference-panel)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -215,6 +216,11 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Instant Code Refactoring** — A single-click patch trigger embedded inside the Code Smells reports and dashboards.
 - **Automated Regex Extractor** — Asynchronously fetches recommendations from Gemini, extracts raw code segments from code blocks, and replaces file content seamlessly in memory.
 - **Hot-Reloaded Telemetry Recalculation** — Applying a patch instantly updates the repository workspace state and re-triggers codebase health evaluations, clearing resolved code smells on the fly.
+
+### ⌨️ Keyboard Shortcut Reference Panel
+- **Global Key Bindings Indicator** — A dedicated helper panel displaying all command palette, navigation, and theme hotkeys.
+- **Instant Hotkey Toggle** — Accessible anywhere in the application by pressing the `?` key or `Alt + H`.
+- **Theme-Integrated Design** — Fits natively into all dark and light themes with glowing `<kbd>` styling.
 
 ---
 
@@ -778,6 +784,19 @@ An integrated technical exporter that allows exporting the Gemini-generated Merm
 - **Background Patch Execution**: Bypasses manual copy-paste sequences by using an async pipeline that parses Gemini markdown response segments for code blocks.
 - **Seamless Local Memory Commits**: Invokes `onUpdateFileContent` synchronously to write updates directly to workspace memory.
 - **Automatic Health Re-evaluation**: Saving the patch instantly invokes `analyzeCodebase`, reloading import paths, complexity metrics, cycle indicators, and smell status dynamically.
+
+---
+
+<a id="keyboard-shortcut-reference-panel"></a>
+### 22. Keyboard Shortcut Reference Panel
+
+**Files:** `src/components/KeyboardShortcutsHelp.tsx`, `src/components/CommandPalette.tsx`, `src/App.tsx`
+
+An interactive helper overlay listing all global shortcuts:
+- **Hotkeys Directory**: Maps and categorizes commands into Global Navigation, Graph Views, and AI/Settings shortcuts.
+- **Double-Activation Triggers**: Toggles with either the standard `?` key or `Alt + H` global hotkey.
+- **Fuzzy Search Integration**: Registered within the Command Palette, enabling keyboard-only users to open the reference modal via query commands.
+- **Theme Reactivity**: Styled with adaptive borders, dynamic box-shadows, and glassmorphic panels matching Cyberpunk, Arctic Light, Solar Amber, and all other visual themes.
 
 ---
 
