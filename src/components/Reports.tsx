@@ -18,7 +18,8 @@ import {
   Gauge,
   X,
   GitBranch,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
@@ -329,6 +330,7 @@ export const Reports: React.FC<ReportsProps> = ({
   const [refactorSmell, setRefactorSmell] = useState<any | null>(null);
   const [refactorResult, setRefactorResult] = useState<string | null>(null);
   const [refactoringLoading, setRefactoringLoading] = useState(false);
+  const [autoApplyingSmellIds, setAutoApplyingSmellIds] = useState<Set<string>>(new Set());
 
   const handleRefactor = async (smell: any) => {
     setRefactorSmell(smell);
@@ -349,6 +351,43 @@ export const Reports: React.FC<ReportsProps> = ({
       setRefactorResult(`### ⚠️ Refactoring Failed\nError: ${err.message || err}`);
     } finally {
       setRefactoringLoading(false);
+    }
+  };
+
+  const handleAutoApplyRefactor = async (smell: any) => {
+    if (!onUpdateFileContent) return;
+    
+    setAutoApplyingSmellIds(prev => {
+      const next = new Set(prev);
+      next.add(smell.id);
+      return next;
+    });
+    
+    try {
+      const fileObj = files.find(f => f.path === smell.file);
+      const fileContent = fileObj?.content || '';
+      
+      const suggestion = await refactorCodeSmell(
+        smell.file,
+        fileContent,
+        smell.message,
+        smell.details,
+        apiKey
+      );
+      
+      const preMatch = suggestion.match(/\`\`\`(?:[a-zA-Z]+)?\n([\s\S]*?)\n\`\`\`/);
+      const cleanCode = preMatch ? preMatch[1].trim() : suggestion;
+      
+      onUpdateFileContent(smell.file, cleanCode);
+      showToast(`AI Refactor applied successfully for ${smell.file.split('/').pop()}!`);
+    } catch (err: any) {
+      showToast(`Refactoring failed: ${err.message || err}`);
+    } finally {
+      setAutoApplyingSmellIds(prev => {
+        const next = new Set(prev);
+        next.delete(smell.id);
+        return next;
+      });
     }
   };
 
@@ -833,6 +872,43 @@ export const Reports: React.FC<ReportsProps> = ({
                           <AiIcon size={12} />
                           AI Refactor
                         </button>
+
+                        {onUpdateFileContent && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAutoApplyRefactor(smell);
+                            }}
+                            disabled={autoApplyingSmellIds.has(smell.id)}
+                            className="cyber-button"
+                            style={{
+                              padding: '3px 8px',
+                              fontSize: '0.65rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(139, 92, 246, 0.2))',
+                              borderColor: 'var(--color-secondary)',
+                              color: 'var(--text-primary)',
+                              fontWeight: 600,
+                              boxShadow: '0 0 10px rgba(0, 242, 254, 0.1)',
+                              cursor: autoApplyingSmellIds.has(smell.id) ? 'not-allowed' : 'pointer',
+                              opacity: autoApplyingSmellIds.has(smell.id) ? 0.7 : 1
+                            }}
+                          >
+                            {autoApplyingSmellIds.has(smell.id) ? (
+                              <>
+                                <RefreshCw size={11} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                                Applying...
+                              </>
+                            ) : (
+                              <>
+                                <Zap size={11} style={{ color: 'var(--color-secondary)' }} />
+                                Auto-Apply
+                              </>
+                            )}
+                          </button>
+                        )}
 
                         <span style={{ 
                           fontSize: '0.6rem', 

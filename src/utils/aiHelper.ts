@@ -328,6 +328,9 @@ export async function refactorCodeSmell(
   apiKey: string
 ): Promise<string> {
   if (!isValidApiKey(apiKey)) {
+    const ext = filePath.split('.').pop() || 'js';
+    const lang = ['ts', 'tsx'].includes(ext) ? 'typescript' : (['js', 'jsx'].includes(ext) ? 'javascript' : ext);
+    
     return `### 💡 Mock Refactoring Suggestion (Offline Mode)
 
 **File:** \`${filePath}\`
@@ -338,7 +341,16 @@ export async function refactorCodeSmell(
 Here is a general refactoring tip:
 1. **Extract Method / Function**: Break down the long block of logic into smaller, self-contained functions.
 2. **Remove Duplicate Code**: If a block of code appears in multiple places, extract it to a shared helper.
-3. **Use Descriptors**: Use clear parameter names and extract complex nested conditionals into descriptive variables.`;
+3. **Use Descriptors**: Use clear parameter names and extract complex nested conditionals into descriptive variables.
+
+Here is the refactored code (Mock):
+\`\`\`${lang}
+// Refactored by CodeGraph AI (Offline Mode)
+// Resolved Smell: ${smellMessage}
+// Details: ${smellDetails}
+
+${fileContent.trim()}
+\`\`\``;
   }
 
   const cacheKey = getCacheKey('refactorCodeSmell', { filePath, fileContent, smellMessage, smellDetails });
