@@ -3261,3 +3261,11 @@ input:checked + .slider:before {
   transform: translateY(0);
 }
 
+.help-indicator-btn:hover {
+  color: var(--color-primary) !important;
+}
+
+.api-indicator-btn:hover {
+  opacity: 0.85;
+}
+

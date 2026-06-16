@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2, Activity } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2, Activity, HelpCircle } from 'lucide-react';
 import JSZip from 'jszip';
 import type { ParsedFile } from './utils/repoParser';
 import { fetchGitHubRepo } from './utils/repoParser';
@@ -14,6 +14,7 @@ import { KpiRibbon } from './components/KpiRibbon';
 import { ApiDocsPortal } from './components/ApiDocsPortal';
 import { AiIcon } from './components/AiIcon';
 import { CommandPalette } from './components/CommandPalette';
+import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import logoImg from './assets/logo.png';
 import { 
   semanticSearchCodebase, 
@@ -111,6 +112,7 @@ export default function App() {
   const [isLinting, setIsLinting] = useState(false);
   const [linterError, setLinterError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [telemetry, setTelemetry] = useState(() => getCacheTelemetry());
 
   useEffect(() => {
@@ -846,6 +848,30 @@ export default function App() {
             ))}
           </div>
 
+          {/* Keyboard Shortcuts Help Button */}
+          <div
+            onClick={() => setIsHelpOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'var(--transition-smooth)',
+              borderLeft: '1px solid var(--panel-border)',
+              paddingLeft: '12px',
+              paddingRight: '4px',
+              userSelect: 'none'
+            }}
+            title="Keyboard Shortcuts Reference (?)"
+            className="help-indicator-btn"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+              <HelpCircle size={14} />
+              <span>Shortcuts</span>
+            </div>
+          </div>
+
           {/* Settings API Key Toggle indicator */}
           <div 
             onClick={() => setIsSettingsOpen(true)}
@@ -1520,12 +1546,18 @@ export default function App() {
           isChatOpen={isChatOpen}
           setIsChatOpen={setIsChatOpen}
           setIsSettingsOpen={setIsSettingsOpen}
+          onToggleHelp={() => setIsHelpOpen(prev => !prev)}
           onRunDependencyAudit={handleRunDependencyAudit}
           onRunDbAudit={() => setDbAuditTrigger(prev => prev + 1)}
           files={repoData.files}
           onSelectFile={setSelectedNodeId}
         />
       )}
+
+      <KeyboardShortcutsHelp 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 }

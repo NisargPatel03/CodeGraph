@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Sparkles, Palette, File, Settings, Activity, Database, BookOpen, Layers } from 'lucide-react';
+import { Search, Sparkles, Palette, File, Settings, Activity, Database, BookOpen, Layers, HelpCircle } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 
 interface CommandPaletteProps {
@@ -11,6 +11,7 @@ interface CommandPaletteProps {
   isChatOpen: boolean;
   setIsChatOpen: (open: boolean) => void;
   setIsSettingsOpen: (open: boolean) => void;
+  onToggleHelp: () => void;
   onRunDependencyAudit: () => void;
   onRunDbAudit: () => void;
   files: ParsedFile[];
@@ -34,6 +35,7 @@ export function CommandPalette({
   isChatOpen,
   setIsChatOpen,
   setIsSettingsOpen,
+  onToggleHelp,
   onRunDependencyAudit,
   onRunDbAudit,
   files,
@@ -153,6 +155,14 @@ export function CommandPalette({
       icon: <Settings size={14} />,
       shortcut: ['Alt', 'O'],
       action: () => setIsSettingsOpen(true)
+    },
+    {
+      id: 'toggle-help',
+      name: 'Show Keyboard Shortcuts Reference',
+      category: 'Visual Controls',
+      icon: <HelpCircle size={14} />,
+      shortcut: ['Alt', 'H'],
+      action: onToggleHelp
     }
   ], [theme, isChatOpen]);
 
@@ -176,6 +186,13 @@ export function CommandPalette({
         activeEl.getAttribute('contenteditable') === 'true'
       );
       if (isTyping) return;
+
+      // Toggle Help Shortcuts: ? or Alt+H
+      if (e.key === '?' || (e.altKey && e.key.toLowerCase() === 'h')) {
+        e.preventDefault();
+        onToggleHelp();
+        return;
+      }
 
       // Alt Key Shortcuts
       if (e.altKey) {
@@ -204,7 +221,7 @@ export function CommandPalette({
 
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
-  }, [theme, isChatOpen]);
+  }, [theme, isChatOpen, onToggleHelp]);
 
   // Filter commands and files based on searchQuery
   const filteredItems = useMemo(() => {
