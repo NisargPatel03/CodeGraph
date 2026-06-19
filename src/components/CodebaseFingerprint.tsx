@@ -315,13 +315,13 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
           bottom: '12px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(10, 10, 15, 0.96)',
+          background: 'var(--panel-bg)',
           border: '1px solid var(--panel-border)',
           borderRadius: '8px',
           padding: '10px 14px',
           fontSize: '0.74rem',
           color: 'var(--text-primary)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
           pointerEvents: 'none',
           textAlign: 'center',
           backdropFilter: 'blur(8px)',
@@ -334,7 +334,7 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
           <div style={{ color: 'var(--text-muted)', fontSize: '0.66rem', marginBottom: '6px', wordBreak: 'break-all' }}>
             {hoveredFile.path}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: '6px', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px dashed var(--panel-border)', paddingTop: '6px', gap: '8px', color: 'var(--text-secondary)', fontSize: '0.68rem' }}>
             <div>Language: <strong style={{ color: getLanguageColor(hoveredFile.language) }}>{hoveredFile.language}</strong></div>
             <div>LOC: <strong style={{ color: 'var(--text-primary)' }}>{hoveredFile.loc}</strong></div>
             {hoveredFile.smells > 0 && (
@@ -351,7 +351,7 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
         position: 'absolute',
         bottom: '12px',
         left: '12px',
-        background: 'rgba(10, 10, 15, 0.65)',
+        background: 'var(--panel-bg)',
         border: '1px solid var(--panel-border)',
         borderRadius: '6px',
         padding: '8px 10px',
@@ -360,11 +360,12 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
         flexDirection: 'column',
         gap: '4px',
         backdropFilter: 'blur(8px)',
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
       }}>
         <div style={{ fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '0.58rem', marginBottom: '2px' }}>Fingerprint Key</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
-          <span style={{ display: 'inline-block', width: '12px', height: '1.5px', background: '#6366f1' }} />
+          <span style={{ display: 'inline-block', width: '12px', height: '1.5px', background: 'var(--color-primary)' }} />
           <span>Concentric Ridges: Complexity (LOC)</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
