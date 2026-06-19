@@ -16,6 +16,7 @@ import { AiIcon } from './components/AiIcon';
 import { CommandPalette } from './components/CommandPalette';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import logoImg from './assets/logo.png';
+import { audioSonifier } from './utils/audioSonifier';
 import { 
   semanticSearchCodebase, 
   lintCodebaseRules, 
@@ -36,6 +37,9 @@ interface FileTreeItem {
 }
 
 export default function App() {
+  const [audioEnabled, setAudioEnabled] = useState(() => audioSonifier.isEnabled());
+  const [audioVolume, setAudioVolume] = useState(() => audioSonifier.getVolume());
+
   const [theme, setTheme] = useState(() => {
     const queryParams = new URLSearchParams(window.location.search);
     const urlTheme = queryParams.get('theme');
@@ -213,6 +217,7 @@ export default function App() {
   }, [theme]);
 
   const handleThemeClick = (e: React.MouseEvent, themeId: string) => {
+    audioSonifier.playClick();
     const clickX = e.clientX;
     const clickY = e.clientY;
 
@@ -679,6 +684,7 @@ export default function App() {
   }, [repoData]);
 
   const toggleFolder = (path: string) => {
+    audioSonifier.playClick();
     setExpandedFolders((prev) => ({
       ...prev,
       [path]: !prev[path],
@@ -705,6 +711,7 @@ export default function App() {
           className={`file-node ${isSelected ? 'active' : ''} ${hasCycle ? 'cycle-member' : ''}`}
           style={{ paddingLeft: `${depth * 14 + 8}px`, display: 'flex', alignItems: 'center' }}
           onClick={() => {
+            audioSonifier.playClick();
             if (isMultiSelectActive) {
               setSelectedFilePaths(prev => {
                 const next = new Set(prev);
@@ -1481,6 +1488,90 @@ export default function App() {
                     <span style={{ color: 'var(--text-secondary)' }}>Saved (Cached): <strong style={{ color: '#10b981' }}>{telemetry.savedTokens.toLocaleString()}</strong></span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Audio Settings Panel */}
+            <div style={{ marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '0.8rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span>🔊 Codebase Sonification (Audio Feedback)</span>
+              </h4>
+              
+              <div className="glass-panel" style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>Enable Auditory Feedback</span>
+                    <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>Plays responsive synthesized chimes on hover and simulation ticks.</span>
+                  </div>
+                  <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={audioEnabled}
+                      onChange={(e) => {
+                        const nextVal = e.target.checked;
+                        audioSonifier.setEnabled(nextVal);
+                        setAudioEnabled(nextVal);
+                        if (nextVal) {
+                          audioSonifier.playClick();
+                        }
+                      }}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span style={{
+                      position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: audioEnabled ? 'var(--color-primary)' : 'rgba(255,255,255,0.1)',
+                      transition: '0.3s', borderRadius: '20px',
+                      boxShadow: audioEnabled ? '0 0 8px var(--color-primary-glow)' : 'none'
+                    }}>
+                      <span style={{
+                        position: 'absolute', content: '""', height: '14px', width: '14px', left: '3px', bottom: '3px',
+                        backgroundColor: '#ffffff', transition: '0.3s', borderRadius: '50%',
+                        transform: audioEnabled ? 'translateX(18px)' : 'translateX(0)'
+                      }} />
+                    </span>
+                  </label>
+                </div>
+
+                {audioEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      <span>Master Volume</span>
+                      <span>{Math.round(audioVolume * 100)}%</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05"
+                        value={audioVolume}
+                        onChange={(e) => {
+                          const nextVol = parseFloat(e.target.value);
+                          audioSonifier.setVolume(nextVol);
+                          setAudioVolume(nextVol);
+                        }}
+                        style={{
+                          flex: 1,
+                          accentColor: 'var(--color-primary)',
+                          background: 'rgba(255,255,255,0.1)',
+                          height: '4px',
+                          borderRadius: '2px',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <button 
+                        className="cyber-button secondary"
+                        style={{ fontSize: '0.7rem', padding: '4px 10px', height: '24px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => {
+                          audioSonifier.playClick();
+                          audioSonifier.playNodeHover({ size: 100, complexity: 10 });
+                        }}
+                      >
+                        🎵 Test sound
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

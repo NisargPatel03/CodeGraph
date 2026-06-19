@@ -699,6 +699,8 @@ code, pre {
 .settings-modal {
   width: 500px;
   max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 24px;
   display: flex;
   flex-direction: column;

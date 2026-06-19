@@ -8,6 +8,7 @@ import { EvolutionPlayer } from './EvolutionPlayer';
 import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
 import { auditDatabaseSchema, extractEndpointsFromCodebase } from '../utils/aiHelper';
 import mermaid from 'mermaid';
+import { audioSonifier } from '../utils/audioSonifier';
 
 interface GraphCanvasProps {
   graphData: CodebaseGraph;
@@ -1379,6 +1380,31 @@ code, pre, .mono {
     return () => clearInterval(interval);
   }, [traceSteps]);
 
+  // Call trace simulation sonification
+  const prevTraceNodeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTraceNodeId && !prevTraceNodeRef.current) {
+      audioSonifier.playSimulationStart();
+    } else if (!activeTraceNodeId && prevTraceNodeRef.current) {
+      audioSonifier.playSimulationStop();
+    }
+    prevTraceNodeRef.current = activeTraceNodeId;
+  }, [activeTraceNodeId]);
+
+  useEffect(() => {
+    if (activeTraceNodeId && traceSteps.length > 0) {
+      const activeStep = traceSteps[currentTraceStep];
+      if (activeStep) {
+        audioSonifier.playTraceStep(
+          currentTraceStep,
+          traceSteps.length,
+          activeStep.source,
+          activeStep.target
+        );
+      }
+    }
+  }, [currentTraceStep, activeTraceNodeId, traceSteps]);
+
   const handleMinimapClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = minimapCanvasRef.current;
     if (!canvas || !svgRef.current || !containerRef.current) return;
@@ -2701,6 +2727,10 @@ code, pre, .mono {
           setHoveredDbTableId(d.id);
           return;
         }
+        if (hoveredNode !== d.id) {
+          const isCyclic = graphData.cycles.some(cycle => cycle.includes(d.id));
+          audioSonifier.playNodeHover({ ...d, isCyclic });
+        }
         setHoveredNode(d.id);
         if (viewMode === 'cluster' && d.folder) {
           const folderMembers = nodes.filter((n: any) => n.folder === d.folder);
@@ -3859,6 +3889,10 @@ code, pre, .mono {
         });
 
         if (closestNode) {
+          if (hoveredNode3D !== closestNode.id) {
+            const isCyclic = graphData.cycles.some(cycle => cycle.includes(closestNode.id));
+            audioSonifier.playNodeHover({ ...closestNode, isCyclic });
+          }
           setHoveredNode3D(closestNode.id);
         } else {
           setHoveredNode3D(null);
