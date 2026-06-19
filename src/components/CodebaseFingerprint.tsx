@@ -346,6 +346,40 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
           </div>
         </div>
       )}
+      {/* Visual Legend Key Overlay */}
+      <div style={{
+        position: 'absolute',
+        bottom: '12px',
+        left: '12px',
+        background: 'rgba(10, 10, 15, 0.65)',
+        border: '1px solid var(--panel-border)',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        fontSize: '0.64rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        backdropFilter: 'blur(8px)',
+        pointerEvents: 'none'
+      }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '0.58rem', marginBottom: '2px' }}>Fingerprint Key</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+          <span style={{ display: 'inline-block', width: '12px', height: '1.5px', background: '#6366f1' }} />
+          <span>Concentric Ridges: Complexity (LOC)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+          <span style={{ display: 'inline-block', width: '12px', height: '1.5px', background: 'rgba(239, 68, 68, 0.6)' }} />
+          <span>Inner Arcs: Dependency Loops</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+          <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.8)' }} />
+          <span>Orange Nodes: Code Smells</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+          <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#ef4444' }} />
+          <span>Red Orbs: Security CVEs</span>
+        </div>
+      </div>
     </div>
   );
 };

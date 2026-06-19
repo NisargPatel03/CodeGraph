@@ -1059,6 +1059,49 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       }))
       .sort((a, b) => b.count - a.count);
 
+    // Additional Calculations for Details
+    const totalLoc = localNodes.reduce((acc, curr) => acc + (curr.complexity || 0), 0);
+    const avgLoc = Math.round(totalLoc / totalFiles);
+
+    let maxComplexFile = { name: 'None', complexity: 0 };
+    localNodes.forEach(n => {
+      const complexity = n.complexity || 0;
+      if (complexity > maxComplexFile.complexity) {
+        maxComplexFile = { name: n.name, complexity };
+      }
+    });
+
+    let maxFolderDepth = 0;
+    localNodes.forEach(n => {
+      if (n.id) {
+        const parts = n.id.split('/');
+        const depth = Math.max(0, parts.length - 1);
+        if (depth > maxFolderDepth) {
+          maxFolderDepth = depth;
+        }
+      }
+    });
+
+    const uniqueCves = new Map<string, any>();
+    graphData.nodes.forEach(n => {
+      if (n.isVulnerable && n.vulnerabilities) {
+        n.vulnerabilities.forEach((v: any) => {
+          uniqueCves.set(v.cveId || `${n.name}-${v.description.slice(0, 10)}`, v);
+        });
+      }
+    });
+
+    const cveBreakdown = { critical: 0, high: 0, moderate: 0, low: 0 };
+    uniqueCves.forEach(v => {
+      const sev = (v.severity || 'low').toLowerCase();
+      if (sev === 'critical') cveBreakdown.critical++;
+      else if (sev === 'high') cveBreakdown.high++;
+      else if (sev === 'moderate' || sev === 'medium') cveBreakdown.moderate++;
+      else cveBreakdown.low++;
+    });
+
+    const timestamp = new Date().toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
     return {
       qualityScore,
       grade,
@@ -1068,7 +1111,13 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       languages,
       vulnsCount,
       smellsCount,
-      cyclesCount
+      cyclesCount,
+      avgLoc,
+      totalLoc,
+      maxComplexFile,
+      maxFolderDepth,
+      cveBreakdown,
+      timestamp
     };
   }, [graphData.nodes, graphData.codeSmells, cycles]);
 
@@ -1613,17 +1662,27 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         // Titles
         ctx.textAlign = 'left';
         ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = '900 9px monospace';
-        ctx.fillText(title.toUpperCase(), px + 15, py + 25);
+        ctx.font = '900 8.5px monospace';
+        ctx.fillText(title.toUpperCase(), px + 12, py + 22);
 
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.font = '500 11px system-ui, sans-serif';
-        ctx.fillText(subtitle, px + 15, py + 45);
+        if (subtitle.length > 18) {
+          ctx.font = '500 8.5px system-ui, sans-serif';
+          const displaySub = subtitle.length > 22 ? '...' + subtitle.slice(-19) : subtitle;
+          ctx.fillText(displaySub, px + 12, py + 42);
+        } else {
+          ctx.font = '500 10.5px system-ui, sans-serif';
+          ctx.fillText(subtitle, px + 12, py + 42);
+        }
 
         // Big visual metric indicator
         ctx.fillStyle = accentColor;
-        ctx.font = 'bold 24px system-ui, sans-serif';
-        ctx.fillText(mainText, px + 15, py + 80);
+        if (mainText.length > 8) {
+          ctx.font = 'bold 15px system-ui, sans-serif';
+        } else {
+          ctx.font = 'bold 22px system-ui, sans-serif';
+        }
+        ctx.fillText(mainText, px + 12, py + 78);
       };
 
       // Main Grade card
@@ -1668,11 +1727,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillText('Based on complexity, code smells, and structures.', gx + 155, gy + 105);
 
-      // Sub Cards
-      drawPanel(700, 305, 215, 105, 'Maintainability', 'Weighted complexity', `${fingerprintMetrics.qualityScore}%`, '#8b5cf6');
-      drawPanel(935, 305, 215, 105, 'Security Rating', `${fingerprintMetrics.vulnsCount} Vulnerabilities`, fingerprintMetrics.securityRating, fingerprintMetrics.securityColor);
-      drawPanel(700, 425, 215, 105, 'Architect Health', 'Files without loops', `${fingerprintMetrics.archHealth}%`, '#10b981');
-      drawPanel(935, 425, 215, 105, 'Code Smells', 'Refactor recommendations', String(fingerprintMetrics.smellsCount), '#f59e0b');
+      // Sub Cards (3 Columns x 2 Rows)
+      // Row 1
+      drawPanel(700, 305, 140, 105, 'Maintainability', 'Quality Index', `${fingerprintMetrics.qualityScore}%`, '#8b5cf6');
+      drawPanel(855, 305, 140, 105, 'Security Rating', `${fingerprintMetrics.vulnsCount} Vulnerabilities`, fingerprintMetrics.securityRating, fingerprintMetrics.securityColor);
+      drawPanel(1010, 305, 140, 105, 'Avg File Size', 'Lines of Code', `${fingerprintMetrics.avgLoc} LOC`, '#3b82f6');
+
+      // Row 2
+      drawPanel(700, 425, 140, 105, 'Architect Health', 'Files without loops', `${fingerprintMetrics.archHealth}%`, '#10b981');
+      drawPanel(855, 425, 140, 105, 'Code Smells', 'Refactor warnings', String(fingerprintMetrics.smellsCount), '#f59e0b');
+      const largestFileName = fingerprintMetrics.maxComplexFile.name.split('/').pop() || 'None';
+      drawPanel(1010, 425, 140, 105, 'Largest File', largestFileName, `${fingerprintMetrics.maxComplexFile.complexity} lines`, '#ec4899');
 
       // 5. Language Breakdown Bar
       ctx.textAlign = 'left';
@@ -1721,11 +1786,52 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         legendX += Math.max(90, ctx.measureText(`${lang.lang} (${lang.percent}%)`).width + 25);
       });
 
+      // Draw Visual Legend Key in bottom-left corner
+      const lx = 50;
+      const ly = 545;
+      
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.font = '900 8.5px monospace';
+      ctx.fillText('FINGERPRINT KEY', lx, ly);
+
+      const drawLegendItem = (index: number, color: string, text: string, isLine: boolean) => {
+        const itemY = ly + 15 + index * 14;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        
+        ctx.beginPath();
+        if (isLine) {
+          ctx.moveTo(lx, itemY - 3);
+          ctx.lineTo(lx + 12, itemY - 3);
+          ctx.stroke();
+        } else {
+          ctx.arc(lx + 6, itemY - 3, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '500 9px system-ui, sans-serif';
+        ctx.fillText(text, lx + 20, itemY);
+      };
+
+      drawLegendItem(0, '#6366f1', 'Concentric Ridges: Complexity (LOC)', true);
+      drawLegendItem(1, 'rgba(239, 68, 68, 0.6)', 'Inner Arcs: Dependency Loops', true);
+      drawLegendItem(2, 'rgba(249, 115, 22, 0.8)', 'Orange Nodes: Code Smells', false);
+      drawLegendItem(3, '#ef4444', 'Red Orbs: Security CVEs', false);
+
       // 6. Watermark Footer
       ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.font = '11px monospace';
       ctx.textAlign = 'left';
       ctx.fillText('CODEGRAPH VISUALIZER • HEALTH FINGERPRINT CERTIFICATE', 50, 642);
+
+      // Render metadata footnote at bottom-right
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.font = '500 10px monospace';
+      ctx.fillText(`Max Nesting Depth: ${fingerprintMetrics.maxFolderDepth}  |  Scanned: ${fingerprintMetrics.timestamp}`, 1150, 642);
 
       // Download
       const dataUrl = canvas.toDataURL('image/png');
@@ -2572,7 +2678,57 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   </span>
                 </div>
 
+                {/* Average LOC */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Avg File Size</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {fingerprintMetrics.avgLoc} LOC
+                  </span>
+                </div>
+
+                {/* Largest File */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px', minWidth: 0 }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Largest Module</span>
+                  <span 
+                    style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={`${fingerprintMetrics.maxComplexFile.name} (${fingerprintMetrics.maxComplexFile.complexity} lines)`}
+                  >
+                    {fingerprintMetrics.maxComplexFile.name.split('/').pop() || fingerprintMetrics.maxComplexFile.name} <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)' }}>({fingerprintMetrics.maxComplexFile.complexity} lines)</span>
+                  </span>
+                </div>
+
               </div>
+
+              {/* CVE Breakdown */}
+              {fingerprintMetrics.vulnsCount > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(239, 68, 68, 0.03)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Vulnerability Severity Breakdown
+                  </span>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>Critical:</span>
+                      <strong style={{ color: '#ef4444' }}>{fingerprintMetrics.cveBreakdown.critical}</strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>High:</span>
+                      <strong style={{ color: '#f97316' }}>{fingerprintMetrics.cveBreakdown.high}</strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>Medium:</span>
+                      <strong style={{ color: '#f59e0b' }}>{fingerprintMetrics.cveBreakdown.moderate}</strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>Low:</span>
+                      <strong style={{ color: '#3b82f6' }}>{fingerprintMetrics.cveBreakdown.low}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Primary languages profile */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2628,15 +2784,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '16px', borderTop: '1px dashed var(--panel-border)' }}>
-                <button
-                  className="cyber-button"
-                  onClick={handleExportScorecard}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, padding: '10px 18px', fontSize: '0.8rem' }}
-                >
-                  <Download size={14} />
-                  Export Score Card (PNG)
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto', paddingTop: '16px', borderTop: '1px dashed var(--panel-border)' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    className="cyber-button"
+                    onClick={handleExportScorecard}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, padding: '10px 18px', fontSize: '0.8rem' }}
+                  >
+                    <Download size={14} />
+                    Export Score Card (PNG)
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-muted)', padding: '0 4px' }}>
+                  <span>Max Folder Nesting: <strong>{fingerprintMetrics.maxFolderDepth}</strong></span>
+                  <span>Scanned: <strong>{fingerprintMetrics.timestamp}</strong></span>
+                </div>
               </div>
 
             </div>
