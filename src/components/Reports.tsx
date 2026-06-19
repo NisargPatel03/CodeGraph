@@ -263,6 +263,41 @@ function formatMarkdown(text: string): string {
     return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${tableName}')" title="Locate ${tableName} Table on Canvas">📊 ${tableName}</button>`;
   });
 
+  // Helper to check if a match is part of a URL, image link, or standard markdown link
+  const isInsideUrlOrLink = (offset: number, matchLength: number, str: string) => {
+    const before = str.slice(0, offset);
+    const after = str.slice(offset + matchLength);
+
+    // 1. Check if preceded by URL components in the current word
+    const lastSpace = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\n'), before.lastIndexOf('"'), before.lastIndexOf("'"));
+    const wordBefore = lastSpace === -1 ? before : before.slice(lastSpace + 1);
+    if (/https?:\/\/|www\.|shields\.io/i.test(wordBefore)) {
+      return true;
+    }
+
+    // 2. Check if inside link/image parenthesis part: e.g. [...](http://shields.io/badge/Next.js-xxx)
+    const lastOpenParen = before.lastIndexOf('(');
+    const lastCloseBracket = before.lastIndexOf(']');
+    if (lastOpenParen !== -1 && lastOpenParen > lastCloseBracket) {
+      const textBetween = before.slice(lastCloseBracket + 1, lastOpenParen).trim();
+      if (before[lastOpenParen - 1] === ']' || textBetween === '') {
+        return true;
+      }
+    }
+
+    // 3. Check if inside link/image square brackets part: e.g. ![Next.js](...)
+    const nextCloseBracket = after.indexOf(']');
+    const nextOpenBracket = after.indexOf('[');
+    if (nextCloseBracket !== -1 && (nextOpenBracket === -1 || nextCloseBracket < nextOpenBracket)) {
+      const afterBracket = after.slice(nextCloseBracket + 1).trim();
+      if (afterBracket.startsWith('(')) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   // Parse file paths wrapped in backticks or raw file paths
   const fileRegex = /\`?((?:[a-zA-Z0-9_\-\/]*\/)?[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json|go|py|rs|md|yaml|yml|sh|sql))\`?/gi;
   processedText = processedText.replace(fileRegex, (match, filePath, offset, string) => {
@@ -270,8 +305,21 @@ function formatMarkdown(text: string): string {
     if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'") || before.endsWith('`')) {
       return match;
     }
+    if (isInsideUrlOrLink(offset, match.length, string)) {
+      return match;
+    }
     const fileName = filePath.split('/').pop() || filePath;
     return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+  });
+
+  // Parse markdown images: ![alt](url) -> <img src="url" alt="alt" />
+  processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (_match, alt, url) => {
+    return `<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 2px; display: inline-block;" />`;
+  });
+
+  // Parse markdown links: [text](url) -> <a href="url" target="_blank">text</a>
+  processedText = processedText.replace(/\[(.*?)\]\((.*?)\)/g, (_match, text, url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; font-weight: 500;">${text}</a>`;
   });
 
   // Parse remaining block-level and inline markdown

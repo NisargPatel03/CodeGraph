@@ -29,8 +29,10 @@ import {
   refactorCodeSmell, 
   generateMermaidDiagram,
   suggestFolderRestructureStream,
-  validateApiDbContractsStream
+  validateApiDbContractsStream,
+  generateReadmeFile
 } from '../utils/aiHelper';
+import { parseDatabaseSchemas } from '../utils/schemaParser';
 import { CodebaseFingerprint } from './CodebaseFingerprint';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
@@ -357,6 +359,41 @@ function formatMarkdown(text: string): string {
     return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${tableName}')" title="Locate ${tableName} Table on Canvas">📊 ${tableName}</button>`;
   });
 
+  // Helper to check if a match is part of a URL, image link, or standard markdown link
+  const isInsideUrlOrLink = (offset: number, matchLength: number, str: string) => {
+    const before = str.slice(0, offset);
+    const after = str.slice(offset + matchLength);
+
+    // 1. Check if preceded by URL components in the current word
+    const lastSpace = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\n'), before.lastIndexOf('"'), before.lastIndexOf("'"));
+    const wordBefore = lastSpace === -1 ? before : before.slice(lastSpace + 1);
+    if (/https?:\/\/|www\.|shields\.io/i.test(wordBefore)) {
+      return true;
+    }
+
+    // 2. Check if inside link/image parenthesis part: e.g. [...](http://shields.io/badge/Next.js-xxx)
+    const lastOpenParen = before.lastIndexOf('(');
+    const lastCloseBracket = before.lastIndexOf(']');
+    if (lastOpenParen !== -1 && lastOpenParen > lastCloseBracket) {
+      const textBetween = before.slice(lastCloseBracket + 1, lastOpenParen).trim();
+      if (before[lastOpenParen - 1] === ']' || textBetween === '') {
+        return true;
+      }
+    }
+
+    // 3. Check if inside link/image square brackets part: e.g. ![Next.js](...)
+    const nextCloseBracket = after.indexOf(']');
+    const nextOpenBracket = after.indexOf('[');
+    if (nextCloseBracket !== -1 && (nextOpenBracket === -1 || nextCloseBracket < nextOpenBracket)) {
+      const afterBracket = after.slice(nextCloseBracket + 1).trim();
+      if (afterBracket.startsWith('(')) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   // Parse file paths wrapped in backticks or raw file paths
   const fileRegex = /\`?((?:[a-zA-Z0-9_\-\/]*\/)?[a-zA-Z0-9_\-\/]+\.(?:tsx|ts|css|html|js|json|go|py|rs|md|yaml|yml|sh|sql))\`?/gi;
   processedText = processedText.replace(fileRegex, (match, filePath, offset, string) => {
@@ -364,8 +401,21 @@ function formatMarkdown(text: string): string {
     if (/https?:\/\//i.test(before) || before.endsWith('/') || before.endsWith('=') || before.endsWith('"') || before.endsWith("'") || before.endsWith('`')) {
       return match;
     }
+    if (isInsideUrlOrLink(offset, match.length, string)) {
+      return match;
+    }
     const fileName = filePath.split('/').pop() || filePath;
     return `<button class="clickable-file-tag" onclick="if(window.locateFileNode)window.locateFileNode('${filePath}')" title="Locate ${fileName} on Canvas">📄 ${fileName}</button>`;
+  });
+
+  // Parse markdown images: ![alt](url) -> <img src="url" alt="alt" />
+  processedText = processedText.replace(/!\[(.*?)\]\((.*?)\)/g, (_match, alt, url) => {
+    return `<img src="${url}" alt="${alt}" style="max-width: 100%; height: auto; vertical-align: middle; margin: 2px; display: inline-block;" />`;
+  });
+
+  // Parse markdown links: [text](url) -> <a href="url" target="_blank">text</a>
+  processedText = processedText.replace(/\[(.*?)\]\((.*?)\)/g, (_match, text, url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; font-weight: 500;">${text}</a>`;
   });
 
   // Parse remaining block-level and inline markdown
@@ -763,11 +813,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onSelectFile,
   onUpdateFileContent,
 }) => {
-  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring' | 'fingerprint'>('metrics');
+  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring' | 'fingerprint' | 'readme'>('metrics');
   
   // Onboarding Exporter states
   const [onboardingDoc, setOnboardingDoc] = useState('');
   const [loadingOnboarding, setLoadingOnboarding] = useState(false);
+
+  // README Generator states
+  const [readmeDoc, setReadmeDoc] = useState('');
+  const [loadingReadme, setLoadingReadme] = useState(false);
   
   // Architecture states
   const [architectureDoc, setArchitectureDoc] = useState('');
@@ -870,6 +924,80 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     } finally {
       setLoadingOnboarding(false);
     }
+  };
+
+  const handleGenerateReadme = async () => {
+    setLoadingReadme(true);
+    try {
+      const pkgFile = files.find(f => f.path.toLowerCase().endsWith('package.json'));
+      const packageJsonContent = pkgFile ? pkgFile.content : '';
+
+      const dbReport = parseDatabaseSchemas(files);
+      const dbSummary = dbReport.tables.length > 0 
+        ? dbReport.tables.map(t => {
+            const fieldsStr = t.fields.map(f => `${f.name} (${f.type})${f.isPrimaryKey ? ' [PK]' : ''}${f.isForeignKey ? ` [FK -> ${f.refTable}.${f.refField}]` : ''}`).join(', ');
+            return `- **Table:** ${t.id} (${t.sourceFile})\n  Fields: ${fieldsStr}`;
+          }).join('\n')
+        : 'No DB tables detected.';
+
+      const staticEndpoints = files
+        .filter(f => f.path.toLowerCase().includes('route') || f.path.toLowerCase().includes('controller') || f.path.toLowerCase().includes('api'))
+        .map(f => {
+          const methods = [];
+          if (f.content.includes('GET') || f.content.includes('get(')) methods.push('GET');
+          if (f.content.includes('POST') || f.content.includes('post(')) methods.push('POST');
+          if (f.content.includes('PUT') || f.content.includes('put(')) methods.push('PUT');
+          if (f.content.includes('PATCH') || f.content.includes('patch(')) methods.push('PATCH');
+          if (f.content.includes('DELETE') || f.content.includes('delete(')) methods.push('DELETE');
+          
+          if (methods.length === 0) methods.push('GET');
+          
+          return {
+            path: `/${f.path.split('/').pop()?.replace(/\.(tsx|ts|js|py|go|rb|php)$/, '').toLowerCase() || ''}`,
+            methods,
+            file: f.path
+          };
+        });
+
+      const apiSummary = staticEndpoints.length > 0
+        ? staticEndpoints.map(e => `- **Endpoint:** [${e.methods.join(', ')}] ${e.path} (defined in ${e.file})`).join('\n')
+        : 'No API endpoints detected.';
+
+      const summary = files.map((f) => ({ path: f.path, language: f.language, size: f.size }));
+      
+      const doc = await generateReadmeFile(
+        summary,
+        packageJsonContent,
+        apiSummary,
+        dbSummary,
+        apiKey
+      );
+      setReadmeDoc(doc);
+    } catch (err: any) {
+      console.error(err);
+      showToast(`README generation failed: ${err.message || err}`);
+    } finally {
+      setLoadingReadme(false);
+    }
+  };
+
+  const handleDownloadReadme = () => {
+    if (!readmeDoc) return;
+    const blob = new Blob([readmeDoc], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'README.md');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Downloaded README.md!');
+  };
+
+  const handleCopyReadme = () => {
+    if (!readmeDoc) return;
+    navigator.clipboard.writeText(readmeDoc);
+    showToast('Copied README.md to Clipboard!');
   };
 
   const handleGenerateRestructure = async () => {
@@ -1893,6 +2021,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             <Sparkles size={15} style={{ marginRight: '6px' }} />
             Codebase Fingerprint Card
           </button>
+          <button 
+            className={`tab-btn ${subTab === 'readme' ? 'active' : ''}`}
+            onClick={() => setSubTab('readme')}
+            style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '6px' }}
+          >
+            <FileText size={15} style={{ marginRight: '6px' }} />
+            README.md Generator
+          </button>
         </div>
       </div>
 
@@ -2804,6 +2940,84 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 6: README AUTO-GENERATOR */}
+      {subTab === 'readme' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {readmeDoc ? (
+            <>
+              {/* Exporters menu */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={handleDownloadReadme}
+                    className="cyber-button secondary" 
+                    style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                  >
+                    <Download size={13} style={{ marginRight: '5px' }} />
+                    Download README.md
+                  </button>
+                  <button 
+                    onClick={handleCopyReadme}
+                    className="cyber-button secondary" 
+                    style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                  >
+                    <Copy size={13} style={{ marginRight: '5px' }} />
+                    Copy to Clipboard
+                  </button>
+                </div>
+                
+                <button
+                  className="cyber-button"
+                  style={{ fontSize: '0.78rem', padding: '6px 12px' }}
+                  onClick={handleGenerateReadme}
+                  disabled={loadingReadme}
+                >
+                  <RefreshCw size={12} style={{ marginRight: '6px', animation: loadingReadme ? 'spin 1s linear infinite' : 'none' }} />
+                  Regenerate README
+                </button>
+              </div>
+
+              {/* README display */}
+              <div className="glass-panel markdown-body" style={{ padding: '24px', maxHeight: '550px', overflowY: 'auto' }}>
+                {loadingReadme ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '40px' }}>
+                    <RefreshCw size={24} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--color-primary)' }} />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Generating README.md...</span>
+                  </div>
+                ) : (
+                  <div dangerouslySetInnerHTML={{ __html: formatMarkdown(readmeDoc) }} />
+                )}
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '60px 20px', textAlign: 'center' }}>
+              <FileText size={48} style={{ color: 'var(--color-primary)', opacity: 0.5 }} />
+              <div>
+                <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600 }}>No README.md Generated</h4>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', maxWidth: '450px', lineHeight: 1.6 }}>
+                  Generate an AI-driven, comprehensive README.md detailing the project description, feature set, tech stack, installation guides, API endpoints, and database models.
+                </p>
+              </div>
+              <button
+                className="cyber-button"
+                onClick={handleGenerateReadme}
+                style={{ padding: '10px 20px' }}
+                disabled={loadingReadme}
+              >
+                {loadingReadme ? (
+                  <>
+                    <RefreshCw size={14} style={{ marginRight: '6px', animation: 'spin 1s linear infinite' }} />
+                    Generating README...
+                  </>
+                ) : (
+                  'Generate README.md'
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

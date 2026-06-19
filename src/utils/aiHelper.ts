@@ -102,7 +102,7 @@ export function getCacheTelemetry() {
 
 // Simple check if API key exists and is valid format
 export function isValidApiKey(key: string): boolean {
-  return key.trim().length > 10 && key.trim().startsWith('AIzaSy');
+  return key.trim().length > 10;
 }
 
 export function formatGeminiError(error: any): string {
@@ -2070,5 +2070,130 @@ JSON Output:`;
 
   return resolvedLinks;
 }
+
+export async function generateReadmeFile(
+  filesSummary: { path: string; language: string; size: number }[],
+  packageJson: string,
+  apiSummary: string,
+  dbSummary: string,
+  apiKey: string
+): Promise<string> {
+  if (!isValidApiKey(apiKey)) {
+    return generateStaticReadme(filesSummary, packageJson, apiSummary, dbSummary);
+  }
+
+  const cacheKey = getCacheKey('generateReadmeFile', { filesSummary, packageJson, apiSummary, dbSummary });
+  if (aiCache.has(cacheKey)) {
+    return aiCache.get(cacheKey);
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const prompt = `You are an expert Developer Advocate and Technical Writer.
+Your task is to generate a comprehensive, highly professional, and visually stunning README.md for the following codebase.
+
+Use clean Markdown formatting, proper headers, bullet points, and tables. Do NOT wrap the entire output in markdown code blocks (i.e. do not start the response with \`\`\`markdown and end with \`\`\`), just output the raw markdown content directly.
+
+Codebase Details Provided:
+1. File structure summary:
+${JSON.stringify(filesSummary.slice(0, 100), null, 2)}
+
+2. package.json Content (for tech stack & script detection):
+${packageJson ? packageJson : "No package.json detected"}
+
+3. Detected API Endpoints:
+${apiSummary ? apiSummary : "No API endpoints detected"}
+
+4. Detected Database Schema:
+${dbSummary ? dbSummary : "No Database schema detected"}
+
+Structure of the output README.md:
+- # [Project Name] (Derive a professional name based on the codebase structure)
+- ## 📝 Project Description (Clear, concise summary of the application, its purpose, and architectural style)
+- ## 🛠️ Tech Stack & Architecture (Display detected tech stack using a markdown table or badge listing. Detail the frontend, backend, database, state management, and visual rendering choices.)
+- ## ✨ Features (Comprehensive list of features based on the detected components/endpoints/schema)
+- ## 🚀 Installation & Setup (Step-by-step instructions. Read package.json scripts and dependencies to output the exact commands for dependency installation and running in dev/production.)
+- ## 🔌 API Endpoints Summary (Neat table of detected endpoints, showing Method, Path, and Description)
+- ## 🗄️ Database Schema & Models (Provide a neat overview of tables, key fields, and foreign-key relations detected)
+- ## 🤝 Contributing (Standard code-quality contribution guidelines, clean PR workflows)
+- ## 📄 License (MIT or appropriate license)`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    aiCache.set(cacheKey, text);
+    return text;
+  } catch (error: any) {
+    return formatGeminiError(error);
+  }
+}
+
+function generateStaticReadme(
+  filesSummary: { path: string; language: string; size: number }[],
+  packageJson: string,
+  apiSummary: string,
+  dbSummary: string
+): string {
+  let scriptsSection = `- Install dependencies: \`npm install\`\n- Start development server: \`npm run dev\``;
+  let dependenciesList = '';
+  if (packageJson) {
+    try {
+      const parsed = JSON.parse(packageJson);
+      if (parsed.scripts) {
+        scriptsSection = Object.entries(parsed.scripts)
+          .map(([name, cmd]) => `- Run \`${name}\`: \`${cmd}\``)
+          .join('\n');
+      }
+      if (parsed.dependencies) {
+        dependenciesList = Object.keys(parsed.dependencies)
+          .map(dep => `  - \`${dep}\``)
+          .join('\n');
+      }
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  const langs = Array.from(new Set(filesSummary.map(f => f.language))).filter(Boolean);
+  
+  return `# 🚀 Project Documentation (Static Template)
+
+This is a statically generated project README because no Gemini API key was provided. Configure an API key in the settings tab to generate a fully customized AI analysis.
+
+## 📝 Project Description
+This repository contains a code structure using **${langs.join(', ')}**.
+- **Total Files:** ${filesSummary.length}
+
+## 🛠️ Tech Stack & Dependencies
+${dependenciesList ? `### Detected Dependencies:\n${dependenciesList}` : `- Languages: ${langs.join(', ')}`}
+
+## 🚀 Installation & Setup
+\`\`\`bash
+# Install dependencies
+npm install
+
+# Available Scripts (detected):
+${scriptsSection}
+\`\`\`
+
+## 🔌 API Endpoints Reference
+${apiSummary ? apiSummary : 'No API endpoints detected.'}
+
+## 🗄️ Database Schema Summary
+${dbSummary ? dbSummary : 'No Database schemas detected.'}
+
+## 🤝 Contributing
+1. Fork the repository
+2. Create your feature branch (\`git checkout -b feature/amazing-feature\`)
+3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
+4. Push to the branch (\`git push origin feature/amazing-feature\`)
+5. Open a Pull Request
+
+## 📄 License
+MIT License - Copyright (c) ${new Date().getFullYear()}
+`;
+}
+
 
 
