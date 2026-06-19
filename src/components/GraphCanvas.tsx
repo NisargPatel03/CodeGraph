@@ -497,6 +497,90 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     }
   };
 
+  const inlineDbSchemaStyles = (svgClone: SVGSVGElement, svgOriginal: SVGSVGElement) => {
+    const originalElements = Array.from(svgOriginal.querySelectorAll('*'));
+    const cloneElements = Array.from(svgClone.querySelectorAll('*'));
+
+    const count = Math.min(originalElements.length, cloneElements.length);
+    for (let i = 0; i < count; i++) {
+      const orig = originalElements[i] as HTMLElement;
+      const clone = cloneElements[i] as HTMLElement;
+      const computed = window.getComputedStyle(orig);
+
+      if (orig.namespaceURI === 'http://www.w3.org/1999/xhtml') {
+        const stylesToInline = [
+          'background',
+          'background-color',
+          'border',
+          'border-top',
+          'border-right',
+          'border-bottom',
+          'border-left',
+          'border-color',
+          'border-style',
+          'border-width',
+          'border-radius',
+          'box-shadow',
+          'color',
+          'display',
+          'flex',
+          'flex-direction',
+          'align-items',
+          'justify-content',
+          'padding',
+          'padding-top',
+          'padding-right',
+          'padding-bottom',
+          'padding-left',
+          'margin',
+          'font-size',
+          'font-weight',
+          'font-family',
+          'text-overflow',
+          'white-space',
+          'overflow',
+          'overflow-y',
+          'gap',
+          'flex-grow',
+          'flex-shrink',
+          'width',
+          'height'
+        ];
+        
+        let inlineStyleString = '';
+        stylesToInline.forEach(prop => {
+          const val = computed.getPropertyValue(prop);
+          if (val) {
+            inlineStyleString += `${prop}: ${val}; `;
+          }
+        });
+        clone.setAttribute('style', inlineStyleString);
+      } else {
+        const stylesToInline = [
+          'stroke',
+          'stroke-width',
+          'stroke-opacity',
+          'stroke-dasharray',
+          'fill',
+          'fill-opacity',
+          'opacity',
+          'marker-end',
+          'marker-start'
+        ];
+        let inlineStyleString = '';
+        stylesToInline.forEach(prop => {
+          const val = computed.getPropertyValue(prop);
+          if (val && val !== 'none' && val !== 'normal') {
+            inlineStyleString += `${prop}: ${val}; `;
+          }
+        });
+        if (inlineStyleString) {
+          clone.setAttribute('style', inlineStyleString);
+        }
+      }
+    }
+  };
+
   const exportGraph = (format: 'svg' | 'png') => {
     try {
       const svgEl = svgRef.current;
@@ -508,6 +592,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }
       if (!svgClone.getAttribute('xmlns:xlink')) {
         svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+
+      if (viewMode === 'dbSchema') {
+        inlineDbSchemaStyles(svgClone, svgEl);
       }
 
       // Add CSS variables for the current theme
@@ -4331,6 +4419,43 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                     <Sparkles size={13} style={{ color: '#fbbf24' }} />
                     {isAuditingDb ? 'Auditing Schema...' : 'Audit Database Design'}
                   </button>
+
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                    <button
+                      className="cyber-button secondary"
+                      onClick={() => exportGraph('svg')}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        fontSize: '0.7rem',
+                        padding: '6px 10px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Download size={12} />
+                      Export SVG
+                    </button>
+                    <button
+                      className="cyber-button secondary"
+                      onClick={() => exportGraph('png')}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        fontSize: '0.7rem',
+                        padding: '6px 10px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Download size={12} />
+                      Export PNG
+                    </button>
+                  </div>
 
                   <div className="toolbox-divider" style={{ borderTop: '1px solid var(--panel-border)', margin: '8px 0' }}></div>
                   
