@@ -21,13 +21,15 @@ root.render(<App />);`
   {
     path: 'src/App.tsx',
     name: 'App.tsx',
-    size: 1540,
+    size: 1680,
     language: 'typescript',
     content: `import React, { useState } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import GraphView from './components/GraphView';
 import { computeMetrics } from './utils/helper';
+import lodash from 'lodash';
+import axios from 'axios';
 
 export default function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -196,6 +198,121 @@ export function runGlobalCheck(appInstance: typeof App) {
   border: none;
   color: white;
   border-radius: 4px;
+}`
+  },
+  {
+    path: 'package.json',
+    name: 'package.json',
+    size: 480,
+    language: 'json',
+    content: `{
+  "name": "codegraph-demo-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lodash": "4.17.20",
+    "axios": "0.21.1",
+    "express": "4.18.2"
+  }
+}`
+  },
+  {
+    path: 'requirements.txt',
+    name: 'requirements.txt',
+    size: 120,
+    language: 'text',
+    content: `requests==2.28.1
+django==4.2.1
+flask==2.2.0`
+  },
+  {
+    path: 'Cargo.toml',
+    name: 'Cargo.toml',
+    size: 190,
+    language: 'toml',
+    content: `[package]
+name = "codegraph-rust-demo"
+version = "0.1.0"
+
+[dependencies]
+serde = "1.0.150"
+rand = "0.8.3"`
+  },
+  {
+    path: 'go.mod',
+    name: 'go.mod',
+    size: 160,
+    language: 'text',
+    content: `module codegraph-go-demo
+
+go 1.18
+
+require (
+  github.com/gin-gonic/gin v1.7.0
+  go.mongodb.org/mongo-driver v1.5.0
+)`
+  },
+  {
+    path: 'scripts/deploy.py',
+    name: 'deploy.py',
+    size: 210,
+    language: 'python',
+    content: `import requests
+import django
+import os
+
+def check_deployment():
+    print("Verifying Django deployment on target host...")
+    print("Django version loaded:", django.__version__)
+    resp = requests.get("https://api.github.com")
+    print("Status response:", resp.status_code)
+
+if __name__ == '__main__':
+    check_deployment()`
+  },
+  {
+    path: 'src/main.rs',
+    name: 'main.rs',
+    size: 240,
+    language: 'rust',
+    content: `use serde::{Serialize, Deserialize};
+use rand::Rng;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    debug: bool,
+    port: u16,
+}
+
+fn main() {
+    let mut rng = rand::thread_rng();
+    let port_offset: u16 = rng.gen_range(1..100);
+    let cfg = Config { debug: true, port: 8080 + port_offset };
+    println!("Config generated: {:?}", cfg);
+}`
+  },
+  {
+    path: 'main.go',
+    name: 'main.go',
+    size: 260,
+    language: 'go',
+    content: `package main
+
+import (
+	"fmt"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.Default()
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
+	fmt.Println("Starting mock go server on port 8080...")
+	r.Run()
 }`
   }
 ];

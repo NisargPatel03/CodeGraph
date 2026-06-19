@@ -1,5 +1,6 @@
 import type { ParsedFile } from './repoParser';
 import * as parser from '@babel/parser';
+import { scanDependenciesForCves } from './cveScanner';
 
 export interface DependencyNode {
   id: string; // File path (e.g. "src/components/Button.tsx")
@@ -10,6 +11,8 @@ export interface DependencyNode {
   isNpm?: boolean;
   churn?: number;
   complexity?: number;
+  isVulnerable?: boolean;
+  vulnerabilities?: any[];
 }
 
 export interface DependencyLink {
@@ -1252,18 +1255,115 @@ export function analyzeCodebase(files: ParsedFile[]): CodebaseGraph {
       });
     }
   }
+
+  // Parse all package manager files for third-party declarations
+  const packageFiles = files.filter(f => {
+    const name = f.path.split('/').pop()?.toLowerCase();
+    return name === 'package.json' || name === 'cargo.toml' || name === 'requirements.txt' || name === 'go.mod';
+  });
+
+  packageFiles.forEach((file) => {
+    const pathLower = file.path.toLowerCase();
+    const ecosystemPackages: { name: string; version: string }[] = [];
+    
+    if (pathLower.endsWith('package.json')) {
+      try {
+        const data = JSON.parse(file.content);
+        const deps = { ...(data.dependencies || {}), ...(data.devDependencies || {}) };
+        Object.entries(deps).forEach(([pkg, ver]) => {
+          ecosystemPackages.push({ name: pkg, version: String(ver) });
+        });
+      } catch {}
+    } else if (pathLower.endsWith('requirements.txt')) {
+      file.content.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('-')) return;
+        const match = trimmed.match(/^([a-zA-Z0-9_\-\[\]]+)\s*(==|>=|<=|>|<)?\s*([0-9a-zA-Z\.\-_]+)?/);
+        if (match) {
+          const name = match[1].toLowerCase().replace(/\[.*\]/, '');
+          const version = match[3] || 'latest';
+          ecosystemPackages.push({ name, version });
+        }
+      });
+    } else if (pathLower.endsWith('cargo.toml')) {
+      let inDeps = false;
+      file.content.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          inDeps = trimmed.slice(1, -1).toLowerCase().includes('dependencies');
+          return;
+        }
+        if (inDeps) {
+          const match = trimmed.match(/^\s*([a-zA-Z0-9_-]+)\s*=\s*(.*)$/);
+          if (match) {
+            const name = match[1].trim();
+            const rightSide = match[2].trim();
+            let version = 'latest';
+            if (rightSide.startsWith('"')) {
+              version = rightSide.replace(/"/g, '').trim();
+            } else {
+              const verMatch = rightSide.match(/version\s*=\s*"([^"]+)"/);
+              if (verMatch) version = verMatch[1].trim();
+            }
+            ecosystemPackages.push({ name, version });
+          }
+        }
+      });
+    } else if (pathLower.endsWith('go.mod')) {
+      let inReq = false;
+      file.content.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('require (')) {
+          inReq = true;
+          return;
+        }
+        if (inReq && trimmed.startsWith(')')) {
+          inReq = false;
+          return;
+        }
+        const match = trimmed.match(/^(?:require\s+)?([a-zA-Z0-9_\-\.\/]+)\s+v?([0-9\.]+)/);
+        if (match) {
+          ecosystemPackages.push({ name: match[1].trim(), version: match[2].trim() });
+        }
+      });
+    }
+
+    ecosystemPackages.forEach((pkg) => {
+      npmPackagesSeen.add(pkg.name);
+      // Link the configuration declaration to the external package node
+      npmLinks.push({
+        source: file.path,
+        target: `npm::${pkg.name}`,
+        weight: 1
+      });
+    });
+  });
+
+  // Run static vulnerability scan
+  const vulnerabilities = scanDependenciesForCves(files);
+  const vulnMap = new Map<string, typeof vulnerabilities>();
+  vulnerabilities.forEach(v => {
+    const list = vulnMap.get(v.packageName.toLowerCase()) || [];
+    list.push(v);
+    vulnMap.set(v.packageName.toLowerCase(), list);
+  });
   
   // Build npm nodes
-  const npmNodes: DependencyNode[] = Array.from(npmPackagesSeen).map((pkg) => ({
-    id: `npm::${pkg}`,
-    name: pkg,
-    size: 200,
-    language: 'npm',
-    folder: 'node_modules',
-    isNpm: true,
-    churn: 1,
-    complexity: 1,
-  }));
+  const npmNodes: DependencyNode[] = Array.from(npmPackagesSeen).map((pkg) => {
+    const vulns = vulnMap.get(pkg.toLowerCase()) || [];
+    return {
+      id: `npm::${pkg}`,
+      name: pkg,
+      size: 200,
+      language: vulns.length > 0 ? vulns[0].ecosystem : 'npm',
+      folder: 'node_modules',
+      isNpm: true,
+      churn: 1,
+      complexity: 1,
+      isVulnerable: vulns.length > 0,
+      vulnerabilities: vulns,
+    };
+  });
   
   // 3. Cycle Detection
   const cycles = findCircularDependencies(files.map((f) => f.path), adjList);

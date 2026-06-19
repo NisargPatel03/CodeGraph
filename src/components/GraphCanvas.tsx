@@ -2970,10 +2970,22 @@ code, pre, .mono {
       } else if (d.isNpm) {
         element.append('polygon')
           .attr('points', '0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6')
-          .attr('fill', 'var(--color-primary-glow)')
-          .attr('stroke', 'var(--color-primary)')
+          .attr('fill', d.isVulnerable ? 'rgba(239, 68, 68, 0.15)' : 'var(--color-primary-glow)')
+          .attr('stroke', d.isVulnerable ? '#ef4444' : 'var(--color-primary)')
           .attr('stroke-width', 1.5)
-          .attr('class', 'npm-node');
+          .attr('class', `npm-node ${d.isVulnerable ? 'vulnerable-pulsate' : ''}`);
+
+        if (d.isVulnerable) {
+          const badgeG = element.append('g')
+            .attr('class', 'vulnerable-shield-badge')
+            .attr('transform', 'translate(10, -10)');
+
+          badgeG.append('path')
+            .attr('d', 'M -5,-7 L 5,-7 L 5,-2 C 5,2 0,6 0,6 C 0,6 -5,2 -5,-2 Z')
+            .attr('fill', '#ef4444')
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 0.8);
+        }
       } else {
         const circle = element.append('circle')
           .attr('r', (d: any) => {
@@ -4152,7 +4164,9 @@ code, pre, .mono {
           highlight: '#ffffff'
         };
 
-        if (n.isFolder) {
+        if (n.isNpm && n.isVulnerable) {
+          colorTheme = { core: '#ef4444', glow: 'rgba(239, 68, 68, 0.3)', highlight: '#ffffff' };
+        } else if (n.isFolder) {
           colorTheme = { core: '#f59e0b', glow: 'rgba(245, 158, 11, 0.3)', highlight: '#fef3c7' };
         } else if (n.isNpm) {
           colorTheme = { core: '#ec4899', glow: 'rgba(236, 72, 153, 0.3)', highlight: '#fbcfe8' };
@@ -4167,6 +4181,14 @@ code, pre, .mono {
         ctx.beginPath();
         ctx.arc(n.projX, n.projY, rad * (isHovered || isSelected ? 1.6 : 1.2), 0, 2 * Math.PI);
         ctx.fill();
+
+        if (n.isNpm && n.isVulnerable) {
+          const pulseFactor = 1.3 + 0.4 * Math.sin(Date.now() * 0.005);
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+          ctx.beginPath();
+          ctx.arc(n.projX, n.projY, rad * pulseFactor, 0, 2 * Math.PI);
+          ctx.fill();
+        }
 
         // Node sphere base
         const grad = ctx.createRadialGradient(
@@ -4186,6 +4208,23 @@ code, pre, .mono {
         ctx.strokeStyle = isSelected ? '#10b981' : (isHovered ? '#60a5fa' : 'rgba(255,255,255,0.08)');
         ctx.lineWidth = isSelected || isHovered ? 2 : 0.5;
         ctx.stroke();
+
+        if (n.isNpm && n.isVulnerable) {
+          const bx = n.projX + rad * 0.8;
+          const by = n.projY - rad * 0.8;
+          ctx.fillStyle = '#ef4444';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, by - 5);
+          ctx.lineTo(bx + 4, by - 5);
+          ctx.lineTo(bx + 4, by - 1);
+          ctx.quadraticCurveTo(bx + 4, by + 2, bx, by + 5);
+          ctx.quadraticCurveTo(bx - 4, by + 2, bx - 4, by - 1);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
 
         // Render Labels
         const showLabel = isHovered || isSelected || projectedNodes.length < 45 || (n.isFolder && n.scaleFactor > 0.8);

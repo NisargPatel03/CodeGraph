@@ -8,7 +8,8 @@ import {
   Trash2, 
   CheckCircle,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  ShieldAlert
 } from 'lucide-react';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
 
@@ -23,7 +24,7 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
   onOpenAnalytics,
   onSelectFile,
 }) => {
-  const [activeDropdown, setActiveDropdown] = useState<'files' | 'fns' | 'smells' | 'cycles' | 'loc' | 'dead' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'files' | 'fns' | 'smells' | 'cycles' | 'loc' | 'dead' | 'vulns' | null>(null);
   const ribbonRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
@@ -43,16 +44,19 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
   const totalSmells = graphData.codeSmells?.length || 0;
   const totalCycles = graphData.cycles?.length || 0;
   const totalDead = graphData.deadFiles?.length || 0;
+  
+  const vulnerableDeps = (graphData.npmNodes || []).filter(n => n.isVulnerable);
+  const totalVulnerable = vulnerableDeps.length;
 
   // Compute live health status color/glow
   let ribbonGlowClass = 'health-glow-clean';
-  if (totalCycles > 0) {
+  if (totalVulnerable > 0 || totalCycles > 0) {
     ribbonGlowClass = 'health-glow-critical';
   } else if (totalSmells > 0) {
     ribbonGlowClass = 'health-glow-warning';
   }
 
-  const toggleDropdown = (dropdown: 'files' | 'fns' | 'smells' | 'cycles' | 'loc' | 'dead') => {
+  const toggleDropdown = (dropdown: 'files' | 'fns' | 'smells' | 'cycles' | 'loc' | 'dead' | 'vulns') => {
     setActiveDropdown(prev => prev === dropdown ? null : dropdown);
   };
 
@@ -83,10 +87,14 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
         position: 'relative',
         zIndex: 50,
         flexShrink: 0,
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
         userSelect: 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0, overflow: 'hidden' }}>
+      <div className="kpi-scroll-container">
         
         {/* Files Chip */}
         <div style={{ position: 'relative' }}>
@@ -393,39 +401,58 @@ export const KpiRibbon: React.FC<KpiRibbonProps> = ({
           )}
         </div>
 
+        <div className="kpi-divider" />
+
+        {/* Vulnerabilities Chip */}
+        <div style={{ position: 'relative' }}>
+          <div 
+            onClick={() => toggleDropdown('vulns')}
+            className={`kpi-chip ${activeDropdown === 'vulns' ? 'active' : ''} ${totalVulnerable > 0 ? 'critical' : 'clean'}`}
+          >
+            <ShieldAlert size={13} style={{ color: totalVulnerable > 0 ? 'var(--color-alert)' : 'var(--color-accent)' }} />
+            <span>{totalVulnerable} Vulnerabilities</span>
+            {totalVulnerable > 0 ? (
+              <span className="pulse-dot critical" />
+            ) : (
+              <CheckCircle size={10} style={{ color: 'var(--color-accent)', marginLeft: '4px' }} />
+            )}
+            <ChevronDown size={11} style={{ opacity: 0.5, marginLeft: '2px' }} />
+          </div>
+
+          {activeDropdown === 'vulns' && (
+            <div className="kpi-dropdown glass-panel">
+              <div className="dropdown-title">Vulnerable Dependencies ({totalVulnerable})</div>
+              <div className="dropdown-list">
+                {totalVulnerable === 0 ? (
+                  <div className="dropdown-empty-success">
+                    <CheckCircle size={14} style={{ color: 'var(--color-accent)' }} />
+                    <span>0 vulnerabilities found. Safe!</span>
+                  </div>
+                ) : (
+                  vulnerableDeps.map(dep => (
+                    <div 
+                      key={dep.id} 
+                      className="dropdown-item"
+                      onClick={() => {
+                        onSelectFile(dep.id);
+                        setActiveDropdown(null);
+                      }}
+                    >
+                      <span className="file-name" style={{ color: 'var(--color-alert)' }}>🛡️ {dep.name}</span>
+                      <span className="file-val" style={{ opacity: 0.6, fontSize: '0.65rem' }}>
+                        {dep.vulnerabilities?.[0]?.cveId || 'CVE'}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
-      <div 
-        onClick={onOpenAnalytics}
-        style={{
-          fontSize: '0.72rem',
-          color: 'var(--color-secondary)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          fontWeight: 600,
-          background: 'var(--color-secondary-glow)',
-          border: '1px solid var(--color-secondary)',
-          padding: '3px 10px',
-          borderRadius: '4px',
-          transition: 'all 0.2s',
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-          marginLeft: '8px',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--color-secondary-glow)';
-          e.currentTarget.style.boxShadow = '0 0 8px var(--color-secondary-glow)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'var(--color-secondary-glow)';
-          e.currentTarget.style.boxShadow = 'none';
-        }}
-      >
-        <span>Open Intelligence Dashboard</span>
-        <ExternalLink size={10} />
-      </div>
+
     </div>
   );
 };

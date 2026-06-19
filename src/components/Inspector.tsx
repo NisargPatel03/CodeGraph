@@ -7,6 +7,7 @@ import type { LinterViolation, AuditReport } from '../utils/aiHelper';
 import { extractEndpointsFromCodebase } from '../utils/aiHelper';
 import { parseDatabaseSchemas, GET_DEMO_SCHEMA } from '../utils/schemaParser';
 import Editor from '@monaco-editor/react';
+import { scanDependenciesForCves } from '../utils/cveScanner';
 
 function formatMarkdown(text: string): string {
   if (!text) return '';
@@ -552,6 +553,28 @@ export const Inspector: React.FC<InspectorProps> = ({
     if (!isDbTableNode || !selectedNodeId) return null;
     return dbSchema.tables.find(t => t.id === selectedNodeId);
   }, [isDbTableNode, selectedNodeId, dbSchema.tables]);
+
+  const isNpmNode = !!(selectedNodeId && selectedNodeId.startsWith('npm::'));
+
+  const selectedNpmVulns = useMemo(() => {
+    if (!isNpmNode || !selectedNodeId) return [];
+    const pkgName = selectedNodeId.replace('npm::', '');
+    const vulns = scanDependenciesForCves(allFiles);
+    return vulns.filter(v => v.packageName.toLowerCase() === pkgName.toLowerCase());
+  }, [isNpmNode, selectedNodeId, allFiles]);
+
+  const filesImportingNpmPackage = useMemo(() => {
+    if (!isNpmNode || !selectedNodeId) return [];
+    const name = selectedNodeId.replace('npm::', '');
+    return allFiles.filter(file => {
+      const content = file.content;
+      const es6Pattern = new RegExp(`(?:import|export)\\s+.*?\\s+from\\s+['"]${name}(?:/.*)?['"]`, 'i');
+      const cjsPattern = new RegExp(`require\\(\\s*['"]${name}(?:/.*)?['"]\\s*\\)`, 'i');
+      const pyPattern = new RegExp(`(?:import\\s+${name}|from\\s+${name}\\s+import)`, 'i');
+      const goPattern = new RegExp(`"${name}"`, 'i');
+      return es6Pattern.test(content) || cjsPattern.test(content) || pyPattern.test(content) || goPattern.test(content);
+    });
+  }, [isNpmNode, selectedNodeId, allFiles]);
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([]);
@@ -973,7 +996,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   const isSelectedNodeFolder = selectedNodeId && selectedNodeId.startsWith('folder:');
   const selectedFolder = isSelectedNodeFolder ? selectedNodeId!.slice(7) : null;
 
-  const isSelectedNodeFunction = selectedNodeId && selectedNodeId.includes('::');
+  const isSelectedNodeFunction = selectedNodeId && selectedNodeId.includes('::') && !selectedNodeId.startsWith('npm::');
   const selectedFunctionNode = useMemo(() => {
     if (!isSelectedNodeFunction) return null;
     return callNodes.find(n => n.id === selectedNodeId);
@@ -1411,6 +1434,114 @@ export const Inspector: React.FC<InspectorProps> = ({
                       ))
                     )}
                   </div>
+                </div>
+              </div>
+            ) : isNpmNode ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-secondary)', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '1.25rem' }}>📦</span>
+                    <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', margin: 0, fontFamily: 'var(--font-mono)' }}>
+                      {selectedNodeId?.replace('npm::', '')}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Third-Party Dependency
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(168, 85, 247, 0.08)', color: '#c084fc', borderColor: 'rgba(168, 85, 247, 0.2)' }}>
+                    🛡️ AppSec Audit
+                  </span>
+                  <span className="logo-badge" style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.03)', color: 'var(--text-secondary)', borderColor: 'rgba(255, 255, 255, 0.08)' }}>
+                    Ecosystem: {selectedNpmVulns[0]?.ecosystem.toUpperCase() || 'NPM'}
+                  </span>
+                </div>
+
+                {selectedNpmVulns.length === 0 ? (
+                  <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ fontSize: '1.1rem' }}>✅</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)' }}>
+                      <strong>Dependency Secure.</strong> Statically checked against vulnerability database. No known CVE advisories found.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {selectedNpmVulns.map((vuln) => {
+                      const severityColors = {
+                        critical: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#ef4444' },
+                        high: { border: '#f97316', bg: 'rgba(249, 115, 22, 0.1)', text: '#f97316' },
+                        moderate: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: '#f59e0b' },
+                        low: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6' }
+                      };
+                      const colors = severityColors[vuln.severity] || severityColors.high;
+                      
+                      return (
+                        <div key={vuln.cveId} style={{ border: `1px solid ${colors.border}`, borderRadius: '8px', background: 'var(--panel-bg)', backdropFilter: 'blur(8px)', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: colors.bg, padding: '8px 12px', borderBottom: `1px solid ${colors.border}33` }}>
+                            <span style={{ fontWeight: '800', fontSize: '0.75rem', color: colors.text, fontFamily: 'var(--font-mono)' }}>
+                              🛡️ {vuln.cveId}
+                            </span>
+                            <span style={{ fontSize: '0.62rem', fontWeight: '800', background: colors.text, color: '#000000', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                              {vuln.severity}
+                            </span>
+                          </div>
+                          
+                          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Declared Version: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{vuln.currentVersion}</span></div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Fixed In: <span style={{ fontFamily: 'var(--font-mono)', color: '#10b981' }}>{vuln.patchedVersion}</span></div>
+                            </div>
+                            
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4', borderLeft: `2px solid ${colors.border}`, paddingLeft: '8px' }}>
+                              {vuln.description}
+                            </div>
+                            
+                            <div style={{ marginTop: '4px' }}>
+                              <div style={{ fontSize: '0.68rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Upgrade / Remediation Command</div>
+                              <div style={{ display: 'flex', alignItems: 'center', background: '#050510', border: '1px solid var(--panel-border)', borderRadius: '6px', padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#38bdf8', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                                {vuln.upgradeCommand}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
+                  <h4 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    Workspace File Imports ({filesImportingNpmPackage.length})
+                  </h4>
+                  {filesImportingNpmPackage.length === 0 ? (
+                    <div style={{ padding: '8px', background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed var(--panel-border)', borderRadius: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Declared in package manager config, but no active imports found in code files.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '150px', overflowY: 'auto' }}>
+                      {filesImportingNpmPackage.map(f => (
+                        <div 
+                          key={f.path} 
+                          onClick={() => setSelectedNodeId(f.path)}
+                          style={{ 
+                            fontSize: '0.72rem', 
+                            fontFamily: 'var(--font-mono)', 
+                            background: 'rgba(255,255,255,0.02)', 
+                            padding: '6px 10px', 
+                            borderRadius: '4px', 
+                            border: '1px solid rgba(255,255,255,0.03)', 
+                            color: 'var(--color-secondary)', 
+                            cursor: 'pointer',
+                            wordBreak: 'break-all'
+                          }}
+                        >
+                          📄 {f.path}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : !activeInspectorFile ? (
