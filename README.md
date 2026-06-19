@@ -50,6 +50,9 @@
   - [Visual API-to-Database Mapping & Drift Analysis](#visual-api-to-database-mapping-drift-analysis)
   - [One-Click AI-Patch Applicator](#one-click-ai-patch-applicator)
   - [Keyboard Shortcut Reference Panel](#keyboard-shortcut-reference-panel)
+  - [Babel AST-Based Static Analysis](#babel-ast-based-static-analysis)
+  - [Gemini LLM Call-Graph Validation](#gemini-llm-call-graph-validation)
+  - [Database ER Diagram Export & Styling Controls](#database-er-diagram-export-styling-controls)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -797,6 +800,43 @@ An interactive helper overlay listing all global shortcuts:
 - **Double-Activation Triggers**: Toggles with either the standard `?` key or `Alt + H` global hotkey.
 - **Fuzzy Search Integration**: Registered within the Command Palette, enabling keyboard-only users to open the reference modal via query commands.
 - **Theme Reactivity**: Styled with adaptive borders, dynamic box-shadows, and glassmorphic panels matching Cyberpunk, Arctic Light, Solar Amber, and all other visual themes.
+
+---
+
+<a id="babel-ast-based-static-analysis"></a>
+### 23. Babel AST-Based Static Analysis
+
+**File:** `src/utils/codeAnalyzer.ts`
+
+To ensure precision and eliminate false positives (such as matching calls/imports inside strings or comments), CodeGraph processes JavaScript and TypeScript codebases using a fully in-browser Babel AST parser:
+- **Babel Parsing Pipeline**: Utilizes `@babel/parser` with full support for JSX, TypeScript, and modern ECMA stages.
+- **Import/Export Resolution**: Walks the Abstract Syntax Tree (AST) to resolve precise module dependency links, identifiers, alias mappings, and dynamic imports.
+- **Function/Class Extraction**: Identifies exact function declarations, arrow functions, methods, class hierarchies, and properties with physical line locations, mapping them directly to the Monaco editor.
+
+---
+
+<a id="gemini-llm-call-graph-validation"></a>
+### 24. Gemini LLM Call-Graph Validation
+
+**File:** `src/utils/aiHelper.ts`
+
+When generating a codebase's Function Call Graph, different modules often share identical, generic method names (e.g. `init()`, `validate()`, `reset()`). This causes visual overlap noise. CodeGraph resolves this via a hybrid AI-validation pipeline:
+- **Ambiguity Detection**: The static analyzer flags functions containing call-sites that map to multiple possible target definitions.
+- **LLM Call-Site Resolution**: CodeGraph passes the caller function's code context and candidate definitions to Google Gemini. The model analyzes imports, context, and arguments to determine the exact destination.
+- **D3 Graph Refinement**: The resolved target is updated, converting ambiguous links to verified call pathways and stripping away invalid connections.
+
+---
+
+<a id="database-er-diagram-export-styling-controls"></a>
+### 25. Database ER Diagram Export & Styling Controls
+
+**Files:** `src/components/GraphCanvas.tsx`
+
+To produce clean, production-ready Database Schema exports, CodeGraph features a dedicated high-fidelity SVG export pipeline specifically engineered for HTML-based database cards:
+- **Dynamic Bounding Box Calculation**: Programmatically queries the bounding box (`getBBox()`) of the `.main-container` group, resetting viewport panning and zoom transforms. It sets custom `viewBox` coordinates with `60px` margins to capture every database table card.
+- **Computed CSS Inlining (`inlineDbSchemaStyles`)**: Recursively scans and maps CSS variables (`--color-primary`, `--bg-card`, etc.) to inline inline styling attributes on SVGs and `foreignObject` DOM nodes.
+- **Standardized Font & Scrollbar Overrides**: Injects a global `<style>` tag into the exported SVG to enforce standard typography (`Inter`, `monospace`) and hide browser scrollbar elements (`scrollbar-width: none`), guaranteeing identical rendering across independent vector viewers.
+- **Synchronous Layout Settling**: Runs `250` simulation ticks synchronously before export to settle and separate cards, completely preventing overlapping database table blocks.
 
 ---
 
