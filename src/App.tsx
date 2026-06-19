@@ -15,6 +15,7 @@ import { ApiDocsPortal } from './components/ApiDocsPortal';
 import { AiIcon } from './components/AiIcon';
 import { CommandPalette } from './components/CommandPalette';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
+import { OnboardingTour } from './components/OnboardingTour';
 import logoImg from './assets/logo.png';
 import { audioSonifier } from './utils/audioSonifier';
 import { 
@@ -118,7 +119,17 @@ export default function App() {
   const [linterError, setLinterError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(() => {
+    return !localStorage.getItem('completed_onboarding_tour');
+  });
   const [telemetry, setTelemetry] = useState(() => getCacheTelemetry());
+
+  const handleLoadDemo = () => {
+    handleDataLoaded({
+      files: GET_DEMO_FILES(),
+      repoName: 'CodeGraph-Demo-Project'
+    });
+  };
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -899,6 +910,30 @@ export default function App() {
             ))}
           </div>
 
+          {/* Onboarding Tour Button */}
+          <div
+            onClick={() => setIsTourOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'var(--transition-smooth)',
+              borderLeft: '1px solid var(--panel-border)',
+              paddingLeft: '12px',
+              paddingRight: '4px',
+              userSelect: 'none'
+            }}
+            title="Start Onboarding Tour"
+            className="tour-trigger-btn"
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--color-primary)' }}>
+              <Sparkles size={14} />
+              <span>Quick Tour</span>
+            </div>
+          </div>
+
           {/* Keyboard Shortcuts Help Button */}
           <div
             onClick={() => setIsHelpOpen(true)}
@@ -1001,6 +1036,7 @@ export default function App() {
       ) : !repoData ? (
         <RepoSelector 
           onDataLoaded={handleDataLoaded} 
+          onTakeTour={() => setIsTourOpen(true)}
         />
       ) : (
         graphData && (
@@ -1235,11 +1271,13 @@ export default function App() {
 
               {/* Sticky KPI Ribbon */}
               {viewMode !== 'analytics' && viewMode !== 'docs' && viewMode !== 'dbSchema' && (
-                <KpiRibbon
-                  graphData={graphData}
-                  onOpenAnalytics={() => setViewMode('analytics')}
-                  onSelectFile={(filePath) => setSelectedNodeId(filePath)}
-                />
+                <div className="kpi-ribbon-container">
+                  <KpiRibbon
+                    graphData={graphData}
+                    onOpenAnalytics={() => setViewMode('analytics')}
+                    onSelectFile={(filePath) => setSelectedNodeId(filePath)}
+                  />
+                </div>
               )}
 
               {/* D3 Canvas Viewport, Analytics Dashboard or API Docs Portal Content */}
@@ -1694,6 +1732,16 @@ export default function App() {
       <KeyboardShortcutsHelp 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
+      />
+
+      <OnboardingTour
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        hasRepoLoaded={!!repoData}
+        onLoadDemo={handleLoadDemo}
+        setViewMode={setViewMode}
+        setSelectedNodeId={setSelectedNodeId}
+        selectedNodeId={selectedNodeId}
       />
 
       {toastMessage && (

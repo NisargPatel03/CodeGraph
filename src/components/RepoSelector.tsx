@@ -342,9 +342,10 @@ interface RecentRepo {
 
 interface RepoSelectorProps {
   onDataLoaded: (data: { files: ParsedFile[]; repoName: string }) => void;
+  onTakeTour?: () => void;
 }
 
-export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
+export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, onTakeTour }) => {
   const [gitUrl, setGitUrl] = useState('');
   const [gitToken, setGitToken] = useState(() => localStorage.getItem('gh_token') || '');
   const [loading, setLoading] = useState(false);
@@ -526,10 +527,19 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded }) => {
         {/* Settings Integration */}
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
           {/* Load Demo Button */}
-          <button type="button" className="cyber-button secondary" onClick={handleLoadDemo} disabled={loading}>
-            <Sparkles size={16} style={{ color: 'var(--color-secondary)' }} />
-            Load Sample Sandbox Project
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button type="button" className="cyber-button secondary" onClick={handleLoadDemo} disabled={loading}>
+              <Sparkles size={16} style={{ color: 'var(--color-secondary)' }} />
+              Load Sample Sandbox Project
+            </button>
+
+            {onTakeTour && (
+              <button type="button" className="cyber-button" onClick={onTakeTour} disabled={loading} style={{ background: 'rgba(139, 92, 246, 0.15)', border: '1px solid var(--color-primary)' }}>
+                <Sparkles size={16} style={{ color: 'var(--color-primary)' }} />
+                Take Interactive Tour
+              </button>
+            )}
+          </div>
 
           {/* GitHub Auth Modal trigger */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
