@@ -55,6 +55,7 @@
   - [Database ER Diagram Export & Styling Controls](#database-er-diagram-export-styling-controls)
   - [Interactive Codebase Sonification](#interactive-codebase-sonification)
   - [Visual AppSec & Dependency CVE Vulnerability Map](#visual-appsec--dependency-cve-vulnerability-map)
+  - [Codebase "Fingerprint" Score Card](#codebase-fingerprint-score-card)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -899,6 +900,19 @@ Integrates a static package audit pipeline directly into the visualization canva
 - **Metric Telemetry Sync**:
   - Integrates a dedicated red **Vulnerabilities** chip to the sticky KPI ribbon bar.
   - Clicking the chip displays a list of all detected CVE items. Selecting any list item focuses and highlights the corresponding package node in the workspace.
+
+---
+
+<a id="codebase-fingerprint-score-card"></a>
+### 28. Codebase "Fingerprint" Score Card
+
+**Files:** `src/components/CodebaseFingerprint.tsx` and `src/components/AnalyticsDashboard.tsx`
+
+Provides a high-fidelity visual summary of repository health designed for sharing and review:
+- **Biometric Radar Sweeper**: Custom canvas-based radial visualizer that maps lines of code, code smell flags, cycle markers, and vulnerability counts to nested concentric ridges.
+- **Dynamic Grading System**: Computes a composite health index ($100$-point scale) deducting points for structural smells, circular loops, and open vulnerabilities.
+- **Language Profile Bar**: Automatically compiles a relative stacked percentage bar of the top languages detected in the codebase.
+- **16:9 Composited Scorecard Export**: Renders a $1200 \times 675$ off-screen canvas combining the biometric fingerprint, overall grade circle, maintainability metrics, and security ratings into a premium watermarked PNG certificate.
 
 ---
 

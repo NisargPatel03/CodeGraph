@@ -18,7 +18,8 @@ import {
   FileText,
   Activity,
   FileWarning,
-  Zap
+  Zap,
+  ShieldAlert
 } from 'lucide-react';
 import type { ParsedFile } from '../utils/repoParser';
 import type { CodebaseGraph } from '../utils/codeAnalyzer';
@@ -30,6 +31,7 @@ import {
   suggestFolderRestructureStream,
   validateApiDbContractsStream
 } from '../utils/aiHelper';
+import { CodebaseFingerprint } from './CodebaseFingerprint';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
 let mermaidInitialized = false;
@@ -761,7 +763,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onSelectFile,
   onUpdateFileContent,
 }) => {
-  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring'>('metrics');
+  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring' | 'fingerprint'>('metrics');
   
   // Onboarding Exporter states
   const [onboardingDoc, setOnboardingDoc] = useState('');
@@ -1004,6 +1006,71 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       smellCounts,
     };
   }, [graphData]);
+
+  const fingerprintMetrics = useMemo(() => {
+    const localNodes = graphData.nodes.filter(n => !n.id.startsWith('npm::'));
+    const totalFiles = localNodes.length || 1;
+    const smellsCount = graphData.codeSmells?.length || 0;
+    const cyclesCount = cycles?.length || 0;
+    const vulnsCount = graphData.nodes.filter(n => n.isVulnerable).length;
+    
+    // Quality score: starts at 100, drops for smells, cycles, and vulns
+    let qualityScore = 100;
+    qualityScore -= (smellsCount / totalFiles) * 15;
+    qualityScore -= (cyclesCount * 12);
+    qualityScore -= (vulnsCount * 25);
+    qualityScore = Math.max(5, Math.min(100, Math.round(qualityScore)));
+    
+    let grade = 'F';
+    if (qualityScore >= 95) grade = 'A+';
+    else if (qualityScore >= 90) grade = 'A';
+    else if (qualityScore >= 80) grade = 'B';
+    else if (qualityScore >= 70) grade = 'C';
+    else if (qualityScore >= 60) grade = 'D';
+
+    // Security Posture rating
+    let securityRating = 'SECURE';
+    let securityColor = '#10b981'; // Green
+    if (vulnsCount > 2) {
+      securityRating = 'CRITICAL';
+      securityColor = '#ef4444'; // Red
+    } else if (vulnsCount > 0) {
+      securityRating = 'WARNING';
+      securityColor = '#f59e0b'; // Amber
+    }
+
+    // Architecture Health rating: % of files not participating in cycles
+    const filesInCycles = new Set<string>();
+    (cycles || []).forEach(cycle => cycle.forEach(f => filesInCycles.add(f)));
+    const cleanFilesCount = localNodes.filter(n => !filesInCycles.has(n.id)).length;
+    const archHealth = Math.round((cleanFilesCount / totalFiles) * 100);
+
+    // Language stats breakdown
+    const langCounts: Record<string, number> = {};
+    localNodes.forEach(n => {
+      const lang = n.language || 'Other';
+      langCounts[lang] = (langCounts[lang] || 0) + 1;
+    });
+    const languages = Object.entries(langCounts)
+      .map(([lang, count]) => ({
+        lang,
+        count,
+        percent: Math.round((count / totalFiles) * 100)
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      qualityScore,
+      grade,
+      securityRating,
+      securityColor,
+      archHealth,
+      languages,
+      vulnsCount,
+      smellsCount,
+      cyclesCount
+    };
+  }, [graphData.nodes, graphData.codeSmells, cycles]);
 
   // Sort & Filtered Code Smells
   const processedSmells = useMemo(() => {
@@ -1315,6 +1382,366 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     }
   };
 
+  const handleExportScorecard = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 675;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // 1. Draw Background
+      ctx.fillStyle = '#08090f';
+      ctx.fillRect(0, 0, 1200, 675);
+
+      // Draw cyber Grid overlay
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.03)';
+      ctx.lineWidth = 1;
+      const gridSize = 45;
+      for (let x = 0; x < 1200; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 675);
+        ctx.stroke();
+      }
+      for (let y = 0; y < 675; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(1200, y);
+        ctx.stroke();
+      }
+
+      // Draw sci-fi corners
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.2)';
+      ctx.lineWidth = 2;
+      const markLen = 20;
+      const pads = 25;
+      // Top-Left
+      ctx.beginPath();
+      ctx.moveTo(pads, pads + markLen); ctx.lineTo(pads, pads); ctx.lineTo(pads + markLen, pads);
+      ctx.stroke();
+      // Top-Right
+      ctx.beginPath();
+      ctx.moveTo(1200 - pads, pads + markLen); ctx.lineTo(1200 - pads, pads); ctx.lineTo(1200 - pads - markLen, pads);
+      ctx.stroke();
+      // Bottom-Left
+      ctx.beginPath();
+      ctx.moveTo(pads, 675 - pads - markLen); ctx.lineTo(pads, 675 - pads); ctx.lineTo(pads + markLen, 675 - pads);
+      ctx.stroke();
+      // Bottom-Right
+      ctx.beginPath();
+      ctx.moveTo(1200 - pads, 675 - pads - markLen); ctx.lineTo(1200 - pads, 675 - pads); ctx.lineTo(1200 - pads - markLen, 675 - pads);
+      ctx.stroke();
+
+      // 2. Title Section
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+      ctx.fillText('CODEBASE HEALTH FINGERPRINT', 50, 65);
+      
+      ctx.fillStyle = '#8b9bb4';
+      ctx.font = '14px monospace';
+      ctx.fillText(`TARGET WORKSPACE: ${files[0]?.path.split('/')[0] || 'CodeGraph project'}`, 50, 92);
+
+      // Line separator under title
+      const gradient = ctx.createLinearGradient(50, 0, 1150, 0);
+      gradient.addColorStop(0, 'rgba(99, 102, 241, 0.5)');
+      gradient.addColorStop(0.5, 'rgba(0, 242, 254, 0.5)');
+      gradient.addColorStop(1, 'rgba(99, 102, 241, 0.05)');
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(50, 110);
+      ctx.lineTo(1150, 110);
+      ctx.stroke();
+
+      // 3. Biometric Fingerprint rendering on Left side
+      const cx = 350;
+      const cy = 385;
+      const maxRadius = 200;
+      const innerRadius = 55;
+
+      // concentric biometric grid rings
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.lineWidth = 1;
+      for (let r = innerRadius; r <= maxRadius; r += (maxRadius - innerRadius) / 4) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Draw file arcs
+      const localNodes = graphData.nodes.filter(n => !n.id.startsWith('npm::'));
+      const totalFilesCount = localNodes.length || 1;
+      
+      const getLangColor = (l: string): string => {
+        switch (l?.toLowerCase()) {
+          case 'typescript':
+          case 'tsx': return '#6366f1';
+          case 'javascript':
+          case 'jsx': return '#3b82f6';
+          case 'python': return '#10b981';
+          case 'rust': return '#f97316';
+          case 'go': return '#06b6d4';
+          case 'css': return '#ec4899';
+          case 'html': return '#eab308';
+          default: return '#8b5cf6';
+        }
+      };
+
+      const fileSlices = localNodes.map((node, index) => {
+        const startAngle = (index / totalFilesCount) * Math.PI * 2 - Math.PI / 2;
+        const endAngle = ((index + 1) / totalFilesCount) * Math.PI * 2 - Math.PI / 2;
+        const loc = node.complexity || 0;
+        const ridgesCount = Math.max(2, Math.min(8, Math.floor(Math.log2(loc + 10))));
+        const smellsCount = (graphData.codeSmells || []).filter(s => s.file === node.id).length;
+        return {
+          id: node.id,
+          startAngle,
+          endAngle,
+          ridgesCount,
+          smellsCount,
+          language: node.language || 'unknown',
+          vulnerable: !!node.isVulnerable
+        };
+      });
+
+      fileSlices.forEach(slice => {
+        const color = getLangColor(slice.language);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+
+        for (let i = 0; i < slice.ridgesCount; i++) {
+          const ridgeRadius = innerRadius + i * ((maxRadius - innerRadius) / 8);
+          ctx.beginPath();
+          ctx.arc(cx, cy, ridgeRadius, slice.startAngle + 0.015, slice.endAngle - 0.015);
+          ctx.stroke();
+        }
+
+        // Draw small smell ticks/dots
+        if (slice.smellsCount > 0) {
+          ctx.fillStyle = '#f97316'; // Orange
+          const midAngle = (slice.startAngle + slice.endAngle) / 2;
+          const markerRadius = innerRadius + (slice.ridgesCount - 1) * ((maxRadius - innerRadius) / 8) + 8;
+          ctx.beginPath();
+          ctx.arc(
+            cx + Math.cos(midAngle) * markerRadius,
+            cy + Math.sin(midAngle) * markerRadius,
+            3,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        // Draw vulnerability red dots
+        if (slice.vulnerable) {
+          ctx.fillStyle = '#ef4444'; // Red
+          const midAngle = (slice.startAngle + slice.endAngle) / 2;
+          const markerRadius = maxRadius + 8;
+          ctx.beginPath();
+          ctx.arc(
+            cx + Math.cos(midAngle) * markerRadius,
+            cy + Math.sin(midAngle) * markerRadius,
+            4,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+      });
+
+      // Draw cycle bezier connections in center
+      if (cycles && cycles.length > 0) {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+        ctx.lineWidth = 1;
+        cycles.forEach(cycle => {
+          if (cycle.length < 2) return;
+          for (let i = 0; i < cycle.length; i++) {
+            const sliceA = fileSlices.find(s => s.id === cycle[i]);
+            const sliceB = fileSlices.find(s => s.id === cycle[(i + 1) % cycle.length]);
+            if (sliceA && sliceB) {
+              const angleA = (sliceA.startAngle + sliceA.endAngle) / 2;
+              const angleB = (sliceB.startAngle + sliceB.endAngle) / 2;
+              ctx.beginPath();
+              ctx.moveTo(cx + Math.cos(angleA) * innerRadius, cy + Math.sin(angleA) * innerRadius);
+              ctx.quadraticCurveTo(cx, cy, cx + Math.cos(angleB) * innerRadius, cy + Math.sin(angleB) * innerRadius);
+              ctx.stroke();
+            }
+          }
+        });
+      }
+
+      // Center dial
+      ctx.fillStyle = '#0a0a0f';
+      ctx.beginPath();
+      ctx.arc(cx, cy, innerRadius - 4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, innerRadius - 4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#8b9bb4';
+      ctx.font = '600 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('FILES', cx, cy - 5);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 15px system-ui, sans-serif';
+      ctx.fillText(String(totalFilesCount), cx, cy + 9);
+
+      // 4. Metrics Info Panels on Right side (using single card + grid layout)
+      const drawPanel = (px: number, py: number, w: number, h: number, title: string, subtitle: string, mainText: string, accentColor: string) => {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.01)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px, py, w, h, 8); else ctx.rect(px, py, w, h);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px, py, w, h, 8); else ctx.rect(px, py, w, h);
+        ctx.stroke();
+
+        // Decorative color left tab
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px, py, 3, h, [8, 0, 0, 8]); else ctx.rect(px, py, 3, h);
+        ctx.fill();
+
+        // Titles
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '900 9px monospace';
+        ctx.fillText(title.toUpperCase(), px + 15, py + 25);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '500 11px system-ui, sans-serif';
+        ctx.fillText(subtitle, px + 15, py + 45);
+
+        // Big visual metric indicator
+        ctx.fillStyle = accentColor;
+        ctx.font = 'bold 24px system-ui, sans-serif';
+        ctx.fillText(mainText, px + 15, py + 80);
+      };
+
+      // Main Grade card
+      const gx = 700, gy = 135, gw = 450, gh = 150;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.beginPath();
+      ctx.roundRect(gx, gy, gw, gh, 10);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(gx, gy, gw, gh, 10);
+      ctx.stroke();
+
+      // Big Grade badge in main card
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.08)';
+      ctx.beginPath();
+      ctx.arc(gx + 80, gy + 75, 50, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(gx + 80, gy + 75, 50, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#6366f1';
+      ctx.font = 'bold 42px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(fingerprintMetrics.grade, gx + 80, gy + 90);
+
+      // Main Card titles
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.fillText('CODEBASE QUALITY GRADE', gx + 155, gy + 55);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '13px system-ui, sans-serif';
+      ctx.fillText(`Overall Health Score: ${fingerprintMetrics.qualityScore} / 100`, gx + 155, gy + 82);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('Based on complexity, code smells, and structures.', gx + 155, gy + 105);
+
+      // Sub Cards
+      drawPanel(700, 305, 215, 105, 'Maintainability', 'Weighted complexity', `${fingerprintMetrics.qualityScore}%`, '#8b5cf6');
+      drawPanel(935, 305, 215, 105, 'Security Rating', `${fingerprintMetrics.vulnsCount} Vulnerabilities`, fingerprintMetrics.securityRating, fingerprintMetrics.securityColor);
+      drawPanel(700, 425, 215, 105, 'Architect Health', 'Files without loops', `${fingerprintMetrics.archHealth}%`, '#10b981');
+      drawPanel(935, 425, 215, 105, 'Code Smells', 'Refactor recommendations', String(fingerprintMetrics.smellsCount), '#f59e0b');
+
+      // 5. Language Breakdown Bar
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '900 9px monospace';
+      ctx.fillText('PRIMARY LANGUAGES PROFILE', 700, 560);
+
+      const barX = 700;
+      const barY = 572;
+      const barW = 450;
+      const barH = 12;
+      
+      let currentBarX = barX;
+      // Draw stacked bar
+      fingerprintMetrics.languages.slice(0, 4).forEach((lang, idx) => {
+        const segW = (lang.percent / 100) * barW;
+        ctx.fillStyle = getLangColor(lang.lang);
+        ctx.beginPath();
+        // Rounded corners for boundaries
+        const isFirst = idx === 0;
+        const isLast = idx === Math.min(3, fingerprintMetrics.languages.length - 1);
+        const tl = isFirst ? 4 : 0;
+        const tr = isLast ? 4 : 0;
+        const br = isLast ? 4 : 0;
+        const bl = isFirst ? 4 : 0;
+        if (ctx.roundRect) {
+          ctx.roundRect(currentBarX, barY, segW, barH, [tl, tr, br, bl]);
+        } else {
+          ctx.rect(currentBarX, barY, segW, barH);
+        }
+        ctx.fill();
+        currentBarX += segW;
+      });
+
+      // Language legends
+      let legendX = 700;
+      fingerprintMetrics.languages.slice(0, 4).forEach(lang => {
+        ctx.fillStyle = getLangColor(lang.lang);
+        ctx.beginPath();
+        ctx.arc(legendX + 4, 606, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '500 11px system-ui, sans-serif';
+        ctx.fillText(`${lang.lang} (${lang.percent}%)`, legendX + 13, 610);
+        legendX += Math.max(90, ctx.measureText(`${lang.lang} (${lang.percent}%)`).width + 25);
+      });
+
+      // 6. Watermark Footer
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('CODEGRAPH VISUALIZER • HEALTH FINGERPRINT CERTIFICATE', 50, 642);
+
+      // Download
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `codegraph-scorecard-${files[0]?.path.split('/')[0] || 'project'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('Score Card downloaded successfully!');
+    } catch (e) {
+      console.error('Score card download failed:', e);
+      showToast('Failed to export scorecard.');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', padding: '24px', gap: '24px', background: 'transparent' }}>
       {/* Sub tabs header */}
@@ -1351,6 +1778,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           >
             <Folder size={15} style={{ marginRight: '6px' }} />
             Restructure & Contracts
+          </button>
+          <button 
+            className={`tab-btn ${subTab === 'fingerprint' ? 'active' : ''}`}
+            onClick={() => setSubTab('fingerprint')}
+            style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '6px' }}
+          >
+            <Sparkles size={15} style={{ marginRight: '6px' }} />
+            Codebase Fingerprint Card
           </button>
         </div>
       </div>
@@ -2046,6 +2481,164 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   </button>
                 </div>
               )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 5: CODEBASE FINGERPRINT SCORE CARD */}
+      {subTab === 'fingerprint' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px', alignItems: 'start' }}>
+            
+            {/* Left Column: Visual Canvas Fingerprint */}
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', minHeight: '480px' }}>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Activity size={15} style={{ color: 'var(--color-primary)' }} />
+                  Visual Health Fingerprint
+                </h4>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Interactive radar sweep</span>
+              </div>
+              <div style={{ width: '100%', height: '380px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <CodebaseFingerprint graphData={graphData} />
+              </div>
+            </div>
+
+            {/* Right Column: Scorecard Details */}
+            <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', minHeight: '480px' }}>
+              
+              {/* Header card with overall grade */}
+              <div style={{ display: 'flex', gap: '20px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '8px', border: '1px solid var(--panel-border)', alignItems: 'center' }}>
+                <div style={{ 
+                  width: '76px', 
+                  height: '76px', 
+                  borderRadius: '50%', 
+                  background: 'rgba(99, 102, 241, 0.1)', 
+                  border: '2px solid rgba(99, 102, 241, 0.4)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  boxShadow: '0 0 15px rgba(99, 102, 241, 0.2)'
+                }}>
+                  <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--color-primary)' }}>
+                    {fingerprintMetrics.grade}
+                  </span>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+                    Codebase Health Card
+                  </h3>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Overall rating based on quality metrics, security posture, and loop complexities.
+                  </p>
+                </div>
+              </div>
+
+              {/* Grid of details */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                
+                {/* Score */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quality Index</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {fingerprintMetrics.qualityScore}%
+                  </span>
+                </div>
+
+                {/* Security */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Security Posture</span>
+                  <span style={{ fontSize: '1.15rem', fontWeight: 700, color: fingerprintMetrics.securityColor, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <ShieldAlert size={14} />
+                    {fingerprintMetrics.securityRating}
+                  </span>
+                </div>
+
+                {/* Architecture */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Architecture Stability</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#10b981' }}>
+                    {fingerprintMetrics.archHealth}% clean
+                  </span>
+                </div>
+
+                {/* Code Smells */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Structural Smells</span>
+                  <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f59e0b' }}>
+                    {fingerprintMetrics.smellsCount} alerts
+                  </span>
+                </div>
+
+              </div>
+
+              {/* Primary languages profile */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Primary Languages Profile
+                </span>
+                
+                {/* Stacked bar */}
+                <div style={{ display: 'flex', width: '100%', height: '10px', borderRadius: '5px', overflow: 'hidden' }}>
+                  {fingerprintMetrics.languages.slice(0, 4).map((lang) => (
+                    <div 
+                      key={lang.lang}
+                      style={{
+                        width: `${lang.percent}%`,
+                        height: '100%',
+                        backgroundColor: 
+                          lang.lang.toLowerCase() === 'typescript' || lang.lang.toLowerCase() === 'tsx' ? '#6366f1' :
+                          lang.lang.toLowerCase() === 'javascript' || lang.lang.toLowerCase() === 'jsx' ? '#3b82f6' :
+                          lang.lang.toLowerCase() === 'python' ? '#10b981' :
+                          lang.lang.toLowerCase() === 'rust' ? '#f97316' :
+                          lang.lang.toLowerCase() === 'go' ? '#06b6d4' :
+                          lang.lang.toLowerCase() === 'css' ? '#ec4899' :
+                          lang.lang.toLowerCase() === 'html' ? '#eab308' : '#8b5cf6'
+                      }}
+                      title={`${lang.lang}: ${lang.percent}%`}
+                    />
+                  ))}
+                </div>
+
+                {/* Legends */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  {fingerprintMetrics.languages.slice(0, 4).map(lang => (
+                    <div key={lang.lang} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.68rem' }}>
+                      <span style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        borderRadius: '50%', 
+                        backgroundColor: 
+                          lang.lang.toLowerCase() === 'typescript' || lang.lang.toLowerCase() === 'tsx' ? '#6366f1' :
+                          lang.lang.toLowerCase() === 'javascript' || lang.lang.toLowerCase() === 'jsx' ? '#3b82f6' :
+                          lang.lang.toLowerCase() === 'python' ? '#10b981' :
+                          lang.lang.toLowerCase() === 'rust' ? '#f97316' :
+                          lang.lang.toLowerCase() === 'go' ? '#06b6d4' :
+                          lang.lang.toLowerCase() === 'css' ? '#ec4899' :
+                          lang.lang.toLowerCase() === 'html' ? '#eab308' : '#8b5cf6'
+                      }} />
+                      <span style={{ color: 'var(--text-secondary)' }}>{lang.lang}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>({lang.percent}%)</span>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '16px', borderTop: '1px dashed var(--panel-border)' }}>
+                <button
+                  className="cyber-button"
+                  onClick={handleExportScorecard}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, padding: '10px 18px', fontSize: '0.8rem' }}
+                >
+                  <Download size={14} />
+                  Export Score Card (PNG)
+                </button>
+              </div>
+
             </div>
 
           </div>
