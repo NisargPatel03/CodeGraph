@@ -57,6 +57,7 @@
   - [Visual AppSec & Dependency CVE Vulnerability Map](#visual-appsec--dependency-cve-vulnerability-map)
   - [Codebase "Fingerprint" Score Card](#codebase-fingerprint-score-card)
   - [README.md Auto-Generator](#readme-auto-generator)
+  - [Interactive Onboarding Tour](#onboarding-tour)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -935,6 +936,19 @@ Provides a one-click automated documentation synthesizer that generates standard
   - Code Contribution guidelines and License details
 - **Offline Template Generator (`generateStaticReadme`)**: Employs a local parsing fallback that runs if no Gemini API key is configured. It reads project scripts and dependencies statically to generate a baseline documentation markdown file.
 - **Export & Clipboard Integration**: Provides actions to copy raw markdown to the clipboard (with toast notifications) or download it directly as a `.md` file to save to the codebase root.
+
+---
+
+<a id="onboarding-tour"></a>
+### 30. Interactive Onboarding Tour
+
+**Files:** `src/components/OnboardingTour.tsx` and `src/App.tsx`
+
+Provides a premium, step-by-step interactive guidance tour designed to help first-time users master CodeGraph's capabilities:
+- **Reactive Backdrop Spotlight**: Draws a dark overlay with a dynamic CSS box-shadow spotlight that highlights the exact targeted element (e.g., File Explorer, visual tab headers, D3 canvas, or KPI telemetry ribbon).
+- **Auto-Ingestion Integration**: Automatically loads the demo sandbox codebase if a user starts the tour from the repository selector page, enabling immediate interactive graph exploration.
+- **Theme-Synchronized Tooltips**: Renders glassmorphic tooltip boxes containing descriptions, progress indicators, and keyboard shortcut triggers that match the active neon visual theme.
+- **Header Trigger Actions**: Includes a top-right header trigger button (`Quick Tour`) and a setup-screen launch card allowing users to replay or skip the walkthrough at any time.
 
 ---
 
