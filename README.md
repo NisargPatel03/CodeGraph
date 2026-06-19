@@ -56,6 +56,7 @@
   - [Interactive Codebase Sonification](#interactive-codebase-sonification)
   - [Visual AppSec & Dependency CVE Vulnerability Map](#visual-appsec--dependency-cve-vulnerability-map)
   - [Codebase "Fingerprint" Score Card](#codebase-fingerprint-score-card)
+  - [README.md Auto-Generator](#readme-auto-generator)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -125,6 +126,7 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Dependency Risk Auditor** — `runDependencyAudit` — Computes afferent coupling (fan-in), efferent coupling (fan-out), and instability index for every file. Identifies Single Points of Failure (SPOFs) and generates a letter-graded Coupling Health Report with actionable refactoring recommendations.
 - **AI REST API Extractor** — `aiExtractEndpoints` — Scans codebase files for REST route registrations (Express, NestJS, Flask, FastAPI, Django, Spring) and generates a full interactive API documentation portal with endpoint specs, parameter forms, and response schemas.
 - **AI Database Design Auditor** — `auditDatabaseSchema` — Audits SQL DDL, Prisma schemas, SQLAlchemy, or Mongoose models using Gemini to locate circular references, missing indices, normalization flaws, and integrity risks, with an offline static analyzer fallback.
+- **README.md Auto-Generator** — `generateReadmeFile` — Synthesizes a structured `README.md` file from parsed file lists, dependency configurations, detected API endpoints, and database schemas with a clean local static fallback.
 
 ### 📖 REST API Documentation Portal
 - **Auto-Detection** — Statically parses route definitions across 6+ frameworks (Express, NestJS, Flask, FastAPI, Django, Spring Boot) with regex-based pattern matching, enhanced by Gemini AI for deep extraction
@@ -142,6 +144,7 @@ Whether you are onboarding to a new team, performing a code review, identifying 
 - **Highly Active Files (Churn)** — Ranks files by estimated commit frequency to identify hotspots
 - **Onboarding Guide** — AI-generated Markdown exportable as `.md`, PDF (via browser print), or copied in Notion-compatible format
 - **Architecture Overview** — AI-generated architectural analysis with module-level breakdown
+- **README.md Auto-Generator** — Generates complete technical readme documents with one-click download and Notion copy capabilities
 
 ### 📌 KPI Ribbon
 - **Sticky Summary Bar** — A compact, always-visible ribbon below the graph tabs showing key metrics at a glance: total files, functions, lines of code, circular dependency count, and dead file count
@@ -913,6 +916,25 @@ Provides a high-fidelity visual summary of repository health designed for sharin
 - **Dynamic Grading System**: Computes a composite health index ($100$-point scale) deducting points for structural smells, circular loops, and open vulnerabilities.
 - **Language Profile Bar**: Automatically compiles a relative stacked percentage bar of the top languages detected in the codebase.
 - **16:9 Composited Scorecard Export**: Renders a $1200 \times 675$ off-screen canvas combining the biometric fingerprint, overall grade circle, maintainability metrics, and security ratings into a premium watermarked PNG certificate.
+
+---
+
+<a id="readme-auto-generator"></a>
+### 29. README.md Auto-Generator
+
+**Files:** `src/utils/aiHelper.ts` and `src/components/AnalyticsDashboard.tsx`
+
+Provides a one-click automated documentation synthesizer that generates standard or customized README documentation for the workspace codebase:
+- **Multi-Source Context Assembly**: Combines the codebase directory tree, detected dependency lists, extracted REST API endpoint paths, and database schema mappings into a comprehensive payload.
+- **AI Synthesis Pipeline (`generateReadmeFile`)**: Calls Gemini to author a detailed, professional README containing:
+  - Project name and description
+  - Interactive Tech Stack & Dependencies summary
+  - Step-by-Step Installation & Script setups parsed from package files
+  - Full API endpoint tables (Routes, Methods, Actions)
+  - Detailed database schemas and model properties
+  - Code Contribution guidelines and License details
+- **Offline Template Generator (`generateStaticReadme`)**: Employs a local parsing fallback that runs if no Gemini API key is configured. It reads project scripts and dependencies statically to generate a baseline documentation markdown file.
+- **Export & Clipboard Integration**: Provides actions to copy raw markdown to the clipboard (with toast notifications) or download it directly as a `.md` file to save to the codebase root.
 
 ---
 
