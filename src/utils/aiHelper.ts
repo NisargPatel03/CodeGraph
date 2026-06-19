@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { ParsedFile } from './repoParser';
 import type { DbSchemaReport } from './schemaParser';
+import type { CallLink, CallNode } from './codeAnalyzer';
 
 const GEMINI_MODEL = 'gemini-3.5-flash';
 
@@ -101,7 +102,7 @@ export function getCacheTelemetry() {
 
 // Simple check if API key exists and is valid format
 export function isValidApiKey(key: string): boolean {
-  return key.trim().length > 10;
+  return key.trim().length > 10 && key.trim().startsWith('AIzaSy');
 }
 
 export function formatGeminiError(error: any): string {
@@ -1950,4 +1951,124 @@ Provide an audit report in markdown listing any warning/tip alerts.`;
     return errMsg;
   }
 }
+
+export async function refineCallGraphWithLLM(
+  _callNodes: CallNode[],
+  callLinks: CallLink[],
+  files: ParsedFile[],
+  apiKey: string
+): Promise<CallLink[]> {
+  if (!isValidApiKey(apiKey)) {
+    // Mock simulation: resolve ambiguous links by keeping only the first one
+    const seen = new Set<string>();
+    const resolved: CallLink[] = [];
+    for (const link of callLinks) {
+      if (link.isAmbiguous) {
+        const key = `${link.source}->${link.target.split('::').pop()}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          resolved.push({ ...link, isAmbiguous: false });
+        }
+      } else {
+        resolved.push(link);
+      }
+    }
+    return resolved;
+  }
+
+  const ambiguousLinks = callLinks.filter(l => l.isAmbiguous);
+  if (ambiguousLinks.length === 0) {
+    return callLinks;
+  }
+
+  const callerToAmbiguousTargets = new Map<string, CallLink[]>();
+  for (const link of ambiguousLinks) {
+    if (!callerToAmbiguousTargets.has(link.source)) {
+      callerToAmbiguousTargets.set(link.source, []);
+    }
+    callerToAmbiguousTargets.get(link.source)!.push(link);
+  }
+
+  const resolvedLinks: CallLink[] = callLinks.filter(l => !l.isAmbiguous);
+  const fileContentMap = new Map<string, string>();
+  for (const file of files) {
+    fileContentMap.set(file.path, file.content);
+  }
+
+  for (const [callerId, links] of callerToAmbiguousTargets.entries()) {
+    const [callerFile, callerFuncName] = callerId.split('::');
+    const fileContent = fileContentMap.get(callerFile) || '';
+    
+    const candidates = links.map(link => {
+      const [targetFile, targetName] = link.target.split('::');
+      return {
+        id: link.target,
+        name: targetName,
+        file: targetFile
+      };
+    });
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+      const prompt = `You are a static analysis assistant. We have an ambiguous function call in a codebase.
+In file "${callerFile}", the function "${callerFuncName}" calls a function named "${candidates[0].name}".
+However, multiple candidate functions exist in the codebase:
+${candidates.map((c, i) => `${i + 1}. ID: "${c.id}" (defined in file "${c.file}")`).join('\n')}
+
+Here is the source code of the caller file "${callerFile}":
+\`\`\`
+${fileContent.slice(0, 5000)}
+\`\`\`
+
+Analyze the imports and usage in "${callerFile}" to determine which of the candidate targets is actually called by "${callerFuncName}".
+Return ONLY a JSON array containing the IDs of the active target functions that are invoked. If none are invoked or it is not possible to determine, return an empty array.
+Your output must be a valid JSON array of strings, for example:
+["file1.ts::init"]
+
+JSON Output:`;
+
+      const cacheKey = getCacheKey('refineCallGraphWithLLM', { callerId, candidates });
+      let responseText = '';
+      if (aiCache.has(cacheKey)) {
+        responseText = aiCache.get(cacheKey);
+      } else {
+        const result = await model.generateContent(prompt);
+        responseText = result.response.text();
+        aiCache.set(cacheKey, responseText);
+      }
+
+      const jsonMatch = responseText.match(/\[[\s\S]*?\]/);
+      if (jsonMatch) {
+        const resolvedIds: string[] = JSON.parse(jsonMatch[0]);
+        for (const resolvedId of resolvedIds) {
+          if (candidates.some(c => c.id === resolvedId)) {
+            resolvedLinks.push({
+              source: callerId,
+              target: resolvedId,
+              isAmbiguous: false
+            });
+          }
+        }
+      } else {
+        resolvedLinks.push({
+          source: callerId,
+          target: candidates[0].id,
+          isAmbiguous: false
+        });
+      }
+    } catch (err) {
+      console.error('Gemini call graph refinement failed for:', callerId, err);
+      resolvedLinks.push({
+        source: callerId,
+        target: candidates[0].id,
+        isAmbiguous: false
+      });
+    }
+  }
+
+  return resolvedLinks;
+}
+
 

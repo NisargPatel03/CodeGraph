@@ -22,7 +22,8 @@ import {
   runDependencyAudit,
   explainEntireFolderStream,
   suggestCrossFileRefactorStream,
-  getCacheTelemetry
+  getCacheTelemetry,
+  refineCallGraphWithLLM
 } from './utils/aiHelper';
 import type { SemanticSearchResult } from './utils/aiHelper';
 
@@ -154,6 +155,49 @@ export default function App() {
       setAuditError(err.message || 'An error occurred during dependency risk audit.');
     } finally {
       setIsAuditing(false);
+    }
+  };
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Call Graph Refinement States & Handlers
+  const [isRefiningCallGraph, setIsRefiningCallGraph] = useState(false);
+
+  const handleRefineCallGraph = async () => {
+    if (!repoData || !graphData) return;
+    setIsRefiningCallGraph(true);
+    showToast('Initiating Call Graph validation pass...');
+    try {
+      const refinedLinks = await refineCallGraphWithLLM(
+        graphData.callNodes || [],
+        graphData.callLinks || [],
+        repoData.files,
+        apiKey
+      );
+
+      const originalAmbiguousCount = (graphData.callLinks || []).filter(l => l.isAmbiguous).length;
+      const newAmbiguousCount = refinedLinks.filter(l => l.isAmbiguous).length;
+      const resolvedCount = originalAmbiguousCount - newAmbiguousCount;
+
+      setGraphData(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          callLinks: refinedLinks
+        };
+      });
+
+      showToast(`Refined call graph successfully! Resolved ${resolvedCount} ambiguous connections.`);
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Refinement failed: ${err.message || err}`);
+    } finally {
+      setIsRefiningCallGraph(false);
     }
   };
 
@@ -1233,6 +1277,8 @@ export default function App() {
                   apiKey={apiKey}
                   dbAuditTrigger={dbAuditTrigger}
                   onExplainFolder={handleRunFolderExplanation}
+                  onRefineCallGraph={handleRefineCallGraph}
+                  isRefiningCallGraph={isRefiningCallGraph}
                 />
               )}
             </section>
@@ -1558,6 +1604,12 @@ export default function App() {
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
       />
+
+      {toastMessage && (
+        <div className="toast-notification">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

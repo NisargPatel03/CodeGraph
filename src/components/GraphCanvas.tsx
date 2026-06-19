@@ -35,6 +35,8 @@ interface GraphCanvasProps {
   apiKey: string;
   dbAuditTrigger?: number;
   onExplainFolder?: (folderPath: string) => void;
+  onRefineCallGraph?: () => void;
+  isRefiningCallGraph?: boolean;
 }
 
 let mermaidInitialized = false;
@@ -218,6 +220,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   apiKey,
   dbAuditTrigger,
   onExplainFolder,
+  onRefineCallGraph,
+  isRefiningCallGraph,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -3300,15 +3304,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           return;
         }
 
+        const isAmbiguous = viewMode === 'call' && l.isAmbiguous;
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isFlowing = viewMode === 'dependency';
         let cls = 'link-element';
         if (isFlowing) cls += ' flowing';
         
         if (sId === activeId) {
-          line.attr('class', cls + ' flow-out').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight)');
+          line.attr('class', cls + ' flow-out')
+            .style('stroke-opacity', 0.95)
+            .style('stroke', isAmbiguous ? '#fb923c' : (null as any))
+            .attr('stroke-dasharray', isAmbiguous ? '4,4' : null)
+            .attr('marker-end', isAmbiguous ? 'url(#arrow-violating)' : 'url(#arrow-highlight)');
         } else if (tId === activeId) {
-          line.attr('class', cls + ' flow-in').style('stroke-opacity', 0.95).attr('marker-end', 'url(#arrow-highlight-incoming)');
+          line.attr('class', cls + ' flow-in')
+            .style('stroke-opacity', 0.95)
+            .style('stroke', isAmbiguous ? '#fb923c' : (null as any))
+            .attr('stroke-dasharray', isAmbiguous ? '4,4' : null)
+            .attr('marker-end', isAmbiguous ? 'url(#arrow-violating)' : 'url(#arrow-highlight-incoming)');
         } else {
           const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
             const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
@@ -3447,9 +3460,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           return;
         }
 
+        const isAmbiguous = viewMode === 'call' && l.isAmbiguous;
         const isCyclic = viewMode === 'dependency' && cyclicLinks.has(`${sId}->${tId}`);
         const isFlowing = viewMode === 'dependency';
         let cls = isFlowing ? 'link-element flowing' : 'link-element';
+        if (isAmbiguous) cls += ' link-ambiguous';
         
         const isViolating = linterViolations?.violatingLinks.some((vl: any) => {
           const vlSource = typeof vl.source === 'object' ? vl.source.id : vl.source;
@@ -3460,8 +3475,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
         d3.select(this)
           .attr('class', isViolating ? cls : (isCyclic ? 'link-element flow-cycle' : cls))
-          .style('stroke-opacity', isViolating ? 0.95 : (isCyclic ? 0.6 : (isFlowing ? 0.75 : 0.2)))
-          .style('stroke', isViolating ? '#f97316' : (isCyclic ? 'var(--color-alert)' : 'var(--link-stroke)'))
+          .style('stroke-opacity', isViolating ? 0.95 : (isCyclic ? 0.6 : (isAmbiguous ? 0.8 : (isFlowing ? 0.75 : 0.2))))
+          .style('stroke', isViolating ? '#f97316' : (isCyclic ? 'var(--color-alert)' : (isAmbiguous ? '#fb923c' : 'var(--link-stroke)')))
+          .attr('stroke-dasharray', isAmbiguous ? '4,4' : null)
           .attr('marker-end', isViolating ? 'url(#arrow-violating)' : (isCyclic ? 'url(#arrow-cycle)' : 'url(#arrow-normal)'));
       });
       pipelines.each(function () {
@@ -3861,14 +3877,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         let strokeColor = 'rgba(99, 102, 241, ' + opacity + ')';
         if (link.isAggregated) {
           strokeColor = 'rgba(236, 72, 153, ' + opacity + ')';
+        } else if (link.isAmbiguous) {
+          strokeColor = 'rgba(245, 158, 11, ' + (opacity * 1.5) + ')';
         }
 
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = Math.max(0.5, (link.isAggregated ? 3 : 1) * ((sNode.scaleFactor + tNode.scaleFactor) / 2));
+        ctx.lineWidth = Math.max(0.5, (link.isAggregated ? 3 : (link.isAmbiguous ? 1.5 : 1)) * ((sNode.scaleFactor + tNode.scaleFactor) / 2));
+        
+        if (link.isAmbiguous) {
+          ctx.setLineDash([4, 4]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        
         ctx.beginPath();
         ctx.moveTo(sNode.projX, sNode.projY);
         ctx.lineTo(tNode.projX, tNode.projY);
         ctx.stroke();
+        
+        if (link.isAmbiguous) {
+          ctx.setLineDash([]);
+        }
       });
 
       // Spawn new particles occasionally
@@ -4110,6 +4139,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
             {viewMode === 'call' && (
               <div className="toolbox-section">
                 <div className="section-header">📞 Call Graph Analytics</div>
+                
+                {/* Clean with Gemini Button */}
+                <button
+                  className="cyber-button primary"
+                  onClick={onRefineCallGraph}
+                  disabled={isRefiningCallGraph}
+                  style={{
+                    width: '100%',
+                    marginBottom: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '0.75rem',
+                    padding: '8px 12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Sparkles size={13} style={{ color: '#fbbf24' }} />
+                  {isRefiningCallGraph ? 'Cleaning Call Graph...' : 'Clean Call Graph with Gemini'}
+                </button>
                 
                 {/* Depth Filter */}
                 <div className="select-container" style={{ marginBottom: '8px' }}>

@@ -28,6 +28,7 @@ export interface CallNode {
 export interface CallLink {
   source: string;
   target: string;
+  isAmbiguous?: boolean;
 }
 
 export interface ClassNode {
@@ -463,6 +464,76 @@ function getFolder(filePath: string): string {
   return parts.join('/');
 }
 
+function buildImportBindings(
+  file: ParsedFile,
+  filePathsSet: Set<string>,
+  astMap?: Map<string, any>
+): { bindings: Map<string, string>; namespaces: Map<string, string> } {
+  const bindings = new Map<string, string>();
+  const namespaces = new Map<string, string>();
+  
+  if (!['typescript', 'javascript'].includes(file.language)) {
+    return { bindings, namespaces };
+  }
+  
+  const ast = getOrParseAST(file, astMap);
+  if (!ast) return { bindings, namespaces };
+  
+  try {
+    const body = ast.program ? ast.program.body : (ast.body || []);
+    for (const node of body) {
+      if (node.type === 'ImportDeclaration' && node.source && node.source.value) {
+        const sourceVal = node.source.value;
+        const resolved = resolveImportPath(file.path, sourceVal, filePathsSet);
+        if (resolved) {
+          for (const specifier of (node.specifiers || [])) {
+            if (specifier.type === 'ImportSpecifier') {
+              bindings.set(specifier.local.name, resolved);
+            } else if (specifier.type === 'ImportDefaultSpecifier') {
+              bindings.set(specifier.local.name, resolved);
+            } else if (specifier.type === 'ImportNamespaceSpecifier') {
+              namespaces.set(specifier.local.name, resolved);
+            }
+          }
+        }
+      } else if (node.type === 'VariableDeclaration') {
+        for (const decl of (node.declarations || [])) {
+          if (
+            decl.init && 
+            decl.init.type === 'CallExpression' && 
+            decl.init.callee && 
+            decl.init.callee.type === 'Identifier' && 
+            decl.init.callee.name === 'require' && 
+            decl.init.arguments && 
+            decl.init.arguments.length === 1
+          ) {
+            const arg = decl.init.arguments[0];
+            if (arg && (arg.type === 'StringLiteral' || arg.type === 'Literal') && typeof arg.value === 'string') {
+              const resolved = resolveImportPath(file.path, arg.value, filePathsSet);
+              if (resolved) {
+                if (decl.id.type === 'Identifier') {
+                  bindings.set(decl.id.name, resolved);
+                  namespaces.set(decl.id.name, resolved);
+                } else if (decl.id.type === 'ObjectPattern') {
+                  for (const prop of (decl.id.properties || [])) {
+                    if (prop.type === 'ObjectProperty' && prop.key && prop.key.type === 'Identifier' && prop.value && prop.value.type === 'Identifier') {
+                      bindings.set(prop.value.name, resolved);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to parse import bindings for:', file.path, err);
+  }
+  
+  return { bindings, namespaces };
+}
+
 // Function parser for call graphs
 function extractCallGraph(
   files: ParsedFile[],
@@ -471,6 +542,7 @@ function extractCallGraph(
 ): { callNodes: CallNode[]; callLinks: CallLink[] } {
   const functions: { name: string; file: string; id: string; body?: any; isAst: boolean }[] = [];
   const contentMap = new Map<string, string>();
+  const filePathsSet = new Set(files.map(f => f.path));
   
   // 1. Find function declarations
   for (const file of files) {
@@ -565,6 +637,7 @@ function extractCallGraph(
   // 2. Count calls & create links
   const callNodesMap = new Map<string, CallNode>();
   const callLinks: CallLink[] = [];
+  const addedLinks = new Set<string>();
   
   // Initialize nodes
   for (const fn of functions) {
@@ -587,55 +660,111 @@ function extractCallGraph(
     }
   }
 
+  // Map of file path to its parsed import bindings
+  const importBindingsMap = new Map<string, ReturnType<typeof buildImportBindings>>();
+  for (const file of files) {
+    if (['typescript', 'javascript'].includes(file.language)) {
+      importBindingsMap.set(file.path, buildImportBindings(file, filePathsSet, astMap));
+    }
+  }
+
   // Scan file contents/ASTs for invocations of these functions
   for (const sourceFn of functions) {
     if (sourceFn.isAst && sourceFn.body) {
-      // Precise AST Walk inside source function body
-      const calledNames = new Set<string>();
       try {
+        const fileBindings = importBindingsMap.get(sourceFn.file);
+        const bindings = fileBindings ? fileBindings.bindings : new Map<string, string>();
+        const namespaces = fileBindings ? fileBindings.namespaces : new Map<string, string>();
+        
         walkAST(sourceFn.body, (node) => {
           if (node.type === 'CallExpression') {
             const callee = node.callee;
+            let callTargetName = '';
+            let namespaceObjName = '';
+            
             if (callee.type === 'Identifier') {
-              calledNames.add(callee.name);
+              callTargetName = callee.name;
             } else if (callee.type === 'MemberExpression' && callee.property && callee.property.type === 'Identifier') {
-              calledNames.add(callee.property.name);
+              callTargetName = callee.property.name;
+              if (callee.object.type === 'Identifier') {
+                namespaceObjName = callee.object.name;
+              }
             }
+            
+            if (!callTargetName || callTargetName.length <= 2 || callTargetName.startsWith('use')) return;
+            
+            const resolvedTargets: typeof functions = [];
+            
+            // 1. Check if called on a namespace B.init() or require'd object B.init()
+            if (namespaceObjName) {
+              const targetFile = namespaces.get(namespaceObjName) || bindings.get(namespaceObjName);
+              if (targetFile) {
+                const matched = functions.find(f => f.file === targetFile && f.name === callTargetName);
+                if (matched) resolvedTargets.push(matched);
+              }
+            }
+            
+            // 2. Check if the function is imported directly, e.g. import { init } from './b'; init();
+            if (resolvedTargets.length === 0 && !namespaceObjName) {
+              const targetFile = bindings.get(callTargetName);
+              if (targetFile) {
+                const matched = functions.find(f => f.file === targetFile && f.name === callTargetName);
+                if (matched) resolvedTargets.push(matched);
+              }
+            }
+            
+            // 3. Check if it is defined locally in the same file, e.g. function localFunc() {}; localFunc();
+            if (resolvedTargets.length === 0 && !namespaceObjName) {
+              const matched = functions.find(f => f.file === sourceFn.file && f.name === callTargetName);
+              if (matched) resolvedTargets.push(matched);
+            }
+            
+            // 4. Fallback if it is not resolved locally or via imports:
+            if (resolvedTargets.length === 0) {
+              const candidates = functions.filter(f => f.name === callTargetName && f.id !== sourceFn.id);
+              if (candidates.length === 1) {
+                resolvedTargets.push(candidates[0]);
+              } else if (candidates.length > 1) {
+                const importedCandidates = candidates.filter(c => {
+                  const deps = fileDeps.get(sourceFn.file);
+                  return deps && deps.has(c.file);
+                });
+                
+                if (importedCandidates.length === 1) {
+                  resolvedTargets.push(importedCandidates[0]);
+                } else if (importedCandidates.length > 1) {
+                  resolvedTargets.push(...importedCandidates);
+                } else {
+                  resolvedTargets.push(...candidates);
+                }
+              }
+            }
+            
+            // Create links
+            resolvedTargets.forEach(targetFn => {
+              if (sourceFn.id === targetFn.id) return;
+              
+              const linkKey = `${sourceFn.id}->${targetFn.id}`;
+              if (addedLinks.has(linkKey)) return;
+              addedLinks.add(linkKey);
+              
+              const isAmbiguous = resolvedTargets.length > 1;
+              
+              const node = callNodesMap.get(targetFn.id);
+              if (node) {
+                node.callCount++;
+              }
+              
+              callLinks.push({
+                source: sourceFn.id,
+                target: targetFn.id,
+                isAmbiguous
+              });
+            });
           }
         });
       } catch (err) {
         console.error('Failed walking source function body AST for calls:', sourceFn.id, err);
-      }
-
-      for (const targetFn of functions) {
-        if (sourceFn.id === targetFn.id) continue;
-        if (!calledNames.has(targetFn.name)) continue;
-
-        let isMatch = false;
-        if (sourceFn.file === targetFn.file) {
-          isMatch = true;
-        } else {
-          const deps = fileDeps.get(sourceFn.file);
-          if (deps && deps.has(targetFn.file)) {
-            isMatch = true;
-          } else {
-            const globalMatches = functions.filter(f => f.name === targetFn.name);
-            if (globalMatches.length === 1) {
-              isMatch = true;
-            }
-          }
-        }
-
-        if (isMatch) {
-          const node = callNodesMap.get(targetFn.id);
-          if (node) {
-            node.callCount++;
-          }
-          callLinks.push({
-            source: sourceFn.id,
-            target: targetFn.id,
-          });
-        }
       }
     } else {
       // RegExp-based fallback for python, rust, go, and non-AST parsed JS/TS files
@@ -645,6 +774,10 @@ function extractCallGraph(
         
         const callRegex = new RegExp(`\\b${targetFn.name}\\(`, 'g');
         if (callRegex.test(sourceFileContent)) {
+          const linkKey = `${sourceFn.id}->${targetFn.id}`;
+          if (addedLinks.has(linkKey)) continue;
+          addedLinks.add(linkKey);
+          
           const node = callNodesMap.get(targetFn.id);
           if (node) {
             node.callCount++;
@@ -652,6 +785,7 @@ function extractCallGraph(
           callLinks.push({
             source: sourceFn.id,
             target: targetFn.id,
+            isAmbiguous: false
           });
         }
       }

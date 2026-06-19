@@ -36,6 +36,7 @@ export default function App() {
     setSelectedFile(file);
     const metrics = computeMetrics(file);
     console.log("File metrics computed:", metrics);
+    init();
   };
 
   return (
@@ -58,6 +59,10 @@ export default function App() {
 import Button from './Button';
 import { formatName } from '../utils/helper';
 
+export function init() {
+  console.log("Header initialized");
+}
+
 interface HeaderProps {
   onSelect: (file: string) => void;
 }
@@ -78,6 +83,10 @@ export default function Header({ onSelect }: HeaderProps) {
     language: 'typescript',
     content: `import React from 'react';
 import Button from './Button';
+
+export function init() {
+  console.log("Sidebar initialized");
+}
 
 interface SidebarProps {
   onSelect: (file: string) => void;
