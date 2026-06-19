@@ -53,6 +53,8 @@
   - [Babel AST-Based Static Analysis](#babel-ast-based-static-analysis)
   - [Gemini LLM Call-Graph Validation](#gemini-llm-call-graph-validation)
   - [Database ER Diagram Export & Styling Controls](#database-er-diagram-export-styling-controls)
+  - [Interactive Codebase Sonification](#interactive-codebase-sonification)
+  - [Visual AppSec & Dependency CVE Vulnerability Map](#visual-appsec--dependency-cve-vulnerability-map)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -224,6 +226,19 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Global Key Bindings Indicator** — A dedicated helper panel displaying all command palette, navigation, and theme hotkeys.
 - **Instant Hotkey Toggle** — Accessible anywhere in the application by pressing the `?` key or `Alt + H`.
 - **Theme-Integrated Design** — Fits natively into all dark and light themes with glowing `<kbd>` styling.
+
+### 🔊 Interactive Codebase Sonification (Audio Feedback)
+- **Topological Audio Landscaping** — Leverages the browser's native Web Audio API to synthesize real-time ambient soundscapes mapped directly to codebase parameters as developers interact with the graph canvas.
+- **Dynamic Wave Synthesizers** — Small, clean files produce soft, high-frequency, harmonious sine waves; large, complex, or high-risk files trigger rich, lower-frequency sawtooth or triangle oscillator tones.
+- **Dissonant Cycle Alerts** — Code cycles (circular dependencies) trigger distinct dissonant musical intervals (e.g. tritones) to signal structural flaws auditorily.
+- **Trace Path Arpeggios** — Simulating call traces plays a sequence of arpeggiated notes where execution speeds map directly to tempo, helping developers "hear" performance bottlenecks.
+- **Settings Console Controls** — Includes master volume adjustment slider (0% to 100%), test chime trigger, and quick mute switches.
+
+### 🛡️ Visual AppSec & Dependency CVE Vulnerability Map
+- **Static Security Auditing** — Scans package manifest and configuration files (`package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`) for vulnerable third-party dependencies against a database of CVE security advisories.
+- **2D/3D Canvas Alerts** — Vulnerable nodes pulsate with bright neon red highlights (`rgba(239, 68, 68, 0.4)`) and feature vector red shield badges on both 2D SVG and 3D Canvas visualizations.
+- **Remediation Profile HUD** — Selecting a compromised package node in the Inspector sidebar loads its CVE severity, vulnerability descriptions, local import locations, and the exact console command needed to upgrade/patch the library.
+- **Security KPI Chip** — Integrates a persistent "Vulnerabilities" chip in the sticky ribbon bar with an interactive dropdown displaying all detected advisories.
 
 ---
 
@@ -837,6 +852,53 @@ To produce clean, production-ready Database Schema exports, CodeGraph features a
 - **Computed CSS Inlining (`inlineDbSchemaStyles`)**: Recursively scans and maps CSS variables (`--color-primary`, `--bg-card`, etc.) to inline inline styling attributes on SVGs and `foreignObject` DOM nodes.
 - **Standardized Font & Scrollbar Overrides**: Injects a global `<style>` tag into the exported SVG to enforce standard typography (`Inter`, `monospace`) and hide browser scrollbar elements (`scrollbar-width: none`), guaranteeing identical rendering across independent vector viewers.
 - **Synchronous Layout Settling**: Runs `250` simulation ticks synchronously before export to settle and separate cards, completely preventing overlapping database table blocks.
+
+---
+
+<a id="interactive-codebase-sonification"></a>
+### 26. Interactive Codebase Sonification
+
+**Files:** `src/utils/audioSonifier.ts` and `src/components/GraphCanvas.tsx`
+
+Maps the topological properties of the codebase structure into a dynamic auditory landscape, using low-latency Web Audio API synthesizers to guide developer exploration:
+- **Audio Context Management**: Dynamically initializes and resumes a shared browser `AudioContext` only after user interaction to satisfy browser security policies.
+- **Polyphonic Synthesizer Engine**:
+  - **Oscillators**: Utilizes native `OscillatorNode` elements with custom waveforms (sine waves for clean files; triangle/sawtooth waves combined with a `BiquadFilterNode` low-pass filter for complex or high-risk files).
+  - **Frequency Mapping**: Maps file line counts logarithmically to frequency ranges ($220\text{Hz}$ to $880\text{Hz}$), translating larger files to lower, heavier pitches.
+  - **Panning**: Uses `StereoPannerNode` to dynamically pan sounds from left to right based on the node's horizontal coordinate on the 2D/3D canvas.
+- **Structural Feedback Rules**:
+  - **Circular Dependency Alerts**: Triggers a two-tone dissonant tritone interval (e.g., $C$ and $F\#$) to auditorily flag files participating in import loops.
+  - **Arpeggiated Trace Playback**: Simulating execution traces triggers a sequence of envelope-shaped synthesizer notes with tempos mapping to transaction speeds.
+- **UI Integration & State Settings**:
+  - **Master Gain node**: Connects all sound sources to a single master volume gain control.
+  - **Settings Dashboard controls**: Slider control mapping master gain levels from `0` to `1` with state persistent storage in `localStorage.audio_volume` and `localStorage.audio_enabled`.
+  - **Test Chime trigger**: Includes a button to synthesize a clean, decaying chord to preview active audio parameters.
+
+---
+
+<a id="visual-appsec--dependency-cve-vulnerability-map"></a>
+### 27. Visual AppSec & Dependency CVE Vulnerability Map
+
+**Files:** `src/utils/cveScanner.ts`, `src/components/Inspector.tsx`, `src/components/KpiRibbon.tsx`, and `src/components/GraphCanvas.tsx`
+
+Integrates a static package audit pipeline directly into the visualization canvas to identify and help patch vulnerable third-party dependencies:
+- **Static Manifest Parser**:
+  - Automatically identifies dependency management configuration files: `package.json` (NPM), `requirements.txt` (Python/Pip), `Cargo.toml` (Rust/Cargo), and `go.mod` (Go).
+  - Extracts package names and declared semantic version strings using custom parser functions.
+- **Local Advisory Database**:
+  - Evaluates extracted package coordinates against an in-memory database of security advisories (matching name, ecosystem, and semver vulnerability boundaries).
+- **Interactive D3 Visual overlays**:
+  - **2D SVG Mode**: Vulnerable package nodes are appended with a custom vector polygon shield icon badge (`polygon points="0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6"`) filled with neon red overlays and trigger custom `@keyframes pulse-vulnerable` CSS filters.
+  - **3D Canvas Mode**: Computes three-dimensional vector coordinates to overlay red glowing outer halos and projection-adjusted shield icons next to target nodes.
+- **Advisory Remediation Inspector**:
+  - Selecting a vulnerable node dynamically loads security profiles detailing:
+    - **Advisory CVE ID** (e.g. CVE-2023-45853, CVE-2024-22871).
+    - **Description and Severity level** (Low, Moderate, High, Critical).
+    - **Remediation commands** (e.g. `npm install package@version` or `pip install --upgrade package`).
+    - **Import References**: A listing of all local codebase source files that import the vulnerable dependency.
+- **Metric Telemetry Sync**:
+  - Integrates a dedicated red **Vulnerabilities** chip to the sticky KPI ribbon bar.
+  - Clicking the chip displays a list of all detected CVE items. Selecting any list item focuses and highlights the corresponding package node in the workspace.
 
 ---
 
