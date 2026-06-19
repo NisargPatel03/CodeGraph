@@ -630,22 +630,86 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
 
       // Inject style block
       const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      styleEl.textContent = cssVariables + '\n' + getCanvasStyles();
+      const extraStyles = `
+/* Hide scrollbars in exported SVG foreignObjects */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+/* Explicit font fallbacks for exported SVG foreignObjects */
+body, div, span, label, p {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+code, pre, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+}
+`;
+      styleEl.textContent = cssVariables + '\n' + getCanvasStyles() + '\n' + extraStyles;
       svgClone.insertBefore(styleEl, svgClone.firstChild);
 
-      // Set dimensions
-      const width = svgEl.clientWidth || 800;
-      const height = svgEl.clientHeight || 600;
-      svgClone.setAttribute('width', String(width));
-      svgClone.setAttribute('height', String(height));
-      if (!svgClone.getAttribute('viewBox')) {
-        svgClone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      // Set dimensions by calculating bounding box to fit all content without clipping
+      const mainGroupEl = svgEl.querySelector('.main-container') as SVGGraphicsElement;
+      let hasBBoxSet = false;
+      let width = svgEl.clientWidth || 800;
+      let height = svgEl.clientHeight || 600;
+
+      if (mainGroupEl) {
+        try {
+          const bbox = mainGroupEl.getBBox();
+          if (bbox.width > 0 && bbox.height > 0) {
+            const padding = 60; // 60px padding for safety
+            const exportWidth = bbox.width + padding * 2;
+            const exportHeight = bbox.height + padding * 2;
+
+            width = exportWidth;
+            height = exportHeight;
+
+            svgClone.setAttribute('width', String(exportWidth));
+            svgClone.setAttribute('height', String(exportHeight));
+            svgClone.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${exportWidth} ${exportHeight}`);
+
+            const cloneMainGroup = svgClone.querySelector('.main-container');
+            if (cloneMainGroup) {
+              cloneMainGroup.removeAttribute('transform');
+            }
+            hasBBoxSet = true;
+          }
+        } catch (e) {
+          console.error('Failed to get BBox for export:', e);
+        }
       }
 
-      // Insert solid background behind everything
+      if (!hasBBoxSet) {
+        svgClone.setAttribute('width', String(width));
+        svgClone.setAttribute('height', String(height));
+        if (!svgClone.getAttribute('viewBox')) {
+          svgClone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        }
+      }
+
+      // Insert solid background behind everything, ensuring it spans the full viewBox
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      bgRect.setAttribute('width', '100%');
-      bgRect.setAttribute('height', '100%');
+      const viewBoxStr = svgClone.getAttribute('viewBox');
+      if (viewBoxStr) {
+        const parts = viewBoxStr.split(/\s+/).map(Number);
+        if (parts.length === 4 && !parts.some(isNaN)) {
+          bgRect.setAttribute('x', String(parts[0]));
+          bgRect.setAttribute('y', String(parts[1]));
+          bgRect.setAttribute('width', String(parts[2]));
+          bgRect.setAttribute('height', String(parts[3]));
+        } else {
+          bgRect.setAttribute('width', '100%');
+          bgRect.setAttribute('height', '100%');
+        }
+      } else {
+        bgRect.setAttribute('width', '100%');
+        bgRect.setAttribute('height', '100%');
+      }
       bgRect.setAttribute('fill', computedStyle.getPropertyValue('--bg-main').trim() || '#060913');
       if (svgClone.firstChild) {
         svgClone.insertBefore(bgRect, svgClone.firstChild.nextSibling);
@@ -1972,7 +2036,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
           name: table.id,
           sourceFile: table.sourceFile,
           fields: table.fields,
-          width: 220,
+          width: 260,
           height: cardHeight,
           x: cached ? cached.x : undefined,
           y: cached ? cached.y : undefined
@@ -2199,13 +2263,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
         return 100;
       }))
       .force('charge', d3.forceManyBody().strength(() => {
-        if (viewMode === 'dbSchema') return showApiDbMapping ? -800 : -600;
+        if (viewMode === 'dbSchema') return showApiDbMapping ? -400 : -300;
         if (viewMode === 'cluster') return -120;
         if (viewMode === 'hierarchy') return -160;
         return -220;
       }))
       .force('collision', d3.forceCollide<any>().radius((d) => {
-        if (viewMode === 'dbSchema') return Math.max(d.width || 220, d.height || 150) / 2 + 40;
+        if (viewMode === 'dbSchema') return Math.max(d.width || 260, d.height || 150) / 2 + 40;
         if (d.isFolder) return 24;
         if (viewMode === 'call') return 12 + Math.min(d.callCount * 1.5, 20);
         if (viewMode === 'dependency') {
@@ -2217,11 +2281,16 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       }).strength(nodes.length > 300 ? 0.45 : 0.7))
       .force('center', d3.forceCenter(0, 0));
 
-    if (viewMode === 'dbSchema' && showApiDbMapping) {
-      simulation.force('x', d3.forceX().x((d: any) => {
-        return d.nodeType === 'api' ? -350 : 250;
-      }).strength(1.2));
-      simulation.force('y', d3.forceY().y(0).strength(0.08));
+    if (viewMode === 'dbSchema') {
+      if (showApiDbMapping) {
+        simulation.force('x', d3.forceX().x((d: any) => {
+          return d.nodeType === 'api' ? -350 : 250;
+        }).strength(1.2));
+        simulation.force('y', d3.forceY().y(0).strength(0.1));
+      } else {
+        simulation.force('x', d3.forceX().x(0).strength(0.1));
+        simulation.force('y', d3.forceY().y(0).strength(0.1));
+      }
     }
 
     if (viewMode === 'hierarchy') {
@@ -3056,11 +3125,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
     };
 
     // Warm up the simulation synchronously to avoid browser tab freezing
-    // during the initial chaotic settling phase on larger graphs.
+    // during the initial chaotic settling phase on larger graphs, or to fully
+    // stabilize the layout immediately for diagram exporting in DB Schema.
     const nodeCount = nodes.length;
-    if (nodeCount > 100) {
+    if (nodeCount > 100 || viewMode === 'dbSchema') {
       simulation.stop();
-      const warmupTicks = Math.min(180, Math.max(100, Math.floor(nodeCount / 3.5)));
+      const warmupTicks = viewMode === 'dbSchema' ? 250 : Math.min(180, Math.max(100, Math.floor(nodeCount / 3.5)));
       for (let i = 0; i < warmupTicks; ++i) {
         simulation.tick();
       }
@@ -4420,42 +4490,24 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
                     {isAuditingDb ? 'Auditing Schema...' : 'Audit Database Design'}
                   </button>
 
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                    <button
-                      className="cyber-button secondary"
-                      onClick={() => exportGraph('svg')}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        fontSize: '0.7rem',
-                        padding: '6px 10px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Download size={12} />
-                      Export SVG
-                    </button>
-                    <button
-                      className="cyber-button secondary"
-                      onClick={() => exportGraph('png')}
-                      style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        fontSize: '0.7rem',
-                        padding: '6px 10px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Download size={12} />
-                      Export PNG
-                    </button>
-                  </div>
+                  <button
+                    className="cyber-button secondary"
+                    onClick={() => exportGraph('svg')}
+                    style={{
+                      width: '100%',
+                      marginTop: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      fontSize: '0.75rem',
+                      padding: '8px 12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Download size={13} />
+                    Export ER Diagram (SVG)
+                  </button>
 
                   <div className="toolbox-divider" style={{ borderTop: '1px solid var(--panel-border)', margin: '8px 0' }}></div>
                   
@@ -4818,38 +4870,40 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
               >
                 <span>🖼️ Download SVG</span>
               </button>
-              <button
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '0.7rem',
-                  fontWeight: 500,
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--text-secondary)';
-                }}
-                onClick={() => {
-                  setIsExportDropdownOpen(false);
-                  exportGraph('png');
-                }}
-              >
-                <span>🖼️ Download PNG</span>
-              </button>
+              {viewMode !== 'dbSchema' && (
+                <button
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                  onClick={() => {
+                    setIsExportDropdownOpen(false);
+                    exportGraph('png');
+                  }}
+                >
+                  <span>🖼️ Download PNG</span>
+                </button>
+              )}
               <button
                 style={{
                   display: 'flex',
