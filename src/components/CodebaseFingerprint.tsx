@@ -279,12 +279,12 @@ export const CodebaseFingerprint: React.FC<CodebaseFingerprintProps> = ({
       ctx.arc(cx, cy, innerRadius - 5, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'var(--text-muted)';
+      ctx.fillStyle = '#8b9bb4';
       ctx.font = '600 8px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('FILES', cx, cy - 4);
       
-      ctx.fillStyle = 'var(--text-primary)';
+      ctx.fillStyle = '#ffffff';
       ctx.font = '700 13px system-ui, sans-serif';
       ctx.fillText(String(totalFiles), cx, cy + 8);
 
