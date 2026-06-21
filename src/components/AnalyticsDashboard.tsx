@@ -3131,17 +3131,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   Copy Script
                 </button>
               </div>
-              <pre style={{
-                background: 'rgba(0,0,0,0.3)',
-                padding: '12px 16px',
-                borderRadius: '6px',
-                border: '1px solid var(--panel-border)',
-                fontFamily: 'monospace',
-                fontSize: '0.75rem',
-                color: 'var(--color-secondary)',
-                overflowX: 'auto',
-                margin: 0
-              }}>
+              <pre className="remediation-pre">
                 {remediationScript}
               </pre>
             </div>
