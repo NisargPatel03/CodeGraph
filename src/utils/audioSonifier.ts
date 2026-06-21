@@ -337,6 +337,107 @@ class AudioSonifier {
       gain.disconnect();
     }, 500);
   }
+
+  public playJoin() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+
+    const t = this.ctx.currentTime;
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc1.type = 'sine';
+    osc2.type = 'triangle';
+
+    // Digital ascending arpeggio: C5 (523.25) -> G5 (783.99) -> C6 (1046.50)
+    osc1.frequency.setValueAtTime(523.25, t);
+    osc1.frequency.setValueAtTime(783.99, t + 0.08);
+    osc1.frequency.setValueAtTime(1046.50, t + 0.16);
+
+    osc2.frequency.setValueAtTime(261.63, t); // low warm support note
+
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.setValueAtTime(0.12, t + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + 0.4);
+    osc2.stop(t + 0.4);
+
+    setTimeout(() => {
+      osc1.disconnect();
+      osc2.disconnect();
+      gain.disconnect();
+    }, 500);
+  }
+
+  public playLeave() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    // Descending slide: C5 (523.25) down to C4 (261.63)
+    osc.frequency.setValueAtTime(523.25, t);
+    osc.frequency.exponentialRampToValueAtTime(261.63, t + 0.3);
+
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.4);
+
+    setTimeout(() => {
+      osc.disconnect();
+      gain.disconnect();
+    }, 500);
+  }
+
+  public playCollaboratorSelect() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    // High soft ping: E6 (1318.51)
+    osc.frequency.setValueAtTime(1318.51, t);
+    
+    gain.gain.setValueAtTime(0.06, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.2);
+
+    setTimeout(() => {
+      osc.disconnect();
+      gain.disconnect();
+    }, 300);
+  }
 }
 
 export const audioSonifier = new AudioSonifier();
+

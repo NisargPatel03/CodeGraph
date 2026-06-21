@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2, Activity, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Search, Folder, File, ChevronRight, ChevronDown, Sparkles, Key, X, Download, Share2, Activity, HelpCircle, Users } from 'lucide-react';
 import JSZip from 'jszip';
 import type { ParsedFile } from './utils/repoParser';
 import { fetchGitHubRepo } from './utils/repoParser';
@@ -18,6 +18,7 @@ import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { OnboardingTour } from './components/OnboardingTour';
 import logoImg from './assets/logo.png';
 import { audioSonifier } from './utils/audioSonifier';
+import { CollabManager, type Collaborator, type ActivityLogEntry } from './utils/collabManager';
 import { 
   semanticSearchCodebase, 
   lintCodebaseRules, 
@@ -111,6 +112,117 @@ export default function App() {
   const [isExplainingFolder, setIsExplainingFolder] = useState(false);
   const [folderExplainReport, setFolderExplainReport] = useState<string | null>(null);
   const [explainingFolderName, setExplainingFolderName] = useState<string | null>(null);
+
+  // --- Collaboration States & Handlers ---
+  const [collabRoomId, setCollabRoomId] = useState<string | null>(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    return queryParams.get('collab');
+  });
+  const [collabPeers, setCollabPeers] = useState<Map<string, Collaborator>>(new Map());
+  const [collabActivityLog, setCollabActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [isCollabSimulating, setIsCollabSimulating] = useState(false);
+  const [showCollabLogs, setShowCollabLogs] = useState(false);
+
+  const repoDataRef = useRef(repoData);
+  useEffect(() => {
+    repoDataRef.current = repoData;
+  }, [repoData]);
+
+  const handleLoadRepoByName = async (repoName: string) => {
+    setIsLoadingRepo(true);
+    setRepoLoadError(null);
+    try {
+      if (repoName === 'CodeGraph-Demo-Project' || repoName === 'demo') {
+        setRepoData({
+          files: GET_DEMO_FILES(),
+          repoName: 'CodeGraph-Demo-Project'
+        });
+      } else {
+        const token = localStorage.getItem('gh_token') || '';
+        const result = await fetchGitHubRepo(repoName, token);
+        handleDataLoaded(result);
+      }
+    } catch (err: any) {
+      console.error('Failed to auto-load shared repository:', err);
+      setRepoLoadError(err.message || 'Failed to auto-load shared repository.');
+    } finally {
+      setIsLoadingRepo(false);
+    }
+  };
+
+  const collabManager = useMemo(() => {
+    return new CollabManager({
+      onPeersChange: (newPeers) => {
+        setCollabPeers(newPeers);
+      },
+      onActivityLog: (entry) => {
+        setCollabActivityLog(prev => [entry, ...prev].slice(0, 100));
+      },
+      onRemoteViewModeChange: (remoteView) => {
+        setViewMode(remoteView as any);
+      },
+      onRemoteTraceTrigger: (remoteNodeId) => {
+        setActiveTraceNodeId(remoteNodeId);
+      },
+      onRemoteRepoSync: (remoteRepoName) => {
+        const currentRepo = repoDataRef.current;
+        if (!currentRepo || currentRepo.repoName !== remoteRepoName) {
+          handleLoadRepoByName(remoteRepoName);
+        }
+      },
+      onPeerJoinedNeedSync: () => {
+        const currentRepo = repoDataRef.current;
+        if (currentRepo) {
+          collabManager.sendRepoSync(currentRepo.repoName);
+        }
+      }
+    });
+  }, []);
+
+  const toggleCollabSimulation = () => {
+    if (isCollabSimulating) {
+      collabManager.stopSimulation();
+      setIsCollabSimulating(false);
+    } else {
+      if (graphData && graphData.nodes) {
+        collabManager.startSimulation(graphData.nodes);
+        setIsCollabSimulating(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (collabRoomId) {
+      collabManager.joinRoom(collabRoomId);
+    } else {
+      collabManager.leaveRoom();
+    }
+    return () => {
+      collabManager.leaveRoom();
+    };
+  }, [collabRoomId, collabManager]);
+
+  // Sync simulation nodes list if graphData loads after simulation started
+  useEffect(() => {
+    if (isCollabSimulating && graphData && graphData.nodes) {
+      collabManager.startSimulation(graphData.nodes);
+    }
+  }, [graphData, isCollabSimulating, collabManager]);
+
+  // Sync selections and views
+  useEffect(() => {
+    collabManager.sendNodeSelect(selectedNodeId);
+  }, [selectedNodeId, collabManager]);
+
+  useEffect(() => {
+    collabManager.sendViewModeChange(viewMode);
+  }, [viewMode, collabManager]);
+
+  useEffect(() => {
+    if (activeTraceNodeId) {
+      collabManager.sendTraceTrigger(activeTraceNodeId);
+    }
+  }, [activeTraceNodeId, collabManager]);
 
   // AI Architectural Linter States
   const [linterViolations, setLinterViolations] = useState<import('./utils/aiHelper').LinterViolation | null>(null);
@@ -326,6 +438,11 @@ export default function App() {
       }
       
       queryParams.set('theme', theme);
+      if (collabRoomId) {
+        queryParams.set('collab', collabRoomId);
+      } else {
+        queryParams.delete('collab');
+      }
     } else {
       queryParams.delete('repo');
       queryParams.delete('view');
@@ -333,6 +450,11 @@ export default function App() {
       queryParams.delete('search');
       queryParams.delete('trace');
       queryParams.delete('depth');
+      if (collabRoomId) {
+        queryParams.set('collab', collabRoomId);
+      } else {
+        queryParams.delete('collab');
+      }
       if (theme !== 'cyberpunk') {
         queryParams.set('theme', theme);
       } else {
@@ -345,7 +467,7 @@ export default function App() {
       : window.location.pathname;
 
     window.history.replaceState(null, '', newUrl);
-  }, [repoData, viewMode, selectedNodeId, searchQuery, activeTraceNodeId, depthFilter, theme, isLoadingRepo]);
+  }, [repoData, viewMode, selectedNodeId, searchQuery, activeTraceNodeId, depthFilter, theme, isLoadingRepo, collabRoomId]);
 
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -890,6 +1012,183 @@ export default function App() {
             </>
           )}
 
+          {/* Collaboration HUD */}
+          <div className="collab-hud-wrapper" style={{ position: 'relative' }}>
+            <div 
+              className="collab-hud-container" 
+              onClick={() => setShowCollabLogs(!showCollabLogs)}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              {/* Status Dot */}
+              <div className={`collab-status-indicator ${isCollabSimulating ? 'simulating' : (collabRoomId && collabManager.getIsConnected() ? 'online' : 'offline')}`} />
+              
+              {/* Room label / invite code */}
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {collabRoomId ? (
+                  <>Live Room: <span className="mono" style={{ color: 'var(--color-primary)' }}>{collabRoomId}</span></>
+                ) : (
+                  "Go Collaborative"
+                )}
+              </span>
+
+              {/* Avatar stack */}
+              {collabPeers.size > 0 && (
+                <div className="collab-avatar-stack">
+                  {Array.from(collabPeers.values()).map((peer) => (
+                    <div 
+                      key={peer.clientId} 
+                      className="collab-avatar-item" 
+                      style={{ backgroundColor: peer.color }}
+                    >
+                      {peer.username.substring(0, 2)}
+                      <div className="collab-avatar-tooltip">
+                        {peer.username} ({peer.viewMode || 'exploring'})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Collaboration Control & Log Dropdown */}
+            {showCollabLogs && (
+              <div className="collab-activity-dropdown">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '10px', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={15} className="text-primary" />
+                    Live Collaboration
+                  </h3>
+                  <button 
+                    onClick={() => setShowCollabLogs(false)} 
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {/* Room Actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="text" 
+                      placeholder="Enter Room ID..."
+                      defaultValue={collabRoomId || ''}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val) setCollabRoomId(val);
+                          else setCollabRoomId(null);
+                        }
+                      }}
+                      style={{ 
+                        flex: 1, 
+                        background: 'var(--input-bg)', 
+                        border: '1px solid var(--panel-border)', 
+                        borderRadius: '6px', 
+                        padding: '6px 10px', 
+                        fontSize: '0.72rem', 
+                        color: 'var(--text-primary)',
+                        outline: 'none'
+                      }}
+                    />
+                    <button 
+                      className="cyber-button"
+                      style={{ padding: '6px 12px', fontSize: '0.7rem' }}
+                      onClick={(e) => {
+                        const input = (e.target as HTMLElement).previousSibling as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val) setCollabRoomId(val);
+                        else setCollabRoomId(null);
+                      }}
+                    >
+                      {collabRoomId ? 'Switch' : 'Join'}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
+                    {!collabRoomId && (
+                      <button 
+                        className="cyber-button secondary"
+                        style={{ flex: 1, padding: '6px', fontSize: '0.7rem' }}
+                        onClick={() => {
+                          const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                          setCollabRoomId(newRoomId);
+                        }}
+                      >
+                        Generate Room
+                      </button>
+                    )}
+                    
+                    {collabRoomId && (
+                      <button 
+                        className="cyber-button secondary"
+                        style={{ flex: 1, padding: '6px', fontSize: '0.7rem', color: '#fca5a5' }}
+                        onClick={() => setCollabRoomId(null)}
+                      >
+                        Leave Room
+                      </button>
+                    )}
+
+                    <button 
+                      className={`cyber-button ${isCollabSimulating ? 'warning' : 'secondary'}`}
+                      style={{ flex: 1, padding: '6px', fontSize: '0.7rem', opacity: graphData ? 1 : 0.5 }}
+                      onClick={toggleCollabSimulation}
+                      disabled={!graphData}
+                      title={!graphData ? "Load a workspace first to run simulation" : ""}
+                    >
+                      {isCollabSimulating ? 'Stop Simulation' : 'Run Simulation'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Logs Section */}
+                <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '10px' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Activity Log</span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{collabPeers.size} peer(s)</span>
+                  </div>
+
+                  <div style={{ 
+                    maxHeight: '180px', 
+                    overflowY: 'auto', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '6px',
+                    paddingRight: '4px'
+                  }}>
+                    {collabActivityLog.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.68rem', padding: '20px 0' }}>
+                        No collaborative actions logged yet.
+                      </div>
+                    ) : (
+                      collabActivityLog.map((log) => (
+                        <div 
+                          key={log.id} 
+                          style={{ 
+                            fontSize: '0.68rem', 
+                            padding: '5px 8px', 
+                            background: 'rgba(255,255,255,0.02)', 
+                            border: '1px solid rgba(255,255,255,0.03)',
+                            borderRadius: '4px',
+                            color: 'var(--text-secondary)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px'
+                          }}
+                        >
+                          <span style={{ color: 'var(--text-primary)' }}>{log.text}</span>
+                          <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>
+                            {log.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Theme Selector Bubbles */}
           <div className="theme-selector-group">
             {[
@@ -1324,6 +1623,8 @@ export default function App() {
                   onExplainFolder={handleRunFolderExplanation}
                   onRefineCallGraph={handleRefineCallGraph}
                   isRefiningCallGraph={isRefiningCallGraph}
+                  collabPeers={collabPeers}
+                  onLocalCursorMove={(x, y) => collabManager.sendCursorMove(x, y)}
                 />
               )}
             </section>

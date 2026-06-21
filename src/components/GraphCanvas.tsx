@@ -38,6 +38,8 @@ interface GraphCanvasProps {
   onExplainFolder?: (folderPath: string) => void;
   onRefineCallGraph?: () => void;
   isRefiningCallGraph?: boolean;
+  collabPeers?: Map<string, any>;
+  onLocalCursorMove?: (x: number | null, y: number | null) => void;
 }
 
 let mermaidInitialized = false;
@@ -223,6 +225,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   onExplainFolder,
   onRefineCallGraph,
   isRefiningCallGraph,
+  collabPeers,
+  onLocalCursorMove,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2281,6 +2285,21 @@ code, pre, .mono {
     svgElement.call(zoomBehavior.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
     applyLevelOfDetail(0.8);
 
+    svgElement.on('mousemove', (event) => {
+      if (onLocalCursorMove && mainGroup.node()) {
+        const [mx, my] = d3.pointer(event, mainGroup.node());
+        if (!isNaN(mx) && !isNaN(my)) {
+          onLocalCursorMove(mx, my);
+        }
+      }
+    });
+
+    svgElement.on('mouseleave', () => {
+      if (onLocalCursorMove) {
+        onLocalCursorMove(null, null);
+      }
+    });
+
     const simulation = d3.forceSimulation<any>(nodes)
       .force('link', d3.forceLink<any, any>(links).id((d) => d.id).distance(() => {
         if (viewMode === 'dbSchema') return showApiDbMapping ? 320 : 240;
@@ -3194,6 +3213,203 @@ code, pre, .mono {
       simulation.stop();
     };
   }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath, showApiDbMapping]);
+
+  // --- Collaboration Presence and Cursor Rendering Hook ---
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svgElement = d3.select(svgRef.current);
+    const mainGroup = svgElement.select('.main-container');
+    if (mainGroup.empty()) return;
+
+    // Render / Update Cursors
+    let cursorsContainer = mainGroup.select('.cursors-container');
+    if (cursorsContainer.empty()) {
+      cursorsContainer = mainGroup.append('g').attr('class', 'cursors-container');
+    }
+
+    const peersArray = Array.from(collabPeers?.values() || []).filter(p => p.cursor);
+
+    const cursorSelection = cursorsContainer.selectAll('.presence-cursor')
+      .data(peersArray, (d: any) => d.clientId);
+
+    cursorSelection.exit().remove();
+
+    const cursorEnter = cursorSelection.enter()
+      .append('g')
+      .attr('class', 'presence-cursor');
+
+    // Laser cursor arrow
+    cursorEnter.append('path')
+      .attr('d', 'M0,0 L0,16 L4,12 L8,20 L11,19 L7,11 L14,11 Z')
+      .attr('fill', (d) => d.color)
+      .attr('stroke', '#ffffff')
+      .attr('stroke-width', 1.2)
+      .style('filter', 'drop-shadow(0 0 6px rgba(0,0,0,0.5))');
+
+    // Laser trail glowing dot
+    cursorEnter.append('circle')
+      .attr('cx', 0)
+      .attr('cy', 0)
+      .attr('r', 4)
+      .attr('fill', (d) => d.color)
+      .style('opacity', 0.6)
+      .style('filter', (d) => `blur(1px) drop-shadow(0 0 3px ${d.color})`);
+
+    const labelGroup = cursorEnter.append('g')
+      .attr('transform', 'translate(12, 18)');
+
+    labelGroup.append('rect')
+      .attr('rx', 4)
+      .attr('ry', 4)
+      .attr('fill', (d) => d.color)
+      .attr('stroke', 'rgba(255,255,255,0.15)')
+      .attr('stroke-width', 0.5)
+      .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))');
+
+    labelGroup.append('text')
+      .attr('fill', '#ffffff')
+      .attr('font-size', '9px')
+      .attr('font-weight', '600')
+      .attr('font-family', 'var(--font-sans)')
+      .style('pointer-events', 'none')
+      .text((d) => d.username);
+
+    // Auto-adjust rect size
+    labelGroup.each(function() {
+      const g = d3.select(this);
+      const textNode = g.select('text').node() as SVGTextElement;
+      if (textNode) {
+        const bbox = textNode.getBBox();
+        g.select('rect')
+          .attr('x', bbox.x - 5)
+          .attr('y', bbox.y - 2)
+          .attr('width', bbox.width + 10)
+          .attr('height', bbox.height + 4);
+      }
+    });
+
+    const cursorMerge = cursorSelection.merge(cursorEnter as any);
+    cursorMerge
+      .transition()
+      .duration(45)
+      .ease(d3.easeLinear)
+      .attr('transform', (d) => `translate(${d.cursor?.x || 0}, ${d.cursor?.y || 0})`);
+
+  }, [collabPeers]);
+
+  // --- Collaboration Selection Halo Rendering Hook ---
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svgElement = d3.select(svgRef.current);
+    
+    // Clear old halos
+    svgElement.selectAll('.collab-halo').remove();
+
+    if (!collabPeers) return;
+
+    collabPeers.forEach((peer) => {
+      if (!peer.selectedNodeId) return;
+
+      const nodeG = svgElement.selectAll('.node-element')
+        .filter((d: any) => d && d.id === peer.selectedNodeId);
+
+      if (nodeG.empty()) return;
+
+      const halo = nodeG.append('g')
+        .attr('class', 'collab-halo')
+        .style('pointer-events', 'none');
+
+      if (viewMode === 'dbSchema') {
+        // Table Card Halo
+        halo.append('rect')
+          .attr('x', (d: any) => -d.width / 2 - 4)
+          .attr('y', (d: any) => -d.height / 2 - 4)
+          .attr('width', (d: any) => d.width + 8)
+          .attr('height', (d: any) => d.height + 8)
+          .attr('rx', 8)
+          .attr('ry', 8)
+          .attr('fill', 'none')
+          .attr('stroke', peer.color)
+          .attr('stroke-width', 2.5)
+          .style('filter', `drop-shadow(0 0 8px ${peer.color})`)
+          .style('animation', 'cardGlow 1.8s infinite alternate ease-in-out');
+
+        const badge = halo.append('g')
+          .attr('transform', (d: any) => `translate(${d.width / 2 - 80}, ${-d.height / 2 - 10})`);
+
+        badge.append('rect')
+          .attr('rx', 3)
+          .attr('ry', 3)
+          .attr('width', 80)
+          .attr('height', 14)
+          .attr('fill', peer.color);
+
+        badge.append('text')
+          .attr('x', 40)
+          .attr('y', 10)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#ffffff')
+          .attr('font-size', '8px')
+          .attr('font-weight', 'bold')
+          .text(peer.username.split('-')[0]);
+      } else {
+        // Standard Circle Node Halo
+        halo.append('circle')
+          .attr('r', (d: any) => {
+            let baseRadius = 10;
+            if (d.isFolder) baseRadius = 24;
+            else if (viewMode === 'call') baseRadius = 12 + Math.min(d.callCount * 1.5, 20);
+            else if (viewMode === 'dependency') {
+              const inDeg = (d.id && d3.select(svgRef.current).selectAll('.link-element').filter((l: any) => (typeof l.target === 'object' ? l.target.id : l.target) === d.id).size()) || 0;
+              baseRadius = 12 + Math.min(inDeg * 2.0, 24);
+            }
+            return baseRadius + 10;
+          })
+          .attr('fill', 'none')
+          .attr('stroke', peer.color)
+          .attr('stroke-width', 2.5)
+          .style('opacity', 0.8)
+          .style('animation', 'nodePulse 1.8s infinite ease-in-out');
+
+        halo.append('circle')
+          .attr('r', (d: any) => {
+            let baseRadius = 10;
+            if (d.isFolder) baseRadius = 24;
+            else if (viewMode === 'call') baseRadius = 12 + Math.min(d.callCount * 1.5, 20);
+            return baseRadius + 6;
+          })
+          .attr('fill', 'none')
+          .attr('stroke', peer.color)
+          .attr('stroke-width', 1.5)
+          .style('opacity', 0.9);
+
+        const badge = halo.append('g')
+          .attr('transform', (d: any) => {
+            let yOffset = -22;
+            if (d.isFolder) yOffset = -36;
+            return `translate(0, ${yOffset})`;
+          });
+
+        badge.append('rect')
+          .attr('rx', 3)
+          .attr('ry', 3)
+          .attr('x', -35)
+          .attr('y', -8)
+          .attr('width', 70)
+          .attr('height', 14)
+          .attr('fill', peer.color);
+
+        badge.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#ffffff')
+          .attr('font-size', '8px')
+          .attr('font-weight', 'bold')
+          .attr('y', 2)
+          .text(`${peer.username.split('-')[0]}`);
+      }
+    });
+  }, [collabPeers, viewMode]);
+
   useEffect(() => {
     if (!svgRef.current) return;
     if (viewMode === 'dbSchema' && !showApiDbMapping) return;
