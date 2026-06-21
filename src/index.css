@@ -156,7 +156,7 @@ code, pre {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* --- Repo Selector Landing Screen --- */
@@ -1135,18 +1135,18 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
 .theme-selector-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--panel-border);
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 20px;
-  margin-left: 12px;
+  margin-left: 6px;
   flex-shrink: 0;
 }
 
 .theme-bubble {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;

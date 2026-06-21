@@ -990,21 +990,21 @@ export default function App() {
         <div className="header-actions">
           {repoData && (
             <>
-              <button className="cyber-button" style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={handleDownloadZip}>
+              <button className="cyber-button" style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={handleDownloadZip}>
                 <Download size={14} />
                 Export ZIP
               </button>
               <button 
                 className="cyber-button secondary" 
-                style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} 
+                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} 
                 onClick={handleCopyShareLink}
                 title="Copy shareable link with current view state"
               >
                 <Share2 size={14} />
                 Share View
               </button>
-              <button className="cyber-button secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }} onClick={handleResetRepo}>
-                <ArrowLeft size={14} style={{ marginRight: '6px' }} />
+              <button className="cyber-button secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={handleResetRepo}>
+                <ArrowLeft size={14} style={{ marginRight: '4px' }} />
                 Reset Workspace
               </button>
             </>
@@ -1218,7 +1218,7 @@ export default function App() {
               color: 'var(--text-secondary)',
               transition: 'var(--transition-smooth)',
               borderLeft: '1px solid var(--panel-border)',
-              paddingLeft: '12px',
+              paddingLeft: '8px',
               paddingRight: '4px',
               userSelect: 'none',
               whiteSpace: 'nowrap',
@@ -1227,7 +1227,7 @@ export default function App() {
             title="Start Onboarding Tour"
             className="tour-trigger-btn"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--color-primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--color-primary)' }}>
               <Sparkles size={14} />
               <span>Quick Tour</span>
             </div>
@@ -1244,7 +1244,7 @@ export default function App() {
               color: 'var(--text-secondary)',
               transition: 'var(--transition-smooth)',
               borderLeft: '1px solid var(--panel-border)',
-              paddingLeft: '12px',
+              paddingLeft: '8px',
               paddingRight: '4px',
               userSelect: 'none',
               whiteSpace: 'nowrap',
@@ -1253,7 +1253,7 @@ export default function App() {
             title="Keyboard Shortcuts Reference (?)"
             className="help-indicator-btn"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}>
               <HelpCircle size={14} />
               <span>Shortcuts</span>
             </div>
@@ -1265,9 +1265,9 @@ export default function App() {
             style={{ 
               display: 'flex', 
               alignItems: 'center', 
-              gap: '8px', 
+              gap: '6px', 
               borderLeft: '1px solid var(--panel-border)', 
-              paddingLeft: '12px',
+              paddingLeft: '8px',
               cursor: 'pointer',
               userSelect: 'none',
               whiteSpace: 'nowrap',
@@ -1276,7 +1276,7 @@ export default function App() {
             title="Configure Gemini API Key Settings"
             className="api-indicator-btn"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: apiKey ? 'var(--color-secondary)' : '#f59e0b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: apiKey ? 'var(--color-secondary)' : '#f59e0b' }}>
               <Key size={14} style={{ color: apiKey ? 'var(--color-secondary)' : '#f59e0b' }} />
               <span style={{ fontWeight: 500 }}>{apiKey ? 'AI Key Verified' : 'AI Offline Mode'}</span>
             </div>
