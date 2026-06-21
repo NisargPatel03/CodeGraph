@@ -221,7 +221,7 @@ export class CollabManager {
 
   private handleMessage(msg: any) {
     const senderId = msg.clientId;
-    if (!senderId || senderId === this.clientId) return;
+    if (msg.type !== 'room_peers' && (!senderId || senderId === this.clientId)) return;
 
     switch (msg.type) {
       case 'room_peers': {
