@@ -3222,7 +3222,7 @@ code, pre, .mono {
     if (mainGroup.empty()) return;
 
     // Render / Update Cursors
-    let cursorsContainer = mainGroup.select('.cursors-container');
+    let cursorsContainer: any = mainGroup.select('.cursors-container');
     if (cursorsContainer.empty()) {
       cursorsContainer = mainGroup.append('g').attr('class', 'cursors-container');
     }
@@ -3241,7 +3241,7 @@ code, pre, .mono {
     // Laser cursor arrow
     cursorEnter.append('path')
       .attr('d', 'M0,0 L0,16 L4,12 L8,20 L11,19 L7,11 L14,11 Z')
-      .attr('fill', (d) => d.color)
+      .attr('fill', (d: any) => d.color)
       .attr('stroke', '#ffffff')
       .attr('stroke-width', 1.2)
       .style('filter', 'drop-shadow(0 0 6px rgba(0,0,0,0.5))');
@@ -3251,9 +3251,9 @@ code, pre, .mono {
       .attr('cx', 0)
       .attr('cy', 0)
       .attr('r', 4)
-      .attr('fill', (d) => d.color)
+      .attr('fill', (d: any) => d.color)
       .style('opacity', 0.6)
-      .style('filter', (d) => `blur(1px) drop-shadow(0 0 3px ${d.color})`);
+      .style('filter', (d: any) => `blur(1px) drop-shadow(0 0 3px ${d.color})`);
 
     const labelGroup = cursorEnter.append('g')
       .attr('transform', 'translate(12, 18)');
@@ -3261,7 +3261,7 @@ code, pre, .mono {
     labelGroup.append('rect')
       .attr('rx', 4)
       .attr('ry', 4)
-      .attr('fill', (d) => d.color)
+      .attr('fill', (d: any) => d.color)
       .attr('stroke', 'rgba(255,255,255,0.15)')
       .attr('stroke-width', 0.5)
       .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))');
@@ -3272,10 +3272,10 @@ code, pre, .mono {
       .attr('font-weight', '600')
       .attr('font-family', 'var(--font-sans)')
       .style('pointer-events', 'none')
-      .text((d) => d.username);
+      .text((d: any) => d.username);
 
     // Auto-adjust rect size
-    labelGroup.each(function() {
+    labelGroup.each(function(this: any) {
       const g = d3.select(this);
       const textNode = g.select('text').node() as SVGTextElement;
       if (textNode) {
@@ -3293,7 +3293,7 @@ code, pre, .mono {
       .transition()
       .duration(45)
       .ease(d3.easeLinear)
-      .attr('transform', (d) => `translate(${d.cursor?.x || 0}, ${d.cursor?.y || 0})`);
+      .attr('transform', (d: any) => `translate(${d.cursor?.x || 0}, ${d.cursor?.y || 0})`);
 
   }, [collabPeers]);
 
