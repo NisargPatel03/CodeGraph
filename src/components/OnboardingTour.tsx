@@ -303,17 +303,23 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
         .onboarding-card {
           width: 360px;
-          background: rgba(15, 23, 42, 0.85);
+          background: var(--panel-bg, rgba(15, 23, 42, 0.85));
           backdrop-filter: blur(16px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.1));
           border-top: 2px solid var(--color-secondary, #00f2fe);
-          box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.8),
+          box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5),
                       0 0 25px rgba(0, 242, 254, 0.08);
           border-radius: 12px;
           padding: 20px;
           color: var(--text-primary, #f3f4f6);
           transition: all 0.25s ease;
           animation: onboarding-card-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        [data-theme="arctic-light"] .onboarding-card {
+          background: rgba(255, 255, 255, 0.98);
+          border-color: rgba(15, 23, 42, 0.08);
+          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
         }
 
         @keyframes onboarding-card-in {
@@ -336,7 +342,8 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: rgba(255, 255, 255, 0.15);
+          background: var(--text-muted, rgba(255, 255, 255, 0.15));
+          opacity: 0.3;
           transition: all 0.2s;
         }
 
@@ -345,6 +352,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
           box-shadow: 0 0 8px var(--color-secondary, #00f2fe);
           width: 14px;
           border-radius: 4px;
+          opacity: 1;
         }
       `}</style>
 
