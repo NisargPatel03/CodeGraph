@@ -58,6 +58,7 @@
   - [Codebase "Fingerprint" Score Card](#codebase-fingerprint-score-card)
   - [README.md Auto-Generator](#readme-auto-generator)
   - [Interactive Onboarding Tour](#onboarding-tour)
+  - [WebSocket-Based Live Collaboration System](#live-collaboration)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -244,6 +245,12 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **2D/3D Canvas Alerts** — Vulnerable nodes pulsate with bright neon red highlights (`rgba(239, 68, 68, 0.4)`) and feature vector red shield badges on both 2D SVG and 3D Canvas visualizations.
 - **Remediation Profile HUD** — Selecting a compromised package node in the Inspector sidebar loads its CVE severity, vulnerability descriptions, local import locations, and the exact console command needed to upgrade/patch the library.
 - **Security KPI Chip** — Integrates a persistent "Vulnerabilities" chip in the sticky ribbon bar with an interactive dropdown displaying all detected advisories.
+
+### 🤝 Real-Time Collaboration Rooms (Live Collab)
+- **Active WebSocket Sync** — Generate unique room IDs or join an existing session to establish live peer-to-peer WebSocket rooms.
+- **State Synchronization** — Shares active mouse cursors, viewport pan/zoom transformations, active graph view mode tabs, file node selections, and function trace triggers in real-time.
+- **Selection Halos** — Broadcaster clicks render glowing user-themed selection rings around selected nodes in real-time, accompanied by spatial audio notifications.
+- **Developer Bots Simulator** — Spawns virtual developers moving in smooth orbit or Lissajous patterns and selecting random workspace modules to playtest features offline.
 
 ---
 
@@ -949,6 +956,19 @@ Provides a premium, step-by-step interactive guidance tour designed to help firs
 - **Auto-Ingestion Integration**: Automatically loads the demo sandbox codebase if a user starts the tour from the repository selector page, enabling immediate interactive graph exploration.
 - **Theme-Synchronized Tooltips**: Renders glassmorphic tooltip boxes containing descriptions, progress indicators, and keyboard shortcut triggers that match the active neon visual theme.
 - **Header Trigger Actions**: Includes a top-right header trigger button (`Quick Tour`) and a setup-screen launch card allowing users to replay or skip the walkthrough at any time.
+
+---
+
+<a id="live-collaboration"></a>
+### 31. WebSocket-Based Live Collaboration System
+
+**Files:** `src/utils/collabManager.ts`, `src/components/GraphCanvas.tsx`, and `src/App.tsx`
+
+Enables developers to connect, inspect, and trace execution flows concurrently in shared project workspaces:
+- **WebSocket Rooms Infrastructure:** Generates unique, 6-character room IDs (`collabManager.joinRoom(roomId)`) that clients use to establish concurrent WebSocket connections to a signaling server (`/collab?roomId=...`).
+- **Throttled State Synchronization:** Synchronizes mouse cursors, viewport pan/zoom transformations, active visualization tabs, node clicks, and function trace triggers. Mouse cursor updates are throttled to a maximum rate of 33 updates/second (30ms intervals) to optimize network bandwidth.
+- **Collaborative D3 Selection Halos:** Guest/host click selections broadcast node IDs to all peers. The D3 canvas translates these events to render glowing user-themed selection rings around selected nodes in real-time, coupled with spatial sound chimes.
+- **Developer Bots Simulation:** Features an offline room simulator that spawns virtual developers (e.g. `DevCyber-🚀`, `DevNeo-🧬`) moving in smooth orbit or Lissajous patterns and selecting random workspace modules, facilitating local playtesting and product demonstrations.
 
 ---
 
