@@ -1141,6 +1141,7 @@ body, .app-header, .sidebar-left, .center-panel, .inspector-panel, .reports-pane
   padding: 4px 10px;
   border-radius: 20px;
   margin-left: 12px;
+  flex-shrink: 0;
 }
 
 .theme-bubble {
@@ -3353,6 +3354,8 @@ input:checked + .slider:before {
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .collab-hud-container:hover {

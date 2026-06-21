@@ -979,15 +979,13 @@ export default function App() {
         <div className="logo-container">
           <img src={logoImg} alt="CodeGraph Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <h1 className="logo-text">CodeGraph</h1>
-          <span className="logo-badge">Beta v1.0</span>
+          {repoData && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.02)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--panel-border)', marginLeft: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Repository:</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-secondary)' }}>{repoData.repoName}</span>
+            </div>
+          )}
         </div>
-
-        {repoData && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.02)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--panel-border)' }}>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Repository:</span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-secondary)' }}>{repoData.repoName}</span>
-          </div>
-        )}
 
         <div className="header-actions">
           {repoData && (
@@ -1222,7 +1220,9 @@ export default function App() {
               borderLeft: '1px solid var(--panel-border)',
               paddingLeft: '12px',
               paddingRight: '4px',
-              userSelect: 'none'
+              userSelect: 'none',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
             title="Start Onboarding Tour"
             className="tour-trigger-btn"
@@ -1246,7 +1246,9 @@ export default function App() {
               borderLeft: '1px solid var(--panel-border)',
               paddingLeft: '12px',
               paddingRight: '4px',
-              userSelect: 'none'
+              userSelect: 'none',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
             title="Keyboard Shortcuts Reference (?)"
             className="help-indicator-btn"
@@ -1267,7 +1269,9 @@ export default function App() {
               borderLeft: '1px solid var(--panel-border)', 
               paddingLeft: '12px',
               cursor: 'pointer',
-              userSelect: 'none'
+              userSelect: 'none',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
             title="Configure Gemini API Key Settings"
             className="api-indicator-btn"
