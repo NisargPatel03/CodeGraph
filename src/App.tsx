@@ -1165,8 +1165,8 @@ export default function App() {
                           style={{ 
                             fontSize: '0.68rem', 
                             padding: '5px 8px', 
-                            background: 'rgba(255,255,255,0.02)', 
-                            border: '1px solid rgba(255,255,255,0.03)',
+                            background: 'var(--input-bg)', 
+                            border: '1px solid var(--panel-border)',
                             borderRadius: '4px',
                             color: 'var(--text-secondary)',
                             display: 'flex',

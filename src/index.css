@@ -3470,3 +3470,21 @@ input:checked + .slider:before {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* --- Arctic Light theme overrides for Collaboration HUD --- */
+[data-theme="arctic-light"] .collab-hud-container {
+  background: rgba(15, 23, 42, 0.05) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-theme="arctic-light"] .collab-hud-container:hover {
+  background: rgba(15, 23, 42, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+[data-theme="arctic-light"] .collab-activity-dropdown {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1), 0 0 1px var(--color-primary-glow) !important;
+}
+
