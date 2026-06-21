@@ -33,6 +33,7 @@ import {
   generateReadmeFile
 } from '../utils/aiHelper';
 import { parseDatabaseSchemas } from '../utils/schemaParser';
+import { scanDependenciesForCves } from '../utils/cveScanner';
 import { CodebaseFingerprint } from './CodebaseFingerprint';
 
 // ── Mermaid renderer component ──────────────────────────────────────────────
@@ -813,7 +814,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onSelectFile,
   onUpdateFileContent,
 }) => {
-  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring' | 'fingerprint' | 'readme'>('metrics');
+  const [subTab, setSubTab] = useState<'metrics' | 'architecture' | 'onboarding' | 'restructuring' | 'fingerprint' | 'readme' | 'security'>('metrics');
   
   // Onboarding Exporter states
   const [onboardingDoc, setOnboardingDoc] = useState('');
@@ -1083,6 +1084,59 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       setLoadingMermaid(false);
     }
   };
+
+  const vulnerabilities = useMemo(() => {
+    return scanDependenciesForCves(files);
+  }, [files]);
+
+  const remediationScript = useMemo(() => {
+    if (!vulnerabilities || vulnerabilities.length === 0) return '';
+    
+    const groups: Record<string, string[]> = {};
+    vulnerabilities.forEach(v => {
+      const eco = v.ecosystem || 'npm';
+      if (!groups[eco]) groups[eco] = [];
+      if (!groups[eco].includes(v.packageName)) {
+        groups[eco].push(v.packageName);
+      }
+    });
+
+    const lines: string[] = [];
+    if (groups['npm'] && groups['npm'].length > 0) {
+      const upgrades = groups['npm'].map(pkg => {
+        const matches = vulnerabilities.filter(v => v.packageName === pkg && v.ecosystem === 'npm');
+        const target = matches[0]?.patchedVersion || 'latest';
+        return `${pkg}@${target}`;
+      });
+      lines.push(`# npm remediation:\nnpm install ${upgrades.join(' ')}`);
+    }
+    if (groups['pip'] && groups['pip'].length > 0) {
+      const upgrades = groups['pip'].map(pkg => {
+        const matches = vulnerabilities.filter(v => v.packageName === pkg && v.ecosystem === 'pip');
+        const target = matches[0]?.patchedVersion || '';
+        return `${pkg}>=${target}`;
+      });
+      lines.push(`# pip remediation:\npip install --upgrade ${upgrades.join(' ')}`);
+    }
+    if (groups['cargo'] && groups['cargo'].length > 0) {
+      const commands = groups['cargo'].map(pkg => {
+        const matches = vulnerabilities.filter(v => v.packageName === pkg && v.ecosystem === 'cargo');
+        const target = matches[0]?.patchedVersion || '';
+        return `cargo update -p ${pkg} --precise ${target}`;
+      });
+      lines.push(`# cargo remediation:\n${commands.join('\n')}`);
+    }
+    if (groups['go'] && groups['go'].length > 0) {
+      const commands = groups['go'].map(pkg => {
+        const matches = vulnerabilities.filter(v => v.packageName === pkg && v.ecosystem === 'go');
+        const target = matches[0]?.patchedVersion || 'latest';
+        return `go get ${pkg}@v${target}`;
+      });
+      lines.push(`# go remediation:\n${commands.join('\n')}`);
+    }
+
+    return lines.join('\n\n');
+  }, [vulnerabilities]);
 
   // Calculations
   const dashboardData = useMemo(() => {
@@ -2028,6 +2082,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           >
             <FileText size={15} style={{ marginRight: '6px' }} />
             README.md Generator
+          </button>
+          <button 
+            className={`tab-btn ${subTab === 'security' ? 'active' : ''}`}
+            onClick={() => setSubTab('security')}
+            style={{ fontSize: '0.85rem', padding: '8px 16px', borderRadius: '6px' }}
+          >
+            <ShieldAlert size={15} style={{ marginRight: '6px' }} />
+            Security & Remediation
           </button>
         </div>
       </div>
@@ -3016,6 +3078,165 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   'Generate README.md'
                 )}
               </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-TAB 7: SECURITY CVE AUDIT & REMEDIATION */}
+      {subTab === 'security' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* KPI Dashboard */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+            <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Vulnerabilities</span>
+              <strong style={{ fontSize: '1.6rem', color: vulnerabilities.length > 0 ? '#ef4444' : 'var(--text-primary)' }}>{vulnerabilities.length}</strong>
+            </div>
+            <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Critical Severity</span>
+              <strong style={{ fontSize: '1.6rem', color: fingerprintMetrics.cveBreakdown.critical > 0 ? '#ef4444' : 'var(--text-primary)' }}>{fingerprintMetrics.cveBreakdown.critical}</strong>
+            </div>
+            <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>High Severity</span>
+              <strong style={{ fontSize: '1.6rem', color: fingerprintMetrics.cveBreakdown.high > 0 ? '#f97316' : 'var(--text-primary)' }}>{fingerprintMetrics.cveBreakdown.high}</strong>
+            </div>
+            <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Moderate Severity</span>
+              <strong style={{ fontSize: '1.6rem', color: fingerprintMetrics.cveBreakdown.moderate > 0 ? '#f59e0b' : 'var(--text-primary)' }}>{fingerprintMetrics.cveBreakdown.moderate}</strong>
+            </div>
+          </div>
+
+          {/* Remediation Script Section */}
+          {vulnerabilities.length > 0 ? (
+            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Zap size={14} style={{ color: 'var(--color-secondary)' }} />
+                    Global Remediation Script
+                  </h4>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                    Run the following commands in your shell to upgrade all vulnerable dependencies to safe patched versions.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(remediationScript);
+                    showToast('Remediation script copied!');
+                  }}
+                  className="cyber-button secondary"
+                  style={{ fontSize: '0.72rem', padding: '6px 12px' }}
+                >
+                  <Copy size={12} style={{ marginRight: '5px' }} />
+                  Copy Script
+                </button>
+              </div>
+              <pre style={{
+                background: 'rgba(0,0,0,0.3)',
+                padding: '12px 16px',
+                borderRadius: '6px',
+                border: '1px solid var(--panel-border)',
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: 'var(--color-secondary)',
+                overflowX: 'auto',
+                margin: 0
+              }}>
+                {remediationScript}
+              </pre>
+            </div>
+          ) : (
+            <div className="glass-panel" style={{ padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center' }}>
+              <CheckCircle size={40} style={{ color: '#10b981' }} />
+              <div>
+                <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)', fontWeight: 600 }}>Dependencies Fully Secure</h4>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '400px' }}>
+                  No known security advisories or vulnerabilities were detected in your configuration files.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* List of Vulnerabilities */}
+          {vulnerabilities.length > 0 && (
+            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <h4 style={{ fontSize: '0.85rem', color: 'var(--text-primary)', textTransform: 'uppercase', margin: 0 }}>
+                Vulnerability Advisory Ledger
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {vulnerabilities.map((vuln, idx) => {
+                  let badgeColor = '#ef4444';
+                  if (vuln.severity === 'high') badgeColor = '#f97316';
+                  else if (vuln.severity === 'moderate') badgeColor = '#f59e0b';
+                  else if (vuln.severity === 'low') badgeColor = '#3b82f6';
+
+                  return (
+                    <div
+                      key={`${vuln.cveId}-${idx}`}
+                      style={{
+                        padding: '16px',
+                        background: 'rgba(255,255,255,0.01)',
+                        border: '1px solid var(--panel-border)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            background: `${badgeColor}20`,
+                            color: badgeColor,
+                            borderRadius: '4px',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            border: `1px solid ${badgeColor}40`
+                          }}>
+                            {vuln.severity}
+                          </span>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {vuln.packageName}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            ({vuln.currentVersion} &rarr; {vuln.patchedVersion})
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-primary)', fontFamily: 'monospace' }}>
+                          {vuln.cveId}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                        {vuln.description}
+                      </p>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderTop: '1px dashed var(--panel-border)', paddingTop: '10px' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          Declared in: <span
+                            onClick={() => onSelectFile(vuln.declaredInFile)}
+                            style={{ color: 'var(--color-secondary)', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            {vuln.declaredInFile}
+                          </span>
+                        </div>
+                        <code style={{
+                          fontSize: '0.7rem',
+                          background: 'rgba(0,0,0,0.2)',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          color: 'var(--text-secondary)',
+                          border: '1px solid var(--panel-border)'
+                        }}>
+                          {vuln.upgradeCommand}
+                        </code>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
