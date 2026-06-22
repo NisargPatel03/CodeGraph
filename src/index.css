@@ -708,7 +708,6 @@ code, pre {
   flex-direction: column;
   gap: 20px;
 }
-
 .weather-hud-panel {
   position: absolute;
   bottom: 20px;
@@ -716,10 +715,10 @@ code, pre {
   width: 255px;
   z-index: 100;
   border: 1px solid var(--panel-border);
-  background: rgba(10, 15, 30, 0.85);
+  background: var(--panel-bg);
   backdrop-filter: blur(16px);
   border-radius: 8px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
   padding: 10px 12px;
@@ -734,7 +733,7 @@ code, pre {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--panel-border);
   padding-bottom: 4px;
   cursor: pointer;
 }
@@ -782,14 +781,14 @@ code, pre {
   color: var(--text-secondary);
   padding: 4px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.01);
-  border: 1px solid rgba(255, 255, 255, 0.02);
+  background: var(--input-bg);
+  border: 1px solid var(--panel-border);
   transition: all 0.2s ease;
 }
 
 .weather-hud-row.active {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: var(--input-bg);
+  border-color: var(--color-primary-glow);
   color: var(--text-primary);
   box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.01);
 }
