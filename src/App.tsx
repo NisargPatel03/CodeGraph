@@ -108,6 +108,14 @@ export default function App() {
   const [isRefactoring, setIsRefactoring] = useState(false);
   const [refactorProposal, setRefactorProposal] = useState<string | null>(null);
 
+  // Digital Forensic Investigator Mode States
+  const [forensicModeEnabled, setForensicModeEnabled] = useState(false);
+  const [crimeSceneData, setCrimeSceneData] = useState<{
+    crimeSceneNodeId: string;
+    suspectPath: string[];
+    stackTrace: string;
+  } | null>(null);
+
   const [showFolderExplainModal, setShowFolderExplainModal] = useState(false);
   const [isExplainingFolder, setIsExplainingFolder] = useState(false);
   const [folderExplainReport, setFolderExplainReport] = useState<string | null>(null);
@@ -522,7 +530,7 @@ export default function App() {
     }
   }, [repoData]);
 
-  // Global file/schema node locator handler
+  // Global file/schema node locator handler and forensic debugger triggers
   useEffect(() => {
     (window as any).locateFileNode = (filePath: string) => {
       if (!filePath) return;
@@ -541,8 +549,29 @@ export default function App() {
       }
     };
 
+    (window as any).triggerForensicMode = (suspectSequence: string[], rawTrace: string = '') => {
+      if (!suspectSequence || suspectSequence.length === 0) return;
+      const crimeSceneNodeId = suspectSequence[suspectSequence.length - 1];
+      setCrimeSceneData({
+        crimeSceneNodeId,
+        suspectPath: suspectSequence,
+        stackTrace: rawTrace
+      });
+      setForensicModeEnabled(true);
+      setSelectedNodeId(crimeSceneNodeId);
+      if (viewMode === 'dbSchema' || viewMode === 'analytics' || viewMode === 'docs') {
+        setViewMode('dependency');
+      }
+    };
+
+    (window as any).openAiChat = () => {
+      setIsChatOpen(true);
+    };
+
     return () => {
       delete (window as any).locateFileNode;
+      delete (window as any).triggerForensicMode;
+      delete (window as any).openAiChat;
     };
   }, [viewMode]);
 
@@ -1629,6 +1658,10 @@ export default function App() {
                   isRefiningCallGraph={isRefiningCallGraph}
                   collabPeers={collabPeers}
                   onLocalCursorMove={(x, y) => collabManager.sendCursorMove(x, y)}
+                  forensicModeEnabled={forensicModeEnabled}
+                  setForensicModeEnabled={setForensicModeEnabled}
+                  crimeSceneData={crimeSceneData}
+                  setCrimeSceneData={setCrimeSceneData}
                 />
               )}
             </section>
@@ -1663,6 +1696,8 @@ export default function App() {
                 auditError={auditError}
                 onRunAudit={handleRunDependencyAudit}
                 onUpdateFileContent={handleUpdateFileContent}
+                forensicModeEnabled={forensicModeEnabled}
+                crimeSceneData={crimeSceneData}
               />
             )}
           </main>
@@ -1724,6 +1759,10 @@ export default function App() {
           selectedFile={activeFile}
           allFiles={repoData.files}
           apiKey={apiKey}
+          forensicModeEnabled={forensicModeEnabled}
+          setForensicModeEnabled={setForensicModeEnabled}
+          crimeSceneData={crimeSceneData}
+          setCrimeSceneData={setCrimeSceneData}
         />
       )}
 

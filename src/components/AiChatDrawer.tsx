@@ -220,6 +220,14 @@ interface AiChatDrawerProps {
   selectedFile: ParsedFile | null;
   allFiles: ParsedFile[];
   apiKey: string;
+  forensicModeEnabled?: boolean;
+  setForensicModeEnabled?: (val: boolean) => void;
+  crimeSceneData?: {
+    crimeSceneNodeId: string;
+    suspectPath: string[];
+    stackTrace: string;
+  } | null;
+  setCrimeSceneData?: (val: any) => void;
 }
 
 export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
@@ -228,6 +236,10 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
   selectedFile,
   allFiles,
   apiKey,
+  forensicModeEnabled = false,
+  setForensicModeEnabled = () => {},
+  crimeSceneData = null,
+  setCrimeSceneData = () => {},
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -242,6 +254,46 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
 
   const handleSend = async (textToSend: string) => {
     if (!textToSend.trim() || loading || isStreaming) return;
+
+    // Scan for stack trace or bug report pattern to activate forensic mode
+    const lines = textToSend.split('\n');
+    const matchedPaths: string[] = [];
+    
+    // Check keywords suggesting a stack trace or error
+    const lowerText = textToSend.toLowerCase();
+    const hasTraceKeywords = ['error:', 'exception', 'at ', 'failed', 'stack trace', 'trace', 'crash', 'suspicious'].some(k => lowerText.includes(k));
+    
+    if (hasTraceKeywords) {
+      lines.forEach(line => {
+        for (const file of allFiles) {
+          const escapedPath = file.path.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const escapedName = file.name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          
+          const pathRegex = new RegExp(escapedPath, 'i');
+          const nameRegex = new RegExp(`\\b${escapedName}\\b`, 'i');
+          
+          if (pathRegex.test(line) || nameRegex.test(line)) {
+            if (matchedPaths.length === 0 || matchedPaths[matchedPaths.length - 1] !== file.path) {
+              matchedPaths.push(file.path);
+            }
+            break;
+          }
+        }
+      });
+      
+      if (matchedPaths.length > 0) {
+        // JavaScript stack traces trace backwards (crash site on top, main at bottom)
+        const isJsTrace = lowerText.includes('at ') || lowerText.includes('error:');
+        if (isJsTrace && matchedPaths.length > 1) {
+          matchedPaths.reverse();
+        }
+        
+        // Trigger Forensic Mode globally
+        if ((window as any).triggerForensicMode) {
+          (window as any).triggerForensicMode(matchedPaths, textToSend);
+        }
+      }
+    }
 
     const userMsg: Message = { role: 'user', text: textToSend };
     setMessages((prev) => [...prev, userMsg]);
@@ -405,6 +457,49 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
           gap: '12px'
         }}
       >
+        {forensicModeEnabled && crimeSceneData && (
+          <div 
+            style={{
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: '8px',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              marginBottom: '12px',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24', fontWeight: 'bold', fontSize: '0.8rem' }}>
+              <span>🚨 Crime Scene Debugger Active</span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+              Highlighting suspect path: <strong>{crimeSceneData.suspectPath.map(p => p.split('/').pop()).join(' ➔ ')}</strong>
+            </div>
+            <button
+              onClick={() => {
+                if (setForensicModeEnabled) setForensicModeEnabled(false);
+                if (setCrimeSceneData) setCrimeSceneData(null);
+              }}
+              style={{
+                alignSelf: 'flex-end',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '4px',
+                color: '#f43f5e',
+                fontSize: '0.65rem',
+                padding: '4px 8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                marginTop: '4px'
+              }}
+            >
+              Reset Crime Scene
+            </button>
+          </div>
+        )}
+
         {messages.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', gap: '16px', textAlign: 'center', opacity: 0.8 }}>
             <img 

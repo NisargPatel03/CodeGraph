@@ -3650,3 +3650,92 @@ input:checked + .slider:before {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1), 0 0 1px var(--color-primary-glow) !important;
 }
 
+/* --- Forensic Investigator Mode --- */
+.caution-stripe-flowing {
+  animation: caution-crawl 1.2s infinite linear;
+}
+
+@keyframes caution-crawl {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.crime-scene-pulse {
+  transform-origin: 0 0;
+  transform-box: fill-box;
+}
+
+.crime-scene-pulse-1 {
+  animation: crime-pulse-large 2s infinite ease-out;
+}
+
+.crime-scene-pulse-2 {
+  animation: crime-pulse-medium 1.5s infinite ease-out;
+}
+
+@keyframes crime-pulse-large {
+  0% {
+    transform: scale(0.95);
+    stroke-opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.5);
+    stroke-opacity: 0;
+  }
+}
+
+@keyframes crime-pulse-medium {
+  0% {
+    transform: scale(0.95);
+    stroke-opacity: 1;
+  }
+  100% {
+    transform: scale(1.25);
+    stroke-opacity: 0;
+  }
+}
+
+.blast-radius-halo {
+  transform-origin: 0 0;
+  transform-box: fill-box;
+  animation: blast-rotate 6s infinite linear, blast-pulse 2s infinite alternate ease-in-out;
+}
+
+@keyframes blast-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes blast-pulse {
+  0% { stroke-opacity: 0.5; }
+  100% { stroke-opacity: 0.9; }
+}
+
+.suspect-path-glow {
+  transform-origin: 0 0;
+  transform-box: fill-box;
+  animation: suspect-glow-pulse 1.8s infinite alternate ease-in-out;
+}
+
+@keyframes suspect-glow-pulse {
+  0% { stroke-opacity: 0.3; stroke-width: 1.5px; }
+  100% { stroke-opacity: 0.75; stroke-width: 3px; }
+}
+
+/* Light theme overrides for suspect card */
+[data-theme="arctic-light"] .suspect-profile-card {
+  background: rgba(255, 251, 235, 0.7) !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.08) !important;
+}
+
+[data-theme="arctic-light"] .suspect-profile-card strong {
+  color: #1e293b !important;
+}
+
+[data-theme="arctic-light"] .suspect-profile-card span {
+  color: #334155 !important;
+}
+
+

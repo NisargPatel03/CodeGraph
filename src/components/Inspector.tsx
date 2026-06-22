@@ -377,6 +377,12 @@ interface InspectorProps {
   onRunAudit: () => void;
   onUpdateFileContent?: (filePath: string, newContent: string) => void;
   repoName: string;
+  forensicModeEnabled?: boolean;
+  crimeSceneData?: {
+    crimeSceneNodeId: string;
+    suspectPath: string[];
+    stackTrace: string;
+  } | null;
 }
 
 const getEditorLanguage = (filePath: string): string => {
@@ -449,6 +455,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   onRunAudit,
   onUpdateFileContent,
   repoName,
+  forensicModeEnabled = false,
+  crimeSceneData = null,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter' | 'audit'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
@@ -854,6 +862,24 @@ export const Inspector: React.FC<InspectorProps> = ({
   const complexityInfo = useMemo(() => {
     return activeInspectorFile ? calculateComplexity(activeInspectorFile.content || '') : null;
   }, [activeInspectorFile]);
+
+  const circularDependencyCount = useMemo(() => {
+    if (!cycles || !activeInspectorFile) return 0;
+    return cycles.filter(c => c.includes(activeInspectorFile.path)).length;
+  }, [cycles, activeInspectorFile]);
+
+  const blastRadiusCount = useMemo(() => {
+    if (!activeInspectorFile || !allFiles) return 0;
+    const currentPath = activeInspectorFile.path;
+    let count = 0;
+    allFiles.forEach(f => {
+      if (f.path === currentPath) return;
+      const importsF = f.content.includes(currentPath.split('/').pop() || '');
+      const importedByF = activeInspectorFile.content.includes(f.path.split('/').pop() || '');
+      if (importsF || importedByF) count++;
+    });
+    return count;
+  }, [activeInspectorFile, allFiles]);
 
 
 
@@ -1602,6 +1628,128 @@ export const Inspector: React.FC<InspectorProps> = ({
               </div>
             ) : (
               <>
+                {activeInspectorFile && forensicModeEnabled && crimeSceneData && crimeSceneData.suspectPath && crimeSceneData.suspectPath.includes(activeInspectorFile.path) && (
+                  <div 
+                    className="suspect-profile-card"
+                    style={{
+                      margin: '0 0 16px 0',
+                      border: activeInspectorFile.path === crimeSceneData.crimeSceneNodeId ? '2px solid #ef4444' : '1px solid #f59e0b',
+                      borderRadius: '8px',
+                      background: 'rgba(15, 10, 5, 0.45)',
+                      overflow: 'hidden',
+                      boxShadow: activeInspectorFile.path === crimeSceneData.crimeSceneNodeId ? '0 0 20px rgba(239, 68, 68, 0.25)' : '0 0 15px rgba(245, 158, 11, 0.15)'
+                    }}
+                  >
+                    <div 
+                      style={{
+                        background: activeInspectorFile.path === crimeSceneData.crimeSceneNodeId
+                          ? 'repeating-linear-gradient(45deg, #ef4444, #ef4444 10px, #000000 10px, #000000 20px)' 
+                          : 'repeating-linear-gradient(45deg, #fbbf24, #fbbf24 10px, #000000 10px, #000000 20px)',
+                        height: '14px',
+                        width: '100%'
+                      }}
+                    />
+                    
+                    <div style={{ padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 800, color: activeInspectorFile.path === crimeSceneData.crimeSceneNodeId ? '#f43f5e' : '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          {activeInspectorFile.path === crimeSceneData.crimeSceneNodeId ? '🚨 Primary Suspect (Crime Scene)' : '⚠️ Suspect Profile'}
+                        </span>
+                        <span style={{
+                          fontSize: '0.6rem',
+                          fontWeight: '700',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: (complexityInfo?.level || 'Low') === 'High' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                          color: (complexityInfo?.level || 'Low') === 'High' ? '#ef4444' : '#f59e0b',
+                          textTransform: 'uppercase'
+                        }}>
+                          Danger Level: {complexityInfo?.level || 'Low'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{
+                          width: '50px',
+                          height: '60px',
+                          background: '#111827',
+                          border: '1px solid var(--panel-border)',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.8rem',
+                          flexShrink: 0,
+                          position: 'relative',
+                          overflow: 'hidden'
+                        }}>
+                          👤
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            width: '100%',
+                            background: 'rgba(0,0,0,0.6)',
+                            color: '#fbbf24',
+                            fontSize: '8px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            padding: '1px 0'
+                          }}>
+                            SUSPECT
+                          </div>
+                        </div>
+
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.72rem' }}>
+                          <div>
+                            <strong style={{ color: 'var(--text-secondary)' }}>Alias:</strong>{' '}
+                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{activeInspectorFile.name}</span>
+                          </div>
+                          <div>
+                            <strong style={{ color: 'var(--text-secondary)' }}>Last Seen With:</strong>{' '}
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {githubMetadata?.author 
+                                ? `${githubMetadata.author} (${githubMetadata.commitCount || 1} commits)` 
+                                : 'Nisarg Patel (3 commits ago)'}
+                            </span>
+                          </div>
+                          <div>
+                            <strong style={{ color: 'var(--text-secondary)' }}>Danger Score:</strong>{' '}
+                            <span style={{ color: complexityInfo?.color || '#10b981', fontWeight: 'bold' }}>{complexityInfo?.score || 1} (Complexity Index)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.7rem' }}>
+                        <div>
+                          <strong style={{ color: 'var(--text-secondary)' }}>Prior Convictions / Smells:</strong>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                            <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                              {circularDependencyCount} circular dependency smells
+                            </span>
+                            {activeInspectorFile.language && (
+                              <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.08)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                                {activeInspectorFile.language.toUpperCase()} syntax rules
+                              </span>
+                            )}
+                            {activeInspectorFile.size > 20000 && (
+                              <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                                File size warning (&gt;20KB)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <strong style={{ color: 'var(--text-secondary)' }}>Blast Radius Splatter:</strong>{' '}
+                          <span style={{ color: '#ef4444', fontWeight: '600' }}>
+                            Radiates outward to {blastRadiusCount} adjacent modules.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* File Header Details */}
                 <div>
                   <h3 style={{ wordBreak: 'break-all', fontSize: '1.1rem', marginBottom: '8px' }}>{activeInspectorFile.name}</h3>

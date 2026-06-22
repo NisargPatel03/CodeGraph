@@ -40,6 +40,14 @@ interface GraphCanvasProps {
   isRefiningCallGraph?: boolean;
   collabPeers?: Map<string, any>;
   onLocalCursorMove?: (x: number | null, y: number | null) => void;
+  forensicModeEnabled?: boolean;
+  setForensicModeEnabled?: (val: boolean) => void;
+  crimeSceneData?: {
+    crimeSceneNodeId: string;
+    suspectPath: string[];
+    stackTrace: string;
+  } | null;
+  setCrimeSceneData?: (val: any) => void;
 }
 
 let mermaidInitialized = false;
@@ -227,6 +235,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   isRefiningCallGraph,
   collabPeers,
   onLocalCursorMove,
+  forensicModeEnabled = false,
+  setForensicModeEnabled = () => {},
+  crimeSceneData = null,
+  setCrimeSceneData = () => {},
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2700,6 +2712,46 @@ code, pre, .mono {
         return isViolating ? 'url(#arrow-violating)' : 'url(#arrow-normal)';
       });
 
+    // Compute blast radius set from the crime scene node connections
+    const blastRadiusSet = new Set<string>();
+    if (forensicModeEnabled && crimeSceneData && crimeSceneData.crimeSceneNodeId) {
+      links.forEach((l: any) => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        if (sId === crimeSceneData.crimeSceneNodeId) blastRadiusSet.add(tId);
+        if (tId === crimeSceneData.crimeSceneNodeId) blastRadiusSet.add(sId);
+      });
+    }
+
+    // Render police caution tape stripes on suspect path links if Forensic Mode is active
+    const cautionLinksData = (forensicModeEnabled && crimeSceneData && crimeSceneData.suspectPath) ? links.filter((d: any) => {
+      const sId = typeof d.source === 'object' ? d.source.id : d.source;
+      const tId = typeof d.target === 'object' ? d.target.id : d.target;
+      const path = crimeSceneData.suspectPath;
+      const sIdx = path.indexOf(sId);
+      const tIdx = path.indexOf(tId);
+      return sIdx !== -1 && tIdx !== -1 && Math.abs(sIdx - tIdx) === 1;
+    }) : [];
+
+    const cautionTape = mainGroup.append('g').attr('class', 'caution-links-container').selectAll('.link-caution-tape')
+      .data(cautionLinksData)
+      .enter()
+      .append('line')
+      .attr('class', 'link-caution-tape')
+      .attr('stroke', '#fbbf24')
+      .attr('stroke-width', 6.0)
+      .style('stroke-opacity', 0.85);
+
+    const cautionTapeStripe = mainGroup.append('g').attr('class', 'caution-stripes-container').selectAll('.link-caution-stripe')
+      .data(cautionLinksData)
+      .enter()
+      .append('line')
+      .attr('class', 'link-caution-stripe caution-stripe-flowing')
+      .attr('stroke', '#000000')
+      .attr('stroke-width', 6.0)
+      .attr('stroke-dasharray', '6, 6')
+      .style('stroke-opacity', 0.85);
+
     const node = mainGroup.append('g').attr('class', 'nodes-container').selectAll('.node-element').data(nodes).enter().append('g')
       .attr('class', (d: any) => {
         let cls = 'node-element';
@@ -3000,6 +3052,66 @@ code, pre, .mono {
           .text('!');
       }
 
+      // Forensic Investigator Mode circles & badges
+      if (forensicModeEnabled && crimeSceneData) {
+        const isCrimeScene = d.id === crimeSceneData.crimeSceneNodeId;
+        const isInBlastRadius = blastRadiusSet.has(d.id);
+        const isInSuspectPath = crimeSceneData.suspectPath.includes(d.id);
+
+        if (isCrimeScene) {
+          element.append('circle')
+            .attr('class', 'crime-scene-pulse crime-scene-pulse-1')
+            .attr('r', baseRadius + 14)
+            .attr('fill', 'none')
+            .attr('stroke', '#ef4444')
+            .attr('stroke-width', 2.0)
+            .style('stroke-opacity', 0.6);
+
+          element.append('circle')
+            .attr('class', 'crime-scene-pulse crime-scene-pulse-2')
+            .attr('r', baseRadius + 8)
+            .attr('fill', 'none')
+            .attr('stroke', '#f97316')
+            .attr('stroke-width', 1.5)
+            .style('stroke-opacity', 0.8);
+
+          const badgeG = element.append('g')
+            .attr('class', 'crime-scene-badge')
+            .attr('transform', `translate(${baseRadius * 0.9}, -${baseRadius * 0.9})`);
+
+          badgeG.append('polygon')
+            .attr('points', '0,-8 7,5 -7,5')
+            .attr('fill', '#fbbf24')
+            .attr('stroke', '#000000')
+            .attr('stroke-width', 1.0);
+
+          badgeG.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '4.5px')
+            .style('fill', '#000000')
+            .style('font-size', '7px')
+            .style('font-weight', '900')
+            .text('!');
+        } else if (isInBlastRadius) {
+          element.append('circle')
+            .attr('class', 'blast-radius-halo')
+            .attr('r', baseRadius + 6)
+            .attr('fill', 'none')
+            .attr('stroke', '#ef4444')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '3, 3')
+            .style('stroke-opacity', 0.8);
+        } else if (isInSuspectPath) {
+          element.append('circle')
+            .attr('class', 'suspect-path-glow')
+            .attr('r', baseRadius + 4)
+            .attr('fill', 'none')
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 1.5)
+            .style('stroke-opacity', 0.6);
+        }
+      }
+
       if (d.isFolder) {
         element.append('path')
           .attr('d', 'M-12,-8 H-4 L-1,-5 H12 V8 H-12 Z')
@@ -3195,6 +3307,10 @@ code, pre, .mono {
         });
       } else {
         link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+        if (forensicModeEnabled && crimeSceneData) {
+          cautionTape.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y).attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
+          cautionTapeStripe.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y).attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
+        }
       }
       if (pipeline) {
         pipeline.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
@@ -3427,7 +3543,7 @@ code, pre, .mono {
           .text(`${peer.username.split('-')[0]}`);
       }
     });
-  }, [collabPeers, viewMode]);
+  }, [collabPeers, viewMode, forensicModeEnabled, crimeSceneData]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -5860,6 +5976,98 @@ code, pre, .mono {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {forensicModeEnabled && crimeSceneData && (
+        <div 
+          className="glass-panel forensic-canvas-hud"
+          style={{
+            position: 'absolute',
+            bottom: '24px',
+            left: '24px',
+            padding: '12px 16px',
+            zIndex: 100,
+            pointerEvents: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            border: '1px solid #f59e0b',
+            boxShadow: '0 8px 32px 0 rgba(245, 158, 11, 0.25)',
+            background: 'rgba(5, 7, 15, 0.75)',
+            backdropFilter: 'blur(8px)',
+            borderRadius: '10px',
+            maxWidth: '300px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(245, 158, 11, 0.2)', paddingBottom: '6px' }}>
+            <span style={{ fontSize: '1rem' }}>🕵️‍♂️</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Forensic Investigator Mode</span>
+          </div>
+          
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            <div style={{ marginBottom: '4px' }}>
+              <strong>Primary Suspect:</strong> <span style={{ color: '#ef4444', fontFamily: 'var(--font-mono)' }}>{crimeSceneData.crimeSceneNodeId.split('/').pop()}</span>
+            </div>
+            <div style={{ wordBreak: 'break-all' }}>
+              <strong>Trace Path:</strong> <span style={{ color: 'var(--text-muted)' }}>{crimeSceneData.suspectPath.map(p => p.split('/').pop()).join(' ➔ ')}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <button
+              onClick={() => {
+                if (setForensicModeEnabled) setForensicModeEnabled(false);
+                if (setCrimeSceneData) setCrimeSceneData(null);
+              }}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#f43f5e',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
+            >
+              Reset Investigation
+            </button>
+            <button
+              onClick={() => {
+                if ((window as any).openAiChat) {
+                  (window as any).openAiChat();
+                }
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                background: 'rgba(99, 102, 241, 0.15)',
+                color: '#818cf8',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)';
+              }}
+            >
+              Consult AI
+            </button>
+          </div>
         </div>
       )}
 
