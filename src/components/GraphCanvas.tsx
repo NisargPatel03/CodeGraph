@@ -231,6 +231,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
+  const weatherCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [weatherEnabled, setWeatherEnabled] = useState<boolean>(true);
   const boundsRef = useRef({ minX: -100, maxX: 100, minY: -100, maxY: 100 });
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
@@ -4471,6 +4473,353 @@ code, pre, .mono {
     };
   }, [is3DMode, autoRotate3D, zoomScale3D, viewMode, selectedNode, hoveredNode3D]);
 
+  // Weather particles state
+  useEffect(() => {
+    if (!weatherEnabled || !weatherCanvasRef.current) {
+      audioSonifier.stopAmbientWeather();
+      return;
+    }
+
+    const canvas = weatherCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+
+    const resizeWeatherCanvas = () => {
+      const parent = canvas.parentElement;
+      if (parent) {
+        canvas.width = parent.clientWidth || 800;
+        canvas.height = parent.clientHeight || 500;
+      }
+    };
+    resizeWeatherCanvas();
+    window.addEventListener('resize', resizeWeatherCanvas);
+
+    // Weather particles initialization
+    interface Spark { x: number; y: number; vx: number; vy: number; alpha: number; size: number; color: string; }
+    interface RainDrop { x: number; y: number; vy: number; length: number; speed: number; }
+    interface Splash { x: number; y: number; r: number; maxR: number; alpha: number; }
+    interface SmokeParticle { x: number; y: number; vx: number; vy: number; size: number; alpha: number; life: number; maxLife: number; }
+    interface LightningBolt { path: { x: number; y: number }[]; maxAlpha: number; alpha: number; width: number; }
+
+    const sparks: Spark[] = [];
+    const rain: RainDrop[] = [];
+    const splashes: Splash[] = [];
+    const smoke: SmokeParticle[] = [];
+    let lightning: LightningBolt | null = null;
+    let flashAlpha = 0;
+
+    // Helper to generate a fractal lightning bolt path
+    const getFractalPath = (x1: number, y1: number, x2: number, y2: number, displace: number): { x: number; y: number }[] => {
+      if (displace < 4) {
+        return [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+      }
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const px = -dy / len;
+      const py = dx / len;
+      const offset = (Math.random() - 0.5) * displace;
+      const mx = midX + px * offset;
+      const my = midY + py * offset;
+
+      const path1 = getFractalPath(x1, y1, mx, my, displace * 0.48);
+      const path2 = getFractalPath(mx, my, x2, y2, displace * 0.48);
+      return [...path1, ...path2.slice(1)];
+    };
+
+    // Calculate metrics
+    const cycleCount = graphData?.cycles?.length || 0;
+    const allNodes = [...(graphData?.nodes || []), ...(showNpmPackages ? (graphData?.npmNodes || []) : [])];
+    const vulnerableNodes = allNodes.filter(n => n.isVulnerable);
+    const cveCount = vulnerableNodes.length;
+
+    const avgComp = (graphData?.nodes || []).reduce((acc, n) => acc + (n.complexity || 0), 0) / ((graphData?.nodes || []).length || 1);
+    const avgChurn = (graphData?.nodes || []).reduce((acc, n) => acc + (n.churn || 0), 0) / ((graphData?.nodes || []).length || 1);
+    const hotspotNodes = (graphData?.nodes || []).filter(n => (n.complexity || 0) >= avgComp && (n.churn || 0) >= avgChurn);
+    const hotspotCount = hotspotNodes.length;
+
+    // Update ambient sound based on counts
+    audioSonifier.updateAmbientWeather(cveCount, cycleCount, hotspotCount);
+
+    let lastTime = Date.now();
+
+    const loop = () => {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const now = Date.now();
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      // 1. Get Node coordinates in screen space
+      let screenNodes: { id: string; x: number; y: number; radius: number; isVulnerable?: boolean; isHotspot?: boolean }[] = [];
+      if (is3DMode && canvas3DRef.current) {
+        const projected = (canvas3DRef.current as any).__projectedNodes || [];
+        screenNodes = projected.map((n: any) => ({
+          id: n.id,
+          x: n.projX,
+          y: n.projY,
+          radius: n.projRadius || 12,
+          isVulnerable: n.isVulnerable,
+          isHotspot: hotspotNodes.some(hn => hn.id === n.id)
+        }));
+      } else if (svgRef.current) {
+        const transform = d3.zoomTransform(svgRef.current);
+        screenNodes = allNodes.map((n: any) => {
+          const pos = nodePositionsRef.current.get(n.id) || { x: n.x || 0, y: n.y || 0 };
+          let r = 12;
+          if (n.isFolder) r = 24;
+          else if (viewMode === 'call') r = 12 + Math.min((n.callCount || 0) * 1.5, 20);
+          return {
+            id: n.id,
+            x: pos.x * transform.k + transform.x,
+            y: pos.y * transform.k + transform.y,
+            radius: r,
+            isVulnerable: n.isVulnerable,
+            isHotspot: hotspotNodes.some(hn => hn.id === n.id)
+          };
+        });
+      }
+
+      // Filter screen nodes inside visible bounds of screen to optimize search
+      const visibleNodes = screenNodes.filter(sn => sn.x >= -50 && sn.x <= w + 50 && sn.y >= -50 && sn.y <= h + 50);
+
+      // --- CLEAR SKY MODE (Neon Drifting Sparks) ---
+      const totalDisturbance = cveCount + cycleCount + hotspotCount;
+      const maxSparks = totalDisturbance === 0 ? 60 : 15;
+      if (sparks.length < maxSparks && Math.random() < 0.2) {
+        sparks.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          vx: (Math.random() - 0.5) * 12,
+          vy: -Math.random() * 8 - 4, // drift upwards
+          alpha: Math.random() * 0.4 + 0.1,
+          size: Math.random() * 1.8 + 0.6,
+          color: Math.random() > 0.5 ? 'rgba(99, 102, 241, ' : 'rgba(236, 72, 153, '
+        });
+      }
+
+      ctx.save();
+      sparks.forEach((s, idx) => {
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.alpha -= 0.05 * dt;
+        if (s.alpha <= 0 || s.x < 0 || s.x > w || s.y < 0) {
+          sparks.splice(idx, 1);
+          return;
+        }
+        ctx.fillStyle = s.color + s.alpha + ')';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+
+      // --- DIGITAL ACID RAIN MODE ---
+      if (cycleCount > 0) {
+        const targetRainCount = Math.min(150, 20 + cycleCount * 12);
+        if (rain.length < targetRainCount) {
+          rain.push({
+            x: Math.random() * w,
+            y: -20,
+            vy: Math.random() * 300 + 400,
+            length: Math.random() * 15 + 8,
+            speed: Math.random() * 0.05 + 0.03
+          });
+        }
+      }
+
+      ctx.save();
+      // Draw Rain
+      rain.forEach((r, idx) => {
+        r.y += r.vy * dt;
+        // Check collision with nodes
+        let hitNode = false;
+        for (let i = 0; i < visibleNodes.length; i++) {
+          const node = visibleNodes[i];
+          const dx = r.x - node.x;
+          const dy = r.y - node.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < node.radius + 3) {
+            hitNode = true;
+            splashes.push({
+              x: node.x,
+              y: node.y,
+              r: 1,
+              maxR: node.radius + 8,
+              alpha: 0.8
+            });
+            break;
+          }
+        }
+
+        // Hit bottom of the screen
+        if (!hitNode && r.y >= h - 10) {
+          hitNode = true;
+          splashes.push({
+            x: r.x,
+            y: h - Math.random() * 5,
+            r: 1,
+            maxR: Math.random() * 6 + 4,
+            alpha: 0.6
+          });
+        }
+
+        if (hitNode || r.y > h) {
+          rain.splice(idx, 1);
+          return;
+        }
+
+        ctx.strokeStyle = 'rgba(99, 102, 241, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(r.x, r.y);
+        ctx.lineTo(r.x, r.y + r.length);
+        ctx.stroke();
+      });
+
+      // Draw Splashes
+      splashes.forEach((sp, idx) => {
+        sp.r += (sp.maxR - sp.r) * 12 * dt;
+        sp.alpha -= 3 * dt;
+        if (sp.alpha <= 0 || sp.r >= sp.maxR) {
+          splashes.splice(idx, 1);
+          return;
+        }
+        ctx.strokeStyle = `rgba(168, 85, 247, ${sp.alpha})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.ellipse(sp.x, sp.y, sp.r, sp.r * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+      ctx.restore();
+
+      // --- HOTSPOT MAGMA / SMOKE MODE ---
+      const activeHotspots = visibleNodes.filter(n => n.isHotspot);
+      ctx.save();
+      activeHotspots.forEach(node => {
+        const pulse = 1.2 + 0.25 * Math.sin(now * 0.004);
+        const grad = ctx.createRadialGradient(
+          node.x, node.y, node.radius * 0.4,
+          node.x, node.y, node.radius * pulse
+        );
+        grad.addColorStop(0, 'rgba(239, 68, 68, 0.2)');
+        grad.addColorStop(0.5, 'rgba(249, 115, 22, 0.08)');
+        grad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (Math.random() < 0.08) {
+          smoke.push({
+            x: node.x + (Math.random() - 0.5) * 6,
+            y: node.y - node.radius + 5,
+            vx: (Math.random() - 0.5) * 15,
+            vy: Math.random() * 20 + 20,
+            size: Math.random() * 4 + 2,
+            alpha: Math.random() * 0.4 + 0.3,
+            life: 0,
+            maxLife: Math.random() * 1.5 + 0.8
+          });
+        }
+      });
+
+      smoke.forEach((sm, idx) => {
+        sm.life += dt;
+        if (sm.life >= sm.maxLife) {
+          smoke.splice(idx, 1);
+          return;
+        }
+        sm.x += sm.vx * dt;
+        sm.y -= sm.vy * dt;
+        sm.size += 2 * dt;
+        const ageRatio = sm.life / sm.maxLife;
+        const currentAlpha = sm.alpha * (1 - ageRatio);
+
+        const smokeColor = ageRatio < 0.3 
+          ? `rgba(249, 115, 22, ${currentAlpha})`
+          : `rgba(128, 128, 128, ${currentAlpha * 0.6})`;
+
+        ctx.fillStyle = smokeColor;
+        ctx.beginPath();
+        ctx.arc(sm.x, sm.y, sm.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+
+      // --- LIGHTNING STRIKE MODE ---
+      const vulnerableScreenNodes = visibleNodes.filter(n => n.isVulnerable);
+      if (vulnerableScreenNodes.length > 0 && Math.random() < 0.0035 * cveCount && !lightning) {
+        const target = vulnerableScreenNodes[Math.floor(Math.random() * vulnerableScreenNodes.length)];
+        const startX = Math.random() * w;
+        const path = getFractalPath(startX, 0, target.x, target.y, w * 0.2);
+        
+        lightning = {
+          path,
+          maxAlpha: 1.0,
+          alpha: 1.0,
+          width: Math.random() * 3 + 2
+        };
+
+        audioSonifier.playLightningStrike();
+        flashAlpha = Math.random() * 0.45 + 0.15;
+      }
+
+      if (lightning) {
+        ctx.save();
+        lightning.alpha -= 4 * dt;
+        if (lightning.alpha <= 0) {
+          lightning = null;
+        } else {
+          ctx.strokeStyle = `rgba(59, 130, 246, ${lightning.alpha * 0.45})`;
+          ctx.lineWidth = lightning.width * 2.5;
+          ctx.shadowColor = '#3b82f6';
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          lightning.path.forEach((pt, pIdx) => {
+            if (pIdx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(255, 255, 255, ${lightning.alpha})`;
+          ctx.lineWidth = lightning.width * 0.8;
+          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          lightning.path.forEach((pt, pIdx) => {
+            if (pIdx === 0) ctx.moveTo(pt.x, pt.y);
+            else ctx.lineTo(pt.x, pt.y);
+          });
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (flashAlpha > 0) {
+        flashAlpha -= 3.5 * dt;
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, flashAlpha)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resizeWeatherCanvas);
+      audioSonifier.stopAmbientWeather();
+    };
+  }, [weatherEnabled, viewMode, graphData, is3DMode, showNpmPackages]);
+
   return (
     <div 
       ref={containerRef} 
@@ -5028,6 +5377,25 @@ code, pre, .mono {
                 )}
               </div>
             )}
+            {/* Eco-Climate Weather Overlay Control */}
+            <div className="toolbox-section" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
+              <div className="toggle-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  🌧️ Eco-Climate Weather
+                </span>
+                <label className="switch">
+                  <input 
+                    type="checkbox" 
+                    checked={weatherEnabled} 
+                    onChange={(e) => setWeatherEnabled(e.target.checked)} 
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2', marginTop: '4px' }}>
+                Passive visual overlay & audio sonification mapping codebase complexity, circular loops, and vulnerabilities to atmospheric weather events.
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -5378,6 +5746,20 @@ code, pre, .mono {
       <svg ref={svgRef} style={{ width: '100%', height: '100%', display: is3DMode ? 'none' : 'block' }} />
       {is3DMode && (
         <canvas ref={canvas3DRef} style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }} />
+      )}
+      {weatherEnabled && (
+        <canvas 
+          ref={weatherCanvasRef} 
+          style={{ 
+            position: 'absolute', 
+            top: 0, 
+            left: 0, 
+            width: '100%', 
+            height: '100%', 
+            pointerEvents: 'none', 
+            zIndex: 10 
+          }} 
+        />
       )}
 
       {viewMode === 'dbSchema' && dbSchema.tables.length === 0 && (
