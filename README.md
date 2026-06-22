@@ -60,6 +60,7 @@
   - [Interactive Onboarding Tour](#onboarding-tour)
   - [WebSocket-Based Live Collaboration System](#live-collaboration)
   - [Digital Forensic Investigator Mode](#forensic-investigator-mode)
+  - [Eco-Climate Weather Visualizer](#eco-climate-weather-visualizer)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -259,6 +260,14 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Crime Scene Pulse (Crash Site)** — Highlights the crashing file node with a pulsating red warning aura and searchlight locator animation.
 - **Blast Radius Splatter Map** — Displays a rotating heat map radiating outward from the crash site, showing contaminated adjacent modules.
 - **File Suspect Profiles (Mugshots)** — Click any node in the suspect path to display a custom "Mugshot Profile" card in the sidebar listing alias details, prior convictions (warnings, smells), last seen with committer info, and danger level.
+
+### 🌧️ Codebase "Eco-Climate" Weather Visualizer
+- **Topological Atmospheric Mapping** — Maps code quality metrics (cycles, CVEs, hotspots) to dynamic weather phenomena overlaying the 2D and 3D canvas viewports.
+- **Ambient Audio Synthesizer** — Translates the codebase state into low-frequency sine-wave drones, updating drone intensity based on CVE, cycle, and hotspot count.
+- **Clear Sky Mode** — Gentle pink and purple neon sparks drift upwards when the project metrics are healthy.
+- **Digital Acid Rain** — Renders vertical raindrops that collision-detect with nodes and ripple on impact, mapping density to circular import loops.
+- **Hotspot Magma & Smoke** — Releases orange smoke particles and draws pulsating red radial heat gradients around complex, high-churn files.
+- **Fractal Lightning Strikes** — Releases sharp electric bolts from the sky to strike vulnerable package nodes, coupled with spatial audio thunder claps.
 
 ---
 
@@ -996,6 +1005,26 @@ Redesigns the stack trace auditing, error tracking, and bug troubleshooting flow
   - **Last Seen With:** The most recent committer and changeset description.
   - **Danger Level:** Scaled dynamically based on lines of code and code smells.
 - **Auto-Close AI Chat Integration:** Links within the chat response automatically trigger viewport focus, closing the AI chat drawer to display the Suspect Profile in the right sidebar without UI occlusion.
+
+---
+
+<a id="eco-climate-weather-visualizer"></a>
+### 33. Codebase "Eco-Climate" Weather Visualizer (Atmospheric Health)
+
+**Files:** `src/components/GraphCanvas.tsx` and `src/utils/audioSonifier.ts`
+
+Translates codebase quality parameters, structural smells, and security risks into dynamic, interactive atmospheric weather simulations that render on top of the 2D and 3D graph canvases:
+- **Atmospheric Metric Mapping:** Scans active workspace parameters on load:
+  - **Vulnerability CVE Count** determines lightning frequency.
+  - **Circular Dependency Cycles** determine digital rain density.
+  - **Hotspot Nodes Count** (nodes with high complexity and high churn) determines volcanic heat ring counts.
+- **Particle System Rendering:** Draws customized weather phenomena using a dedicated HTML5 `<canvas>` layer synced to viewport pan/zoom transformations:
+  - **Clear Sky Mode:** Gentle neon pink (`rgba(236, 72, 153)`) and purple (`rgba(99, 102, 241)`) sparks drift upwards across the screen when the codebase is healthy.
+  - **Digital Acid Rain:** Simulates raindrops falling down, performing collision detection against active node bounding circles. Colliding drops trigger expanding purple ripple halos (`ellipse()`) around hit files.
+  - **Hotspot Magma/Smoke:** Paints pulsating radial fire gradients around complex hotspot nodes and emits upward-drifting gray and orange smoke particles.
+  - **Fractal Lightning Strikes:** Synthesizes random branching lightning bolts striking vulnerable package nodes, coupled with spatial thunder audio.
+- **Eco-Climate Ambient Audio Drone:** Connects to the Web Audio API to play an ambient low-frequency synthesizer drone (`OscillatorNode` running at $82.4\text{Hz}$) that modulates its volume and texture based on the cumulative structural degradation of the codebase.
+- **Atmospheric Status HUD:** Features a collapsible glassmorphic weather HUD at the bottom left displaying metrics (CVE Count, Cycle Count, Hotspots Count) and active weather statuses (Clear, Rain, Magma, Lightning, Storm).
 
 ---
 
