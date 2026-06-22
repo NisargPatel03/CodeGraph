@@ -547,6 +547,7 @@ export default function App() {
         }
         setSelectedNodeId(filePath);
       }
+      setIsChatOpen(false); // Close AI Chat Drawer to show the Inspector panel
     };
 
     (window as any).triggerForensicMode = (suspectSequence: string[], rawTrace: string = '') => {
@@ -573,7 +574,7 @@ export default function App() {
       delete (window as any).triggerForensicMode;
       delete (window as any).openAiChat;
     };
-  }, [viewMode]);
+  }, [viewMode, setIsChatOpen]);
 
   const handleUpdateFileContent = (filePath: string, newContent: string) => {
     if (!repoData) return;

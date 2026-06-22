@@ -3347,7 +3347,7 @@ code, pre, .mono {
     return () => {
       simulation.stop();
     };
-  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath, showApiDbMapping]);
+  }, [graphData, viewMode, hierarchicalLevels, showNpmPackages, collapsedFolders, depthFilter, selectedNode, treeLayoutStyle, isEvolutionMode, currentEvolutionStep, activeEvolutionFiles, linterViolations, useDemoDbSchema, dbSchema, filterLanguage, filterMinLoc, filterFolderPath, showApiDbMapping, forensicModeEnabled, crimeSceneData]);
 
   // --- Collaboration Presence and Cursor Rendering Hook ---
   useEffect(() => {
