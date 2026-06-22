@@ -5984,8 +5984,9 @@ code, pre, .mono {
           className="glass-panel forensic-canvas-hud"
           style={{
             position: 'absolute',
-            bottom: '24px',
-            left: '24px',
+            bottom: '70px',
+            left: weatherEnabled && showWeatherHud ? '290px' : '20px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             padding: '12px 16px',
             zIndex: 100,
             pointerEvents: 'auto',
