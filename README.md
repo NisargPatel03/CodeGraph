@@ -59,6 +59,7 @@
   - [README.md Auto-Generator](#readme-auto-generator)
   - [Interactive Onboarding Tour](#onboarding-tour)
   - [WebSocket-Based Live Collaboration System](#live-collaboration)
+  - [Digital Forensic Investigator Mode](#forensic-investigator-mode)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -251,6 +252,13 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **State Synchronization** — Shares active mouse cursors, viewport pan/zoom transformations, active graph view mode tabs, file node selections, and function trace triggers in real-time.
 - **Selection Halos** — Broadcaster clicks render glowing user-themed selection rings around selected nodes in real-time, accompanied by spatial audio notifications.
 - **Developer Bots Simulator** — Spawns virtual developers moving in smooth orbit or Lissajous patterns and selecting random workspace modules to playtest features offline.
+
+### 🕵️‍♂️ Digital Forensic Investigator Mode (Crime Scene Debugging)
+- **Automatic Stack Trace Parsing** — Detects pasted error stack traces in the AI chat panel, extracting the list of offending module files and their call hierarchy.
+- **Caution Tape Trails & Suspect Path Glow** — Highlights the path of suspect files in a yellow-and-black caution-tape style with a custom neon trace glow on the canvas.
+- **Crime Scene Pulse (Crash Site)** — Highlights the crashing file node with a pulsating red warning aura and searchlight locator animation.
+- **Blast Radius Splatter Map** — Displays a rotating heat map radiating outward from the crash site, showing contaminated adjacent modules.
+- **File Suspect Profiles (Mugshots)** — Click any node in the suspect path to display a custom "Mugshot Profile" card in the sidebar listing alias details, prior convictions (warnings, smells), last seen with committer info, and danger level.
 
 ---
 
@@ -969,6 +977,25 @@ Enables developers to connect, inspect, and trace execution flows concurrently i
 - **Throttled State Synchronization:** Synchronizes mouse cursors, viewport pan/zoom transformations, active visualization tabs, node clicks, and function trace triggers. Mouse cursor updates are throttled to a maximum rate of 33 updates/second (30ms intervals) to optimize network bandwidth.
 - **Collaborative D3 Selection Halos:** Guest/host click selections broadcast node IDs to all peers. The D3 canvas translates these events to render glowing user-themed selection rings around selected nodes in real-time, coupled with spatial sound chimes.
 - **Developer Bots Simulation:** Features an offline room simulator that spawns virtual developers (e.g. `DevCyber-🚀`, `DevNeo-🧬`) moving in smooth orbit or Lissajous patterns and selecting random workspace modules, facilitating local playtesting and product demonstrations.
+
+---
+
+<a id="forensic-investigator-mode"></a>
+### 32. Digital Forensic Investigator Mode (Crime Scene Debugging)
+
+**Files:** `src/App.tsx`, `src/components/GraphCanvas.tsx`, `src/components/Inspector.tsx`, and `src/components/AiChatDrawer.tsx`
+
+Redesigns the stack trace auditing, error tracking, and bug troubleshooting flow into an interactive, narrative-driven forensic investigation interface:
+- **Smart Stack Trace Parser:** Automatically intercepts and parses copied-and-pasted stack traces or error logs in the AI Assistant chat panel, extracting the list of offending module files and trace hierarchies.
+- **Bug Trace Trail & Glow:** Draws a yellow-and-black "police caution tape" connection layout along the suspect dependency path, lighting up nodes on the D3 canvas with a glowing warning path.
+- **Crime Scene Pulse (Crash Site):** Highlights the primary crashing file (the exact origin of the exception) with a pulsating warning marker and searchlight aura.
+- **Blast Radius Contamination Map:** Computes outward dependency contamination vectors from the crash site, painting adjacent nodes with a rotating heat-map aura to visualize the impact zone.
+- **File Suspect Profiles (Mugshot Cards):** Clicking any warning node displays a custom "Mugshot Profile" card in the file inspector sidebar containing:
+  - **Alias:** The filename (e.g. `authHelper.ts`).
+  - **Prior Convictions:** Active complexity smells, circular references, or vulnerabilities.
+  - **Last Seen With:** The most recent committer and changeset description.
+  - **Danger Level:** Scaled dynamically based on lines of code and code smells.
+- **Auto-Close AI Chat Integration:** Links within the chat response automatically trigger viewport focus, closing the AI chat drawer to display the Suspect Profile in the right sidebar without UI occlusion.
 
 ---
 
