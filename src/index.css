@@ -695,13 +695,13 @@ code, pre {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 2000;
 }
 
 .settings-modal {
   width: 500px;
   max-width: 90%;
-  max-height: 90vh;
+  max-height: 80vh;
   overflow-y: auto;
   padding: 24px;
   display: flex;
