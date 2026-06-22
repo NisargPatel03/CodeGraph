@@ -233,6 +233,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
   const weatherCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [weatherEnabled, setWeatherEnabled] = useState<boolean>(true);
+  const [showWeatherHud, setShowWeatherHud] = useState<boolean>(true);
+  const [isWeatherHudCollapsed, setIsWeatherHudCollapsed] = useState<boolean>(false);
   const boundsRef = useRef({ minX: -100, maxX: 100, minY: -100, maxY: 100 });
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
@@ -303,6 +305,21 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [currentTraceStep, setCurrentTraceStep] = useState(0);
   const [showUmlModal, setShowUmlModal] = useState(false);
   const [umlActiveTab, setUmlActiveTab] = useState<'preview' | 'syntax'>('preview');
+
+  // Eco-climate stats calculations for UI HUD
+  const cycleCount = graphData?.cycles?.length || 0;
+  const allCanvasNodes = [...(graphData?.nodes || []), ...(showNpmPackages ? (graphData?.npmNodes || []) : [])];
+  const vulnerableNodes = allCanvasNodes.filter(n => n.isVulnerable);
+  const cveCount = vulnerableNodes.length;
+
+  const avgComp = (graphData?.nodes || []).reduce((acc, n) => acc + (n.complexity || 0), 0) / ((graphData?.nodes || []).length || 1);
+  const avgChurn = (graphData?.nodes || []).reduce((acc, n) => acc + (n.churn || 0), 0) / ((graphData?.nodes || []).length || 1);
+  const hotspotNodes = (graphData?.nodes || []).filter(n => (n.complexity || 0) >= avgComp && (n.churn || 0) >= avgChurn);
+  const hotspotCount = hotspotNodes.length;
+
+  const totalDisturbance = cveCount + cycleCount + hotspotCount;
+  const isStormActive = totalDisturbance > 15;
+  const isClearSkyActive = totalDisturbance === 0;
 
   const getCanvasStyles = () => {
     let cssText = '';
@@ -5395,6 +5412,19 @@ code, pre, .mono {
               <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: '1.2', marginTop: '4px' }}>
                 Passive visual overlay & audio sonification mapping codebase complexity, circular loops, and vulnerabilities to atmospheric weather events.
               </div>
+              {weatherEnabled && (
+                <div className="toggle-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '6px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Show Status HUD</span>
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={showWeatherHud} 
+                      onChange={(e) => setShowWeatherHud(e.target.checked)} 
+                    />
+                    <span className="slider round"></span>
+                  </label>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -5760,6 +5790,77 @@ code, pre, .mono {
             zIndex: 10 
           }} 
         />
+      )}
+
+      {weatherEnabled && showWeatherHud && (
+        <div className="weather-hud-panel" onClick={(e) => e.stopPropagation()}>
+          <div 
+            className="weather-hud-header" 
+            onClick={() => setIsWeatherHudCollapsed(!isWeatherHudCollapsed)}
+            title={isWeatherHudCollapsed ? "Expand Legend HUD" : "Collapse Legend HUD"}
+          >
+            <div className="weather-hud-title">
+              <span>🌧️ Climate Indicators</span>
+            </div>
+            <button className="weather-hud-toggle-btn">
+              {isWeatherHudCollapsed ? '▲ Expand' : '▼ Collapse'}
+            </button>
+          </div>
+          
+          {!isWeatherHudCollapsed && (
+            <div className="weather-hud-content">
+              <div className={`weather-hud-row ${isClearSkyActive ? 'active' : ''}`}>
+                <div className="weather-hud-row-left">
+                  <span className={`weather-status-dot ${isClearSkyActive ? 'active clear' : ''}`} />
+                  <span>☀️ Clear Sky</span>
+                </div>
+                <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>
+                  {isClearSkyActive ? 'Active (Calm)' : 'Inactive'}
+                </span>
+              </div>
+
+              <div className={`weather-hud-row ${cycleCount > 0 ? 'active' : ''}`}>
+                <div className="weather-hud-row-left">
+                  <span className={`weather-status-dot ${cycleCount > 0 ? 'active rain' : ''}`} />
+                  <span>🌧️ Acid Rain</span>
+                </div>
+                <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>
+                  {cycleCount > 0 ? `Active (${cycleCount} cycles)` : 'Inactive'}
+                </span>
+              </div>
+
+              <div className={`weather-hud-row ${hotspotCount > 0 ? 'active' : ''}`}>
+                <div className="weather-hud-row-left">
+                  <span className={`weather-status-dot ${hotspotCount > 0 ? 'active magma' : ''}`} />
+                  <span>🌋 Hotspot Magma</span>
+                </div>
+                <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>
+                  {hotspotCount > 0 ? `Active (${hotspotCount} hotspots)` : 'Inactive'}
+                </span>
+              </div>
+
+              <div className={`weather-hud-row ${cveCount > 0 ? 'active' : ''}`}>
+                <div className="weather-hud-row-left">
+                  <span className={`weather-status-dot ${cveCount > 0 ? 'active lightning' : ''}`} />
+                  <span>⚡ Lightning Arcs</span>
+                </div>
+                <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>
+                  {cveCount > 0 ? `Active (${cveCount} CVEs)` : 'Inactive'}
+                </span>
+              </div>
+
+              <div className={`weather-hud-row ${isStormActive ? 'active' : ''}`}>
+                <div className="weather-hud-row-left">
+                  <span className={`weather-status-dot ${isStormActive ? 'active storm' : ''}`} />
+                  <span>🌪️ Digital Storm</span>
+                </div>
+                <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>
+                  {isStormActive ? `Active (Storm)` : 'Inactive'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {viewMode === 'dbSchema' && dbSchema.tables.length === 0 && (
