@@ -17,6 +17,12 @@ interface OnboardingTourProps {
   setViewMode: (mode: any) => void;
   setSelectedNodeId: (id: string | null) => void;
   selectedNodeId: string | null;
+  tourType?: 'basic' | 'advanced';
+  setTourType?: (type: 'basic' | 'advanced') => void;
+  setIsEvolutionMode?: (active: boolean) => void;
+  setIsChatOpen?: (open: boolean) => void;
+  setIsSettingsOpen?: (open: boolean) => void;
+  setIsMultiSelectActive?: (active: boolean) => void;
 }
 
 export const OnboardingTour: React.FC<OnboardingTourProps> = ({
@@ -26,14 +32,20 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   onLoadDemo,
   setViewMode,
   setSelectedNodeId,
-  selectedNodeId
+  selectedNodeId,
+  tourType = 'basic',
+  setTourType,
+  setIsEvolutionMode,
+  setIsChatOpen,
+  setIsSettingsOpen,
+  setIsMultiSelectActive
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  const steps: TourStep[] = [
+  const basicSteps: TourStep[] = [
     {
       title: 'Welcome to CodeGraph! 🚀',
       description: 'CodeGraph is an advanced codebase visualization and intelligence engine. Let’s take a 2-minute tour to help you master its power.',
@@ -53,7 +65,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
     },
     {
       title: 'D3 Interactive Canvas 🎨',
-      description: 'The core visualization center. Use mouse-wheel to zoom and drag to pan. Click nodes to focus, trace paths, and play audibles.',
+      description: 'The core visualization center. Use mouse-wheel to zoom and drag to pan. Click nodes to focus, trace paths, and play audibles. Includes Git Replay timeline playback and color-coded PR Diff Graphs to visualize changesets directly on the canvas.',
       selector: '.center-panel',
       position: 'center',
       onBeforeShow: () => {
@@ -94,7 +106,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
     },
     {
       title: 'Detailed Code Inspector 🕵️',
-      description: 'Clicking any code node opens the side Inspector. Review functions list, call trace vectors, Git commit count HUDs, generate unit tests, or apply AI code patches directly.',
+      description: 'Clicking any code node opens the side Inspector. Review functions list, call trace vectors, Git commit count HUDs, generate unit tests, or apply AI code patches directly. Unlocks Forensic investigator mode for stack trace crash analysis, inline Monaco IDE editing, and checkboxed Multi-File Refactor suites.',
       selector: '.sidebar-right',
       position: 'left',
       onBeforeShow: () => {
@@ -107,7 +119,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
     },
     {
       title: 'Settings, Themes & Shortcuts ⚙️',
-      description: 'Cycle between Cyber Neon, Midnight Green, Rose Gold, and Arctic Light modes. Check keyboard shortcut overlays (Hotkey "?") and enter your Gemini key to verify AI functions.',
+      description: 'Cycle between Cyber Neon, Midnight Green, Rose Gold, and Arctic Light modes. Check keyboard shortcut overlays (Hotkey "?") and enter your Gemini key to verify AI functions. Toggle responsive ambient Codebase Sonification audio feedback and Eco-Climate Weather visualizations.',
       selector: '.header-actions',
       position: 'bottom',
       onBeforeShow: () => {
@@ -115,6 +127,110 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
       }
     }
   ];
+
+  const advancedSteps: TourStep[] = [
+    {
+      title: 'Advanced Features Tour 🚀',
+      description: 'Welcome to the Advanced Features Tour! Let’s explore CodeGraph’s next-generation analytical and interactive tools.',
+      selector: '',
+      position: 'center',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) {
+          onLoadDemo();
+        }
+      }
+    },
+    {
+      title: 'Git Replay & Evolutionary Playback ⏱️',
+      description: 'Replay the chronological growth of the codebase. Drag the slider to watch new module clusters pop up and expand with purple neon birth pulses and orange modification alerts.',
+      selector: '.evolution-toggle-btn',
+      position: 'bottom',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        setViewMode('dependency');
+        if (setIsEvolutionMode) setIsEvolutionMode(true);
+      }
+    },
+    {
+      title: 'Digital Forensic Investigator Mode 🕵️‍♂️',
+      description: 'Paste an error log or stack trace into the AI Assistant. CodeGraph will automatically parse the log, map the crash site with a pulsating red beacon, draw caution tape paths, and highlight adjacent contaminated modules.',
+      selector: '.tour-trigger-btn',
+      position: 'bottom',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        if (setIsEvolutionMode) setIsEvolutionMode(false);
+        if (setIsChatOpen) setIsChatOpen(true);
+      }
+    },
+    {
+      title: 'Eco-Climate Weather Visualizer 🌧️',
+      description: 'Visualize codebase health as live weather. Circular dependency cycles trigger digital acid rain that ripples on nodes, CVE security flags trigger fractal lightning strikes, and complex hotspots emit volcanic smoke.',
+      selector: '.weather-hud-panel',
+      position: 'top',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        if (setIsChatOpen) setIsChatOpen(false);
+        setViewMode('dependency');
+      }
+    },
+    {
+      title: 'Interactive Codebase Sonification 🔊',
+      description: 'Hear your codebase structure. Large, complex files synthesize low-frequency sawtooth waves, while clean files emit soft sine wave tones. Code cycles trigger dissonant tritones, and execution traces play arpeggios.',
+      selector: '.api-indicator-btn',
+      position: 'bottom',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        if (setIsSettingsOpen) setIsSettingsOpen(true);
+      }
+    },
+    {
+      title: 'Live Collaboration Rooms 🤝',
+      description: 'Establish live peer-to-peer rooms to synchronize viewports, panned coordinates, active selections, and execution traces. Spawn virtual developer bots to demo collaborative interactions offline.',
+      selector: '.collab-hud-container',
+      position: 'bottom',
+      onBeforeShow: () => {
+        if (setIsSettingsOpen) setIsSettingsOpen(false);
+      }
+    },
+    {
+      title: 'Writable Monaco IDE Workspace ✍️',
+      description: 'Edit codebase files directly in the browser using the embedded Monaco Editor. Saving updates immediately runs AST static analysis to recalculate imports, duplicate functions, and complexity grades in real-time.',
+      selector: '.sidebar-right',
+      position: 'left',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        setViewMode('dependency');
+        if (!selectedNodeId) {
+          setSelectedNodeId('src/App.tsx');
+        }
+      }
+    },
+    {
+      title: 'Multi-File Refactor Console 🗂️',
+      description: 'Toggle the multi-select mode to checkmark multiple files in your workspace tree. Trigger the refactor engine to stream shared helper proposals and decoupling strategies from Gemini.',
+      selector: '.multi-select-toggle-row',
+      position: 'right',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        if (setIsMultiSelectActive) setIsMultiSelectActive(true);
+      }
+    },
+    {
+      title: 'Codebase Fingerprint Certificate 📜',
+      description: 'Review your project\'s security, quality, and maintainability grades on a biometric radar chart. Export a high-fidelity 16:9 certificate graphic for review or sharing.',
+      selector: '.tabs-group button:nth-of-type(5)',
+      position: 'bottom',
+      onBeforeShow: () => {
+        if (!hasRepoLoaded) onLoadDemo();
+        if (setIsMultiSelectActive) setIsMultiSelectActive(false);
+        setViewMode('analytics');
+      }
+    }
+  ];
+
+  const steps = tourType === 'advanced' ? advancedSteps : basicSteps;
+
+  const [showEndPrompt, setShowEndPrompt] = useState(false);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -141,13 +257,30 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   };
 
   const handleComplete = () => {
-    localStorage.setItem('completed_onboarding_tour', 'true');
-    onClose();
+    if (tourType === 'basic') {
+      localStorage.setItem('completed_onboarding_tour', 'true');
+      setShowEndPrompt(true);
+    } else {
+      localStorage.setItem('completed_advanced_tour', 'true');
+      onClose();
+    }
   };
+
+  // Reset step and end prompt on open/tourType change
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(0);
+      setShowEndPrompt(false);
+      const active = tourType === 'advanced' ? advancedSteps[0] : basicSteps[0];
+      if (active && active.onBeforeShow) {
+        active.onBeforeShow();
+      }
+    }
+  }, [isOpen, tourType]);
 
   // Keyboard navigation listeners
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || showEndPrompt) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') {
@@ -164,7 +297,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentStep]);
+  }, [isOpen, currentStep, showEndPrompt, tourType]);
 
   // Recalculate target positions
   useEffect(() => {
@@ -356,96 +489,167 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
         }
       `}</style>
 
-      {/* Screen Mask backdrop */}
-      <div className="onboarding-overlay-mask" onClick={handleComplete} />
-
-      {/* Spotlight box around active target */}
-      {highlightRect && (
-        <div
-          className="onboarding-spotlight"
-          style={{
-            left: `${highlightRect.left - 6}px`,
-            top: `${highlightRect.top - 6}px`,
-            width: `${highlightRect.width + 12}px`,
-            height: `${highlightRect.height + 12}px`
-          }}
-        />
-      )}
-
-      {/* Floating Tooltip Card */}
-      <div
-        ref={tooltipRef}
-        className="onboarding-card"
-        style={tooltipStyle}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-secondary, #00f2fe)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <Sparkles size={13} />
-            <span>Interactive Guide</span>
-          </div>
-          <button
-            onClick={handleComplete}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted, #9ca3af)', cursor: 'pointer', display: 'flex', padding: 0 }}
-            title="Skip Tour"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-          {activeStep.title}
-        </h3>
-
-        <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: 'var(--text-secondary, #9ca3af)', lineHeight: '1.5' }}>
-          {activeStep.description}
-        </p>
-
-        {currentStep === 1 && !hasRepoLoaded && (
-          <button
-            className="cyber-button"
-            style={{ width: '100%', marginBottom: '16px', fontSize: '0.8rem', padding: '10px' }}
-            onClick={() => {
-              onLoadDemo();
-              // Advance to next step once demo loads
-              setTimeout(() => handleNext(), 300);
+      {showEndPrompt ? (
+        <>
+          <div className="onboarding-overlay-mask" onClick={() => { setShowEndPrompt(false); onClose(); }} />
+          <div
+            ref={tooltipRef}
+            className="onboarding-card"
+            style={{
+              position: 'fixed',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 999999,
+              width: '420px',
+              maxWidth: '90vw'
             }}
           >
-            🚀 Load Demo Sandbox & Start Tour
-          </button>
-        )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-secondary, #00f2fe)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Sparkles size={13} />
+                <span>Tour Completed!</span>
+              </div>
+              <button
+                onClick={() => { setShowEndPrompt(false); onClose(); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted, #9ca3af)', cursor: 'pointer', display: 'flex', padding: 0 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="onboarding-dots">
-            {steps.map((_, idx) => (
-              <div
-                key={idx}
-                className={`onboarding-dot ${idx === currentStep ? 'active' : ''}`}
-              />
-            ))}
-          </div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Quick Tour Complete! 🎉
+            </h3>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {currentStep > 0 && (
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: 'var(--text-secondary, #9ca3af)', lineHeight: '1.5' }}>
+              You have mastered the basics of CodeGraph! Would you like to take the **Advanced Features Tour** now to explore Git Replay, digital forensic stack trace debugging, live atmospheric weather visualizers, ambient codebase sonification, and live collaboration?
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 className="cyber-button secondary"
-                style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                onClick={handlePrev}
+                style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                onClick={() => {
+                  setShowEndPrompt(false);
+                  onClose();
+                }}
               >
-                <ArrowLeft size={12} />
-                Back
+                No, thanks
+              </button>
+              <button
+                className="cyber-button"
+                style={{ padding: '8px 18px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => {
+                  setShowEndPrompt(false);
+                  if (setTourType) {
+                    setTourType('advanced');
+                  }
+                  setCurrentStep(0);
+                  if (advancedSteps[0].onBeforeShow) {
+                    advancedSteps[0].onBeforeShow();
+                  }
+                }}
+              >
+                Start Advanced Tour
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Screen Mask backdrop */}
+          <div className="onboarding-overlay-mask" onClick={handleComplete} />
+
+          {/* Spotlight box around active target */}
+          {highlightRect && (
+            <div
+              className="onboarding-spotlight"
+              style={{
+                left: `${highlightRect.left - 6}px`,
+                top: `${highlightRect.top - 6}px`,
+                width: `${highlightRect.width + 12}px`,
+                height: `${highlightRect.height + 12}px`
+              }}
+            />
+          )}
+
+          {/* Floating Tooltip Card */}
+          <div
+            ref={tooltipRef}
+            className="onboarding-card"
+            style={tooltipStyle}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-secondary, #00f2fe)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Sparkles size={13} />
+                <span>Interactive Guide</span>
+              </div>
+              <button
+                onClick={handleComplete}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted, #9ca3af)', cursor: 'pointer', display: 'flex', padding: 0 }}
+                title="Skip Tour"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {activeStep.title}
+            </h3>
+
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: 'var(--text-secondary, #9ca3af)', lineHeight: '1.5' }}>
+              {activeStep.description}
+            </p>
+
+            {currentStep === 1 && !hasRepoLoaded && (
+              <button
+                className="cyber-button"
+                style={{ width: '100%', marginBottom: '16px', fontSize: '0.8rem', padding: '10px' }}
+                onClick={() => {
+                  onLoadDemo();
+                  setTimeout(() => handleNext(), 300);
+                }}
+              >
+                🚀 Load Demo Sandbox & Start Tour
               </button>
             )}
-            <button
-              className="cyber-button"
-              style={{ padding: '6px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-              onClick={handleNext}
-            >
-              {currentStep === steps.length - 1 ? 'Finish' : 'Next'}
-              <ArrowRight size={12} />
-            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="onboarding-dots">
+                {steps.map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`onboarding-dot ${idx === currentStep ? 'active' : ''}`}
+                  />
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {currentStep > 0 && (
+                  <button
+                    className="cyber-button secondary"
+                    style={{ padding: '6px 12px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    onClick={handlePrev}
+                  >
+                    <ArrowLeft size={12} />
+                    Back
+                  </button>
+                )}
+                <button
+                  className="cyber-button"
+                  style={{ padding: '6px 16px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  onClick={handleNext}
+                >
+                  {currentStep === steps.length - 1 ? 'Finish' : 'Next'}
+                  <ArrowRight size={12} />
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </>
   );
 };

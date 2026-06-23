@@ -242,6 +242,8 @@ export default function App() {
   const [isTourOpen, setIsTourOpen] = useState(() => {
     return !localStorage.getItem('completed_onboarding_tour');
   });
+  const [tourType, setTourType] = useState<'basic' | 'advanced'>('basic');
+  const [showTourMenu, setShowTourMenu] = useState(false);
   const [telemetry, setTelemetry] = useState(() => getCacheTelemetry());
 
   const handleLoadDemo = () => {
@@ -1239,8 +1241,8 @@ export default function App() {
 
           {/* Onboarding Tour Button */}
           <div
-            onClick={() => setIsTourOpen(true)}
             style={{
+              position: 'relative',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1254,13 +1256,107 @@ export default function App() {
               whiteSpace: 'nowrap',
               flexShrink: 0
             }}
-            title="Start Onboarding Tour"
             className="tour-trigger-btn"
+            onMouseEnter={() => setShowTourMenu(true)}
+            onMouseLeave={() => setShowTourMenu(false)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--color-primary)' }}>
               <Sparkles size={14} />
-              <span>Quick Tour</span>
+              <span>Interactive Tours</span>
+              <ChevronDown size={10} style={{ opacity: 0.7 }} />
             </div>
+
+            {showTourMenu && (
+              <div 
+                className="glass-panel"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: 'var(--panel-bg, rgba(15, 23, 42, 0.95))',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(139, 92, 246, 0.1)',
+                  zIndex: 1000,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '6px',
+                  width: '200px',
+                  animation: 'onboarding-card-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setTourType('basic');
+                    setIsTourOpen(true);
+                    setShowTourMenu(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'var(--text-primary)',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    gap: '2px',
+                    width: '100%'
+                  }}
+                  className="tour-menu-item"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.color = 'var(--color-secondary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                >
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>✨ Quick Tour (Basic)</span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Master the core platform features</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setTourType('advanced');
+                    setIsTourOpen(true);
+                    setShowTourMenu(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    color: 'var(--text-primary)',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    gap: '2px',
+                    marginTop: '4px',
+                    width: '100%'
+                  }}
+                  className="tour-menu-item"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.color = 'var(--color-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }}
+                >
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>🚀 Advanced Features</span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Git Replay, Sonification & Weather</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Keyboard Shortcuts Help Button */}
@@ -2087,6 +2183,12 @@ export default function App() {
         setViewMode={setViewMode}
         setSelectedNodeId={setSelectedNodeId}
         selectedNodeId={selectedNodeId}
+        tourType={tourType}
+        setTourType={setTourType}
+        setIsEvolutionMode={setIsEvolutionMode}
+        setIsChatOpen={setIsChatOpen}
+        setIsSettingsOpen={setIsSettingsOpen}
+        setIsMultiSelectActive={setIsMultiSelectActive}
       />
 
       {toastMessage && (
