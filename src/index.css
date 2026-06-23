@@ -971,7 +971,7 @@ code, pre {
 .markdown-body h1, .markdown-body h2, .markdown-body h3 {
   margin-top: 16px;
   margin-bottom: 8px;
-  color: #fff;
+  color: var(--text-primary);
 }
 .markdown-body p {
   margin-bottom: 12px;
@@ -1062,7 +1062,7 @@ code, pre {
   --bg-grid: rgba(99, 102, 241, 0.05);
   --panel-bg: rgba(255, 255, 255, 0.88);
   --panel-border: rgba(15, 23, 42, 0.08);
-  --panel-border-glow: rgba(99, 102, 241, 0.12);
+  --panel-border-glow: rgba(99, 102, 241, 0.28);
   --color-primary: #6366F1; /* Indigo */
   --color-primary-glow: rgba(99, 102, 241, 0.3);
   --color-secondary: #0EA5E9; /* Sky Blue */
@@ -1074,7 +1074,7 @@ code, pre {
   --input-bg: rgba(15, 23, 42, 0.04);
   --tabs-header-bg: rgba(15, 23, 42, 0.03);
   --scrollbar-thumb: rgba(15, 23, 42, 0.12);
-  --panel-glow-color: rgba(99, 102, 241, 0.08);
+  --panel-glow-color: rgba(99, 102, 241, 0.24);
 }
 
 [data-theme="rose-gold"] {

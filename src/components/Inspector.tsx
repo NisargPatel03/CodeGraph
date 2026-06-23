@@ -2394,7 +2394,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                         minimap: { enabled: true },
                         wordWrap: 'on',
                         fontSize: 12,
-                        fontFamily: 'var(--font-mono)',
+                        fontFamily: "'JetBrains Mono', Menlo, Monaco, 'Courier New', monospace",
+                        fontLigatures: true,
                         lineNumbers: 'on',
                         automaticLayout: true,
                         scrollbar: {
