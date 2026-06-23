@@ -936,6 +936,18 @@ code, pre {
   stroke-width: 2.5px !important;
 }
 
+.particle-flow-line {
+  stroke-dasharray: 4, 24;
+  animation: bioluminescent-drift 12s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes bioluminescent-drift {
+  to {
+    stroke-dashoffset: -120;
+  }
+}
+
 /* --- Hull Boundaries --- */
 .hull-boundary {
   fill-opacity: 0.04;
@@ -3440,21 +3452,85 @@ input:checked + .slider:before {
   line-height: 1.5;
   white-space: pre-wrap;
 }
-/* Blinking Typing Cursor Indicator */
+/* Blinking Typing Cursor Indicator with AI Sparkle Particle Trail */
 .typing-cursor {
   display: inline-block;
   width: 7px;
   height: 14px;
-  background: var(--color-primary);
-  box-shadow: 0 0 8px var(--color-primary);
+  background: var(--color-secondary);
+  box-shadow: 0 0 8px var(--color-secondary);
   margin-left: 4px;
   vertical-align: middle;
-  animation: blink-cursor 0.8s infinite;
+  position: relative;
+  animation: blink-cursor 0.6s infinite alternate;
+}
+
+.typing-cursor::before, .typing-cursor::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.typing-cursor::before {
+  animation: sparkle-emit-1 1.4s infinite ease-out;
+}
+
+.typing-cursor::after {
+  animation: sparkle-emit-2 1.4s infinite ease-out 0.7s;
 }
 
 @keyframes blink-cursor {
-  0%, 100% { opacity: 0; }
+  0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
+}
+
+@keyframes sparkle-emit-1 {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 
+      -8px -8px 0 var(--color-secondary),
+      8px -12px 0 var(--color-primary),
+      -12px 8px 0 var(--color-secondary),
+      12px 12px 0 var(--color-primary);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.1);
+    box-shadow: 
+      -24px -24px 8px rgba(0, 242, 254, 0),
+      24px -36px 8px rgba(139, 92, 246, 0),
+      -36px 24px 8px rgba(0, 242, 254, 0),
+      36px 36px 8px rgba(139, 92, 246, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes sparkle-emit-2 {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 
+      8px -8px 0 var(--color-primary),
+      -8px -12px 0 var(--color-secondary),
+      12px 8px 0 var(--color-primary),
+      -12px 12px 0 var(--color-secondary);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.1);
+    box-shadow: 
+      24px -24px 8px rgba(139, 92, 246, 0),
+      -24px -36px 8px rgba(0, 242, 254, 0),
+      36px 24px 8px rgba(139, 92, 246, 0),
+      -36px 36px 8px rgba(0, 242, 254, 0);
+    opacity: 0;
+  }
 }
 
 /* Pulsing Focus Glow Ring for Selected Node */

@@ -116,6 +116,64 @@ class AudioSonifier {
     }, 100);
   }
 
+  public playHapticClick() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1800, t);
+    osc.frequency.exponentialRampToValueAtTime(800, t + 0.03);
+
+    gain.gain.setValueAtTime(0.06, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.035);
+
+    setTimeout(() => {
+      osc.disconnect();
+      gain.disconnect();
+    }, 100);
+  }
+
+  public playHapticHover() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2200, t);
+    osc.frequency.setValueAtTime(2000, t + 0.015);
+
+    gain.gain.setValueAtTime(0.02, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.02);
+
+    setTimeout(() => {
+      osc.disconnect();
+      gain.disconnect();
+    }, 50);
+  }
+
   public playNodeHover(node: any) {
     if (!this.enabled) return;
     this.init();

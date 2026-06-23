@@ -871,7 +871,7 @@ export default function App() {
   }, [repoData]);
 
   const toggleFolder = (path: string) => {
-    audioSonifier.playClick();
+    audioSonifier.playHapticClick();
     setExpandedFolders((prev) => ({
       ...prev,
       [path]: !prev[path],
@@ -1646,43 +1646,43 @@ export default function App() {
                 <div className="tabs-group">
                   <button
                     className={`tab-btn ${viewMode === 'dependency' ? 'active' : ''}`}
-                    onClick={() => setViewMode('dependency')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('dependency'); }}
                   >
                     Dependency Graph
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'cluster' ? 'active' : ''}`}
-                    onClick={() => setViewMode('cluster')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('cluster'); }}
                   >
                     Module Clusters
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'call' ? 'active' : ''}`}
-                    onClick={() => setViewMode('call')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('call'); }}
                   >
                     Call Graph
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'hierarchy' ? 'active' : ''}`}
-                    onClick={() => setViewMode('hierarchy')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('hierarchy'); }}
                   >
                     Component Tree
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'analytics' ? 'active' : ''}`}
-                    onClick={() => setViewMode('analytics')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('analytics'); }}
                   >
                     📊 Analytics
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'docs' ? 'active' : ''}`}
-                    onClick={() => setViewMode('docs')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('docs'); }}
                   >
                     📖 API Docs
                   </button>
                   <button
                     className={`tab-btn ${viewMode === 'dbSchema' ? 'active' : ''}`}
-                    onClick={() => setViewMode('dbSchema')}
+                    onClick={() => { audioSonifier.playHapticClick(); setViewMode('dbSchema'); }}
                   >
                     🗃️ DB Schema
                   </button>

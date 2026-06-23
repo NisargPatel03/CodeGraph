@@ -251,6 +251,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const zoomBehaviorRef = useRef<any>(null);
   const drawMinimapRef = useRef<(() => void) | null>(null);
   const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const prevViewModeRef = useRef<string>(viewMode);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(1500); // Default to 2x speed (1500ms)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -2750,6 +2751,23 @@ code, pre, .mono {
         return isViolating ? 'url(#arrow-violating)' : 'url(#arrow-normal)';
       });
 
+    const particleFlow = mainGroup.append('g').attr('class', 'particle-flows-container').selectAll('.particle-flow-line')
+      .data(links)
+      .enter()
+      .append(viewMode === 'dbSchema' ? 'path' : 'line')
+      .attr('class', 'particle-flow-line')
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--color-secondary)')
+      .attr('stroke-width', (d: any) => {
+        if (viewMode === 'dbSchema') return 1.0;
+        if (viewMode === 'dependency' && d.weight !== undefined) {
+          return (1.0 + Math.min(d.weight * 0.5, 6.0)) * 0.8;
+        }
+        return d.isAggregated ? (1.5 + Math.min(d.weight * 0.4, 4)) * 0.8 : 1.2;
+      })
+      .attr('stroke-opacity', 0.28)
+      .style('pointer-events', 'none');
+
     // Compute blast radius set from the crime scene node connections
     const blastRadiusSet = new Set<string>();
     if (forensicModeEnabled && crimeSceneData && crimeSceneData.crimeSceneNodeId) {
@@ -2889,9 +2907,23 @@ code, pre, .mono {
         setHoveredCluster(null);
         setHoveredComponentDetails(null);
       })
-      .call(d3.drag<any, any>().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-        .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+      .call(d3.drag<any, any>().on('start', (e, d) => {
+        audioSonifier.playHapticClick();
+        if (!e.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+        .on('drag', (e, d) => {
+          if (Math.random() < 0.12) audioSonifier.playHapticHover();
+          d.fx = e.x;
+          d.fy = e.y;
+        })
+        .on('end', (e, d) => {
+          audioSonifier.playHapticClick();
+          if (!e.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }));
 
     node.each(function (d: any) {
       const element = d3.select(this);
@@ -3322,7 +3354,7 @@ code, pre, .mono {
       activeNodesRef.current = [...nodes];
       activeLinksRef.current = [...links];
       if (viewMode === 'dbSchema') {
-        link.attr('d', (d: any) => {
+        const pathCalculator = (d: any) => {
           const source = d.source;
           const target = d.target;
           if (!source || !target || source.x === undefined || target.x === undefined) return '';
@@ -3342,12 +3374,21 @@ code, pre, .mono {
 
           const midX = (srcX + tgtX) / 2;
           return `M${srcX},${srcY} Q${midX},${(srcY + tgtY)/2 - 10} ${tgtX},${tgtY}`;
-        });
+        };
+        link.attr('d', pathCalculator);
+        particleFlow.attr('d', pathCalculator);
       } else {
-        link.attr('x1', (d) => d.source.x).attr('y1', (d) => d.source.y).attr('x2', (d) => d.target.x).attr('y2', (d) => d.target.y);
+        const lineUpdater = (selection: any) => {
+          selection.attr('x1', (d: any) => d.source.x)
+            .attr('y1', (d: any) => d.source.y)
+            .attr('x2', (d: any) => d.target.x)
+            .attr('y2', (d: any) => d.target.y);
+        };
+        lineUpdater(link);
+        lineUpdater(particleFlow);
         if (forensicModeEnabled && crimeSceneData) {
-          cautionTape.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y).attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
-          cautionTapeStripe.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y).attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
+          lineUpdater(cautionTape);
+          lineUpdater(cautionTapeStripe);
         }
       }
       if (pipeline) {
@@ -3358,18 +3399,100 @@ code, pre, .mono {
       drawMinimap();
     };
 
-    // Warm up the simulation synchronously to avoid browser tab freezing
-    // during the initial chaotic settling phase on larger graphs, or to fully
-    // stabilize the layout immediately for diagram exporting in DB Schema.
+    // Warm up the simulation synchronously to get the target layout coordinates
     const nodeCount = nodes.length;
-    if (nodeCount > 100 || viewMode === 'dbSchema') {
-      simulation.stop();
-      const warmupTicks = viewMode === 'dbSchema' ? 250 : Math.min(180, Math.max(100, Math.floor(nodeCount / 3.5)));
-      for (let i = 0; i < warmupTicks; ++i) {
-        simulation.tick();
+    simulation.stop();
+    const warmupTicks = viewMode === 'dbSchema' ? 250 : Math.min(180, Math.max(100, Math.floor(nodeCount / 3.5)));
+    for (let i = 0; i < warmupTicks; ++i) {
+      simulation.tick();
+    }
+
+    const isModeChange = prevViewModeRef.current !== viewMode;
+    prevViewModeRef.current = viewMode;
+
+    const oldPositions = new Map<string, { x: number; y: number }>();
+    nodes.forEach((n) => {
+      const pos = nodePositionsRef.current.get(n.id);
+      if (pos) {
+        oldPositions.set(n.id, { x: pos.x, y: pos.y });
       }
-      // Apply the pre-calculated positions immediately
+    });
+
+    const targetPositions = new Map<string, { x: number; y: number }>();
+    nodes.forEach(n => {
+      targetPositions.set(n.id, { x: n.x || 0, y: n.y || 0 });
+    });
+
+    if (isModeChange && oldPositions.size > 0) {
+      // Set initial positions to old positions
+      nodes.forEach(n => {
+        const old = oldPositions.get(n.id);
+        if (old) {
+          n.x = old.x;
+          n.y = old.y;
+        } else {
+          n.x = 0;
+          n.y = 0;
+        }
+      });
       handleTickUpdate();
+
+      // Topological Morphing Transition (Bezier Trajectory Curve)
+      const duration = 850;
+      const startTime = performance.now();
+
+      const animate = (time: number) => {
+        const elapsed = time - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Cubic easing out curve
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        nodes.forEach(n => {
+          const old = oldPositions.get(n.id) || { x: 0, y: 0 };
+          const target = targetPositions.get(n.id) || { x: 0, y: 0 };
+
+          // Linear path interpolation
+          const midX = old.x + (target.x - old.x) * ease;
+          const midY = old.y + (target.y - old.y) * ease;
+
+          // Add curved bezier perpendicular arc offset
+          const dx = target.x - old.x;
+          const dy = target.y - old.y;
+          const perpX = -dy;
+          const perpY = dx;
+          // Curve peaks in the middle of transition
+          const arcScale = 0.12 * Math.sin(progress * Math.PI);
+          
+          n.x = midX + perpX * arcScale;
+          n.y = midY + perpY * arcScale;
+        });
+
+        handleTickUpdate();
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Restart force simulation to keep interactive drags working
+          if (viewMode !== 'dbSchema' && viewMode !== 'hierarchy') {
+            simulation.alpha(0.3).restart();
+          }
+        }
+      };
+      requestAnimationFrame(animate);
+    } else {
+      // If not a mode change, just apply positions immediately
+      nodes.forEach(n => {
+        const target = targetPositions.get(n.id);
+        if (target) {
+          n.x = target.x;
+          n.y = target.y;
+        }
+      });
+      handleTickUpdate();
+      if (viewMode !== 'dbSchema' && viewMode !== 'hierarchy') {
+        simulation.alpha(0.3).restart();
+      }
     }
 
     simulation.on('tick', handleTickUpdate);
