@@ -523,7 +523,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
             </h3>
 
             <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: 'var(--text-secondary, #9ca3af)', lineHeight: '1.5' }}>
-              You have mastered the basics of CodeGraph! Would you like to take the **Advanced Features Tour** now to explore Git Replay, digital forensic stack trace debugging, live atmospheric weather visualizers, ambient codebase sonification, and live collaboration?
+              You have mastered the basics of CodeGraph! Would you like to take the <strong>Advanced Features Tour</strong> now to explore Git Replay, digital forensic stack trace debugging, live atmospheric weather visualizers, ambient codebase sonification, and live collaboration?
             </p>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
