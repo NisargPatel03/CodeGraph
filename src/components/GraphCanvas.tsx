@@ -279,6 +279,11 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
   const [showDbAuditModal, setShowDbAuditModal] = useState(false);
   const [dbAuditError, setDbAuditError] = useState<string | null>(null);
 
+  // Wow Layer States
+  const [isPresenterMode, setIsPresenterMode] = useState(false);
+  const isPresenterModeRef = useRef(false);
+  const [radarActive, setRadarActive] = useState(false);
+
   // Advanced features states
   const [showNpmPackages, setShowNpmPackages] = useState(false);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
@@ -309,6 +314,44 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({
       window.removeEventListener('click', handleCloseDropdown);
     };
   }, [isExportDropdownOpen]);
+
+  useEffect(() => {
+    if (radarActive) {
+      // Play sonar beep!
+      audioSonifier.playHapticClick();
+      const interval = setInterval(() => {
+        audioSonifier.playHapticHover();
+      }, 1500);
+
+      // Append radar-pulse-ring to nodes with issues
+      d3.selectAll('.node-element').each(function (d: any) {
+        const hasIssue = d.isVulnerable || 
+                         (linterViolations?.violatingNodes.includes(d.id)) ||
+                         (d.complexity && d.complexity > 20);
+        
+        if (hasIssue) {
+          const container = d3.select(this);
+          if (container.select('.radar-pulse-ring').empty()) {
+            container.append('circle')
+              .attr('class', 'radar-pulse-ring')
+              .attr('r', 10)
+              .attr('fill', 'none')
+              .attr('stroke', d.isVulnerable ? '#ef4444' : '#a855f7')
+              .attr('stroke-width', 2)
+              .style('pointer-events', 'none')
+              .style('animation', 'radar-alert-pulse 1.8s infinite ease-out');
+          }
+        }
+      });
+
+      return () => {
+        clearInterval(interval);
+        d3.selectAll('.radar-pulse-ring').remove();
+      };
+    } else {
+      d3.selectAll('.radar-pulse-ring').remove();
+    }
+  }, [radarActive, linterViolations, graphData]);
 
   const [heatmapMode, setHeatmapMode] = useState<'none' | 'churn' | 'complexity'>('none');
   const [pathSource, setPathSource] = useState<string | null>(null);
@@ -1308,7 +1351,7 @@ code, pre, .mono {
     }
   };
 
-  const handleSimulateCompare = () => {
+  const handleSimulateCompare = (base = 'main', head = 'feature/auth-upgrade') => {
     setCompareError(null);
     const nodesList = graphData.nodes.filter(n => !n.isNpm);
     if (nodesList.length === 0) {
@@ -1316,52 +1359,192 @@ code, pre, .mono {
       return;
     }
     
-    // Pick 1 or 2 files to modify
+    // Pick files based on selected branches
     const file1 = nodesList[0].id;
-    const file2 = nodesList.length > 1 ? nodesList[Math.min(1, nodesList.length - 1)].id : null;
-    
-    // Get parent path and extensions for simulated added & deleted nodes
     const parentFolder = file1.substring(0, file1.lastIndexOf('/')) || 'src';
     const ext = file1.split('.').pop() || 'tsx';
-    
-    const addedFile = `${parentFolder}/AuthService.${ext}`;
-    const deletedFile = `${parentFolder}/legacyHelper.${ext}`;
-    
-    const simulatedFiles: Record<string, any> = {
-      [file1]: {
-        status: 'modified',
-        additions: 12,
-        deletions: 4,
-        patch: `@@ -8,8 +8,12 @@\n-  const oldConfig = fetchOldSettings();\n-  console.log("Loading deprecations...", oldConfig);\n+  const newConfig = fetchSecureSettings();\n+  console.log("Secure settings loaded successfully.");\n+  validateSettings(newConfig);`
-      },
-      [addedFile]: {
-        status: 'added',
-        additions: 42,
-        deletions: 0,
-        patch: `+ // Authenticated service router\n+ export function validateToken(token: string) {\n+   if (!token) throw new Error("Missing credentials");\n+   return jwt.verify(token, process.env.JWT_SECRET);\n+ }`
-      },
-      [deletedFile]: {
-        status: 'deleted',
-        additions: 0,
-        deletions: 24,
-        patch: `- // Deprecated utilities\n- export function runLegacySync() {\n-   console.warn("Legacy sync has been disabled");\n- }`
-      }
-    };
-    
-    if (file2) {
-      simulatedFiles[file2] = {
-        status: 'modified',
-        additions: 8,
-        deletions: 2,
-        patch: `@@ -42,5 +42,11 @@\n-  return data.map(item => item.id);\n+  if (!data) return [];\n+  const validItems = data.filter(item => item && item.active);\n+  return validItems.map(item => item.id);`
+
+    let simulatedFiles: Record<string, any> = {};
+
+    if (head === 'feature/auth-upgrade') {
+      simulatedFiles = {
+        [file1]: {
+          status: 'modified',
+          additions: 12,
+          deletions: 4,
+          patch: `@@ -8,8 +8,12 @@\n-  const oldConfig = fetchOldSettings();\n-  console.log("Loading deprecations...", oldConfig);\n+  const newConfig = fetchSecureSettings();\n+  console.log("Secure settings loaded successfully.");\n+  validateSettings(newConfig);`
+        },
+        [`${parentFolder}/AuthService.${ext}`]: {
+          status: 'added',
+          additions: 42,
+          deletions: 0,
+          patch: `+ // Authenticated service router\n+ export function validateToken(token: string) {\n+   if (!token) throw new Error("Missing credentials");\n+   return jwt.verify(token, process.env.JWT_SECRET);\n+ }`
+        }
+      };
+    } else if (head === 'feature/appsec-shield') {
+      simulatedFiles = {
+        [file1]: {
+          status: 'modified',
+          additions: 15,
+          deletions: 2,
+          patch: `@@ -42,5 +42,11 @@\n-  return data.map(item => item.id);\n+  if (!data) return [];\n+  const validItems = data.filter(item => item && item.active);\n+  return validItems.map(item => item.id);`
+        },
+        [`${parentFolder}/utils/securityScanner.${ext}`]: {
+          status: 'added',
+          additions: 88,
+          deletions: 0,
+          patch: `+ // Transitive CVE vulnerability scanner\n+ export function scanPackages(deps: string[]) {\n+   return deps.map(d => checkCveDatabase(d));\n+ }`
+        },
+        [`${parentFolder}/components/VulnerabilityReport.${ext}`]: {
+          status: 'added',
+          additions: 120,
+          deletions: 0,
+          patch: `+ // AppSec UI vulnerabilities report list\n+ export const VulnerabilityReport = () => {\n+   return <div className="cve-report">AppSec Shields</div>;\n+ }`
+        },
+        [`${parentFolder}/utils/legacyHelper.${ext}`]: {
+          status: 'deleted',
+          additions: 0,
+          deletions: 50,
+          patch: `- // Deprecated legacy helpers\n- export function parseLegacyData() {\n-   return null;\n- }`
+        }
+      };
+    } else if (head === 'release/v2.0') {
+      simulatedFiles = {
+        [file1]: {
+          status: 'modified',
+          additions: 35,
+          deletions: 12,
+          patch: `@@ -12,4 +12,12 @@\n-  renderDefaultLayout();\n+  renderV2GlassmorphicLayout();\n+  enableAtmosphericWeatherVisualizer();`
+        },
+        [`${parentFolder}/components/DashboardV2.${ext}`]: {
+          status: 'added',
+          additions: 230,
+          deletions: 0,
+          patch: `+ // Premium Glassmorphic Dashboard Layout\n+ export const DashboardV2 = () => {\n+   return <div className="glass-dashboard">V2 Interface</div>;\n+ }`
+        },
+        [`${parentFolder}/utils/legacyHelper.${ext}`]: {
+          status: 'deleted',
+          additions: 0,
+          deletions: 50,
+          patch: `- // Deprecated legacy helpers\n- export function parseLegacyData() {\n-   return null;\n- }`
+        }
+      };
+    } else {
+      // Default dev branch
+      simulatedFiles = {
+        [file1]: {
+          status: 'modified',
+          additions: 5,
+          deletions: 5,
+          patch: `@@ -1,3 +1,3 @@\n- console.log("Init");\n+ devLogger.info("CodeGraph Initialized in dev mode");`
+        },
+        [`${parentFolder}/utils/devLogger.${ext}`]: {
+          status: 'added',
+          additions: 30,
+          deletions: 0,
+          patch: `+ // Dev tool logger\n+ export const devLogger = {\n+   info: (msg: string) => console.log("[DEV]", msg)\n+ };`
+        }
       };
     }
     
     setDiffData({
-      base: 'main',
-      head: 'feature/auth-upgrade',
+      base: base,
+      head: head,
       files: simulatedFiles
     });
+
+    // Trigger visual morph transitions on D3 nodes
+    audioSonifier.playHapticClick();
+    
+    setTimeout(() => {
+      d3.selectAll('.node-element').each(function(d: any) {
+        const fileInfo = simulatedFiles[d.id];
+        const container = d3.select(this);
+        if (fileInfo) {
+          if (fileInfo.status === 'deleted') {
+            container.transition()
+              .duration(1200)
+              .attr('transform', `translate(${d.x - 100}, ${d.y - 100}) scale(0.2)`)
+              .style('opacity', 0.3)
+              .transition()
+              .duration(600)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(1)`)
+              .style('opacity', 1);
+          } else if (fileInfo.status === 'modified') {
+            container.transition()
+              .duration(600)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(1.4)`)
+              .transition()
+              .duration(600)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(1)`);
+          } else if (fileInfo.status === 'added') {
+            container
+              .style('opacity', 0)
+              .transition()
+              .duration(400)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(0.2)`)
+              .style('opacity', 0.5)
+              .transition()
+              .duration(800)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(1.3)`)
+              .style('opacity', 1)
+              .transition()
+              .duration(300)
+              .attr('transform', `translate(${d.x}, ${d.y}) scale(1)`);
+          }
+        }
+      });
+    }, 100);
+  };
+
+  const startPresenterFlyThrough = () => {
+    if (isPresenterModeRef.current) {
+      isPresenterModeRef.current = false;
+      setIsPresenterMode(false);
+      return;
+    }
+    
+    isPresenterModeRef.current = true;
+    setIsPresenterMode(true);
+    audioSonifier.playHapticClick();
+
+    const targetNodes = graphData.nodes.filter(n => !n.isNpm).slice(0, 5);
+    if (targetNodes.length === 0) {
+      isPresenterModeRef.current = false;
+      setIsPresenterMode(false);
+      return;
+    }
+
+    let currentIndex = 0;
+
+    const flyToNext = () => {
+      if (!isPresenterModeRef.current) return;
+      if (currentIndex >= targetNodes.length) {
+        currentIndex = 0;
+      }
+      
+      const nodeData = targetNodes[currentIndex] as any;
+      audioSonifier.playNodeHover({ size: nodeData.size || 20, complexity: nodeData.complexity || 5 });
+      setSelectedNode(nodeData.id);
+
+      const svg = d3.select(svgRef.current);
+      const width = containerRef.current?.clientWidth || 800;
+      const height = containerRef.current?.clientHeight || 600;
+
+      const targetX = width / 2 - (nodeData.x || 0) * 1.5;
+      const targetY = height / 2 - (nodeData.y || 0) * 1.5;
+      const transform = d3.zoomIdentity.translate(targetX, targetY).scale(1.5);
+
+      svg.transition()
+        .duration(2800)
+        .call(zoomBehaviorRef.current.transform, transform)
+        .on('end', () => {
+          currentIndex++;
+          setTimeout(flyToNext, 1200);
+        });
+    };
+
+    setTimeout(flyToNext, 100);
   };
 
   const traceSteps = useMemo(() => {
@@ -2825,6 +3008,88 @@ code, pre, .mono {
       })
       .on('click', (event, d) => {
         event.stopPropagation();
+
+        if (d.isNpm) {
+          // Play click sound
+          audioSonifier.playHapticClick();
+          
+          const parentG = d3.select(event.currentTarget);
+          const hasOrbit = !parentG.select('.npm-orbit-group').empty();
+          
+          // Clear any existing orbits on all nodes
+          d3.selectAll('.npm-orbit-group').remove();
+          
+          if (!hasOrbit) {
+            // Append orbit group
+            const orbitGroup = parentG.append('g').attr('class', 'npm-orbit-group');
+            
+            // Define 4 mock transitive dependencies
+            const orbits = [
+              { name: 'follow-redirects', isVulnerable: true, cve: 'CVE-2023-26159', severity: 'HIGH' },
+              { name: 'debug', isVulnerable: false },
+              { name: 'mime-types', isVulnerable: true, cve: 'CVE-2022-25883', severity: 'MEDIUM' },
+              { name: 'ms', isVulnerable: false }
+            ];
+            
+            const radius = 55;
+            
+            orbits.forEach((orb, index) => {
+              const angle = (index * 2 * Math.PI) / orbits.length;
+              const ox = radius * Math.cos(angle);
+              const oy = radius * Math.sin(angle);
+              
+              // Draw line from parent center (0,0) to orbital node
+              orbitGroup.append('line')
+                .attr('x1', 0)
+                .attr('y1', 0)
+                .attr('x2', ox)
+                .attr('y2', oy)
+                .attr('stroke', orb.isVulnerable ? '#ef4444' : 'var(--color-primary)')
+                .attr('stroke-width', 1)
+                .attr('stroke-dasharray', '2,2')
+                .attr('stroke-opacity', 0.6)
+                .style('opacity', 0)
+                .transition()
+                .duration(600)
+                .style('opacity', 1);
+                
+              // Draw orbit node
+              const orbNode = orbitGroup.append('g')
+                .attr('transform', `translate(${ox}, ${oy})`);
+                
+              const circleElement = orbNode.append('circle')
+                .attr('r', 6)
+                .attr('fill', orb.isVulnerable ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)')
+                .attr('stroke', orb.isVulnerable ? '#ef4444' : 'var(--color-primary)')
+                .attr('stroke-width', 1.5)
+                .style('opacity', 0);
+              
+              circleElement.transition()
+                .duration(600)
+                .style('opacity', 1);
+                
+              if (orb.isVulnerable) {
+                circleElement.classed('vulnerable-pulsate', true);
+              }
+              
+              // Orbit label text
+              orbNode.append('text')
+                .attr('x', ox > 0 ? 9 : -9)
+                .attr('y', 4)
+                .attr('text-anchor', ox > 0 ? 'start' : 'end')
+                .attr('font-size', '8px')
+                .attr('fill', orb.isVulnerable ? '#f43f5e' : 'var(--text-secondary)')
+                .attr('font-family', 'Outfit')
+                .attr('font-weight', '600')
+                .text(orb.isVulnerable ? `${orb.name} (${orb.cve})` : orb.name)
+                .style('opacity', 0)
+                .transition()
+                .duration(800)
+                .style('opacity', 1);
+            });
+          }
+        }
+
         if (viewMode === 'dbSchema') {
           if (d.nodeType === 'api') {
             setSelectedDbTableId(null);
@@ -5621,52 +5886,52 @@ code, pre, .mono {
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '4px', lineHeight: '1.3' }}>
                       Compare codebase changes between branches or pull requests.
                     </div>
-                    {repoName && !repoName.includes('.zip') && repoName.includes('/') ? (
-                      <>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Base</label>
-                            <input 
-                              type="text" 
-                              placeholder="main" 
-                              className="search-input" 
-                              style={{ width: '100%', fontSize: '0.7rem', padding: '4px 8px', height: '26px', background: 'rgba(0,0,0,0.2)' }}
-                              value={baseBranch}
-                              onChange={(e) => setBaseBranch(e.target.value)}
-                            />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Head</label>
-                            <input 
-                              type="text" 
-                              placeholder="feature" 
-                              className="search-input" 
-                              style={{ width: '100%', fontSize: '0.7rem', padding: '4px 8px', height: '26px', background: 'rgba(0,0,0,0.2)' }}
-                              value={headBranch}
-                              onChange={(e) => setHeadBranch(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <button 
-                          className="cyber-button text-btn" 
-                          style={{ padding: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'rgba(99, 102, 241, 0.05)', border: '1px solid rgba(99, 102, 241, 0.25)' }}
-                          onClick={handleCompareGithub}
-                          disabled={isComparing}
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '4px' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Base Branch</label>
+                        <select 
+                          className="search-input"
+                          style={{ width: '100%', fontSize: '0.7rem', padding: '2px 6px', height: '26px', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--panel-border)', borderRadius: '4px', color: 'var(--text-primary)' }}
+                          value={baseBranch}
+                          onChange={(e) => setBaseBranch(e.target.value)}
                         >
-                          {isComparing ? 'Comparing...' : 'Compare GitHub Branches'}
-                        </button>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.6rem', color: 'var(--text-muted)', margin: '2px 0' }}>
-                          <span>or</span>
-                        </div>
-                      </>
-                    ) : null}
+                          <option value="main">main</option>
+                          <option value="dev">dev</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Head Branch</label>
+                        <select 
+                          className="search-input"
+                          style={{ width: '100%', fontSize: '0.7rem', padding: '2px 6px', height: '26px', background: 'rgba(0,0,0,0.25)', border: '1px solid var(--panel-border)', borderRadius: '4px', color: 'var(--text-primary)' }}
+                          value={headBranch}
+                          onChange={(e) => setHeadBranch(e.target.value)}
+                        >
+                          <option value="feature/auth-upgrade">feature/auth-upgrade</option>
+                          <option value="feature/appsec-shield">feature/appsec-shield</option>
+                          <option value="release/v2.0">release/v2.0</option>
+                          <option value="dev">dev</option>
+                        </select>
+                      </div>
+                    </div>
+                    
                     <button 
                       className="cyber-button text-btn" 
-                      style={{ padding: '6px', fontSize: '0.7rem', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)', color: 'var(--text-secondary)' }}
-                      onClick={handleSimulateCompare}
+                      style={{ padding: '6px', fontSize: '0.7rem', background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)', color: '#c084fc', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                      onClick={() => handleSimulateCompare(baseBranch, headBranch)}
                     >
-                      ⚡ Simulate Pull Request Diff
+                      🌿 Compare & Time-Travel Diff
                     </button>
+                    {repoName && !repoName.includes('.zip') && repoName.includes('/') && (
+                      <button 
+                        className="cyber-button text-btn" 
+                        style={{ padding: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'rgba(99, 102, 241, 0.05)', border: '1px solid rgba(99, 102, 241, 0.25)', marginTop: '4px', width: '100%' }}
+                        onClick={handleCompareGithub}
+                        disabled={isComparing}
+                      >
+                        {isComparing ? 'Comparing...' : 'Compare GitHub Branches'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -6069,6 +6334,12 @@ code, pre, .mono {
         />
       )}
 
+      {radarActive && (
+        <div className="radar-sweeper-overlay">
+          <div className="radar-sweeper-line" />
+        </div>
+      )}
+
       {weatherEnabled && showWeatherHud && (
         <div className="weather-hud-panel" onClick={(e) => e.stopPropagation()}>
           <div 
@@ -6418,6 +6689,54 @@ code, pre, .mono {
                 </button>
               </div>
             )}
+
+            {/* Wow Layer Control Center */}
+            <div className="toolbox-section" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                ✨ Extra Premium Features
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  className="cyber-button"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    background: isPresenterMode ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    borderColor: isPresenterMode ? '#a855f7' : 'rgba(255,255,255,0.08)',
+                    color: isPresenterMode ? '#c084fc' : 'var(--text-secondary)',
+                    fontWeight: 600
+                  }}
+                  onClick={startPresenterFlyThrough}
+                >
+                  🎥 {isPresenterMode ? 'Stop Presenter Mode' : 'Cinematic Presenter Mode'}
+                </button>
+                
+                <button
+                  className="cyber-button"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    background: radarActive ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    borderColor: radarActive ? '#a855f7' : 'rgba(255,255,255,0.08)',
+                    color: radarActive ? '#c084fc' : 'var(--text-secondary)',
+                    fontWeight: 600
+                  }}
+                  onClick={() => setRadarActive(!radarActive)}
+                >
+                  📡 {radarActive ? 'Deactivate Radar Scan' : 'Activate Radar Sweeper'}
+                </button>
+              </div>
+            </div>
           </div>
         );
       })()}

@@ -3885,5 +3885,53 @@ input:checked + .slider:before {
   }
 }
 
+/* Radar Sweeper Wow Layer Animations */
+.radar-sweeper-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.03) 0%, rgba(0,0,0,0) 75%);
+  overflow: hidden;
+  z-index: 10;
+}
+
+.radar-sweeper-line {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(168, 85, 247, 0.15) 0deg,
+    rgba(168, 85, 247, 0.03) 120deg,
+    rgba(0,0,0,0) 240deg,
+    rgba(168, 85, 247, 0.15) 360deg
+  );
+  animation: radar-spin 6s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes radar-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes radar-alert-pulse {
+  0% {
+    r: 10px;
+    stroke-opacity: 1;
+    stroke-width: 3px;
+  }
+  100% {
+    r: 28px;
+    stroke-opacity: 0;
+    stroke-width: 1px;
+  }
+}
+
 
 
