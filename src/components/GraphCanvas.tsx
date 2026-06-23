@@ -2300,6 +2300,33 @@ code, pre, .mono {
 
     drawMinimapRef.current = drawMinimap;
 
+    const defs = svgElement.append('defs');
+    const pattern = defs.append('pattern')
+      .attr('id', 'matrix-grid')
+      .attr('width', 45)
+      .attr('height', 45)
+      .attr('patternUnits', 'userSpaceOnUse');
+
+    pattern.append('circle')
+      .attr('cx', 2)
+      .attr('cy', 2)
+      .attr('r', 1.2)
+      .attr('fill', 'var(--color-primary)')
+      .attr('class', 'grid-dot');
+
+    pattern.append('path')
+      .attr('d', 'M 45 0 L 0 0 0 45')
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--color-secondary)')
+      .attr('stroke-width', 0.5)
+      .attr('stroke-opacity', 0.04);
+
+    svgElement.append('rect')
+      .attr('class', 'matrix-grid-bg')
+      .attr('width', '100%')
+      .attr('height', '100%')
+      .attr('fill', 'url(#matrix-grid)');
+
     const mainGroup = svgElement.append('g').attr('class', 'main-container');
 
     const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
@@ -2308,6 +2335,17 @@ code, pre, .mono {
         mainGroup.attr('transform', event.transform);
         applyLevelOfDetail(event.transform.k);
         drawMinimap();
+
+        // Parallax panning/zooming for coordinate matrix grid background
+        const k = event.transform.k;
+        const x = event.transform.x;
+        const y = event.transform.y;
+        const patternScale = 1 + (k - 1) * 0.3;
+        const patternX = x * 0.3;
+        const patternY = y * 0.3;
+
+        svgElement.select('#matrix-grid')
+          .attr('patternTransform', `translate(${patternX}, ${patternY}) scale(${patternScale})`);
       });
 
     zoomBehaviorRef.current = zoomBehavior;

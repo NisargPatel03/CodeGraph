@@ -346,6 +346,14 @@ interface RepoSelectorProps {
 }
 
 export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, onTakeTour }) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
+    e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
+  };
+
   const [gitUrl, setGitUrl] = useState('');
   const [gitToken, setGitToken] = useState(() => localStorage.getItem('gh_token') || '');
   const [loading, setLoading] = useState(false);
@@ -479,7 +487,7 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, onTake
         </p>
       </div>
 
-      <div className="glass-panel input-card">
+      <div className="glass-panel input-card glass-panel-glow-hover" onMouseMove={handleMouseMove}>
         {/* GitHub Repository Form */}
         <form onSubmit={handleGitFetch} className="github-input-group">
           <input
@@ -585,6 +593,8 @@ export const RepoSelector: React.FC<RepoSelectorProps> = ({ onDataLoaded, onTake
                   <div 
                     key={idx}
                     onClick={() => handleRecentClick(repo)}
+                    onMouseMove={handleMouseMove}
+                    className="glass-panel-glow-hover"
                     style={{ 
                       display: 'flex', 
                       alignItems: 'center', 

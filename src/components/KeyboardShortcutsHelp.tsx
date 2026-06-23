@@ -8,6 +8,14 @@ interface KeyboardShortcutsHelpProps {
 export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelpProps) {
   if (!isOpen) return null;
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
+    e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
+  };
+
   const shortcutGroups = [
     {
       title: 'Global Navigation & Utilities',
@@ -39,8 +47,9 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div 
-        className="glass-panel settings-modal" 
+        className="glass-panel settings-modal glass-panel-glow-hover" 
         onClick={(e) => e.stopPropagation()} 
+        onMouseMove={handleMouseMove}
         style={{ 
           width: '540px',
           border: '1px solid var(--color-primary)', 

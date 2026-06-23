@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* --- Theme Variables --- */
 :root {
   --font-sans: 'Outfit', 'Inter', sans-serif;
-  --font-mono: 'Fira Code', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
   
   --bg-main: #060913;
   --bg-glow: #0c122b;
@@ -32,6 +32,7 @@
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glow-shadow: 0 0 15px var(--color-primary-glow);
   --glow-shadow-teal: 0 0 15px var(--color-secondary-glow);
+  --panel-glow-color: rgba(139, 92, 246, 0.12);
 }
 
 /* --- Base Reset & Structure --- */
@@ -83,6 +84,8 @@ h1, h2, h3, h4, h5 {
 code, pre {
   font-family: var(--font-mono);
   font-size: 0.9em;
+  font-variant-ligatures: common-ligatures;
+  font-feature-settings: "liga" on, "calt" on;
 }
 
 /* --- Glassmorphism UI Panels --- */
@@ -103,6 +106,37 @@ code, pre {
 .glass-panel-glow {
   border-color: var(--panel-border-glow);
   box-shadow: 0 0 20px var(--panel-border-glow), 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-glow-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel-glow-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    300px circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+    var(--panel-glow-color, rgba(139, 92, 246, 0.12)),
+    transparent 80%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.glass-panel-glow-hover:hover::before {
+  opacity: 1;
+}
+
+/* Ensure child content stays above the pseudo-element glow */
+.glass-panel-glow-hover > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* --- App Shell & Layouts --- */
@@ -983,6 +1017,7 @@ code, pre {
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
+  --panel-glow-color: rgba(139, 92, 246, 0.12);
 }
 
 [data-theme="midnight-green"] {
@@ -1000,6 +1035,7 @@ code, pre {
   --text-primary: #ECFDF5;
   --text-secondary: #a7f3d0;
   --text-muted: #34d399;
+  --panel-glow-color: rgba(16, 185, 129, 0.12);
 }
 
 [data-theme="solar-amber"] {
@@ -1017,6 +1053,7 @@ code, pre {
   --text-primary: #FFFBEB;
   --text-secondary: #fef3c7;
   --text-muted: #d97706;
+  --panel-glow-color: rgba(245, 158, 11, 0.12);
 }
 
 [data-theme="arctic-light"] {
@@ -1037,6 +1074,7 @@ code, pre {
   --input-bg: rgba(15, 23, 42, 0.04);
   --tabs-header-bg: rgba(15, 23, 42, 0.03);
   --scrollbar-thumb: rgba(15, 23, 42, 0.12);
+  --panel-glow-color: rgba(99, 102, 241, 0.08);
 }
 
 [data-theme="rose-gold"] {
@@ -1054,6 +1092,7 @@ code, pre {
   --text-primary: #FDF2F8;
   --text-secondary: #fbcfe8;
   --text-muted: #db2777;
+  --panel-glow-color: rgba(236, 72, 153, 0.12);
 }
 
 [data-theme="synthwave"] {
@@ -1071,6 +1110,7 @@ code, pre {
   --text-primary: #F0E6FF;
   --text-secondary: #e0ccff;
   --text-muted: #a64dff;
+  --panel-glow-color: rgba(255, 0, 255, 0.12);
 }
 
 /* --- Theme Specific Overrides for Light Mode --- */
@@ -3737,5 +3777,37 @@ input:checked + .slider:before {
 [data-theme="arctic-light"] .suspect-profile-card span {
   color: #334155 !important;
 }
+
+/* Animated Matrix Grid Background */
+.matrix-grid-bg {
+  animation: gridAmbientPulse 15s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.grid-dot {
+  transform-origin: center;
+  animation: dotGlow 8s ease-in-out infinite;
+}
+
+@keyframes gridAmbientPulse {
+  0%, 100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes dotGlow {
+  0%, 100% {
+    r: 1.2px;
+    opacity: 0.15;
+  }
+  50% {
+    r: 2.2px;
+    opacity: 0.35;
+  }
+}
+
 
 

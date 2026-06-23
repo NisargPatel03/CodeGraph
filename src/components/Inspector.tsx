@@ -458,6 +458,14 @@ export const Inspector: React.FC<InspectorProps> = ({
   forensicModeEnabled = false,
   crimeSceneData = null,
 }) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
+    e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
+  };
+
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'linter' | 'audit'>('info');
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loadingExplanation, setLoadingExplanation] = useState(false);
@@ -1116,7 +1124,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   const fileFolder = activeInspectorFile ? activeInspectorFile.path.substring(0, activeInspectorFile.path.lastIndexOf('/')) : null;
 
   return (
-    <aside className="glass-panel sidebar-right">
+    <aside className="glass-panel sidebar-right glass-panel-glow-hover" onMouseMove={handleMouseMove}>
       <div className="inspector-tabs">
         <button
           className={`inspector-tab ${activeTab === 'info' ? 'active' : ''}`}

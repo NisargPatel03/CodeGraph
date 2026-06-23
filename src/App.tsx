@@ -39,6 +39,14 @@ interface FileTreeItem {
 }
 
 export default function App() {
+  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
+    e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
+  };
+
   const [audioEnabled, setAudioEnabled] = useState(() => audioSonifier.isEnabled());
   const [audioVolume, setAudioVolume] = useState(() => audioSonifier.getVolume());
 
@@ -1021,7 +1029,7 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Top Header */}
-      <header className="glass-panel app-header">
+      <header className="glass-panel app-header glass-panel-glow-hover" onMouseMove={handleMouseMove}>
         <div className="logo-container">
           <img src={logoImg} alt="CodeGraph Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           <h1 className="logo-text">CodeGraph</h1>
@@ -1489,7 +1497,7 @@ export default function App() {
           <main className={`workspace-layout ${viewMode === 'docs' ? 'docs-active-layout' : ''}`}>
             {/* Left Sidebar - File Explorer */}
             {viewMode !== 'docs' && (
-              <aside className="glass-panel sidebar-left">
+              <aside className="glass-panel sidebar-left glass-panel-glow-hover" onMouseMove={handleMouseMove}>
               <div className="sidebar-header">
                 <div className="sidebar-title">
                   <span>Files Panel</span>
@@ -1633,7 +1641,7 @@ export default function App() {
             )}
 
             {/* Center Area - D3 Graph Visualizer or Analytics Dashboard */}
-            <section className="glass-panel center-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+            <section className="glass-panel center-panel glass-panel-glow-hover" onMouseMove={handleMouseMove} style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="tabs-header" style={{ flexShrink: 0 }}>
                 <div className="tabs-group">
                   <button
@@ -1883,7 +1891,7 @@ export default function App() {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="settings-overlay" onClick={() => setIsSettingsOpen(false)}>
-          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+          <div className="glass-panel settings-modal glass-panel-glow-hover" onClick={(e) => e.stopPropagation()} onMouseMove={handleMouseMove} style={{ border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
                 <Key size={18} />
@@ -2087,7 +2095,7 @@ export default function App() {
       {/* Folder Explainer Modal */}
       {showFolderExplainModal && (
         <div className="settings-overlay" onClick={() => setShowFolderExplainModal(false)}>
-          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ width: '80%', maxWidth: '800px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+          <div className="glass-panel settings-modal glass-panel-glow-hover" onClick={(e) => e.stopPropagation()} onMouseMove={handleMouseMove} style={{ width: '80%', maxWidth: '800px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
                 🧠 Module Explainer: {explainingFolderName}
@@ -2130,7 +2138,7 @@ export default function App() {
       {/* Cross-File Refactoring Modal */}
       {showRefactorModal && (
         <div className="settings-overlay" onClick={() => setShowRefactorModal(false)}>
-          <div className="glass-panel settings-modal" onClick={(e) => e.stopPropagation()} style={{ width: '90%', maxWidth: '1000px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
+          <div className="glass-panel settings-modal glass-panel-glow-hover" onClick={(e) => e.stopPropagation()} onMouseMove={handleMouseMove} style={{ width: '90%', maxWidth: '1000px', border: '1px solid var(--color-primary)', boxShadow: '0 8px 32px 0 rgba(139, 92, 246, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
                 ✨ Cross-File AI Refactoring Proposal
