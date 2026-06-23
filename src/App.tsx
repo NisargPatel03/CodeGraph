@@ -19,9 +19,9 @@ import { OnboardingTour } from './components/OnboardingTour';
 import logoImg from './assets/logo.png';
 import { audioSonifier } from './utils/audioSonifier';
 import { CollabManager, type Collaborator, type ActivityLogEntry } from './utils/collabManager';
-import { 
-  semanticSearchCodebase, 
-  lintCodebaseRules, 
+import {
+  semanticSearchCodebase,
+  lintCodebaseRules,
   runDependencyAudit,
   explainEntireFolderStream,
   suggestCrossFileRefactorStream,
@@ -64,9 +64,9 @@ export default function App() {
     return (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
   });
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [repoData, setRepoData] = useState<{ 
-    files: ParsedFile[]; 
-    repoName: string; 
+  const [repoData, setRepoData] = useState<{
+    files: ParsedFile[];
+    repoName: string;
     commits?: import('./utils/repoParser').GitHubCommitInfo[];
   } | null>(null);
   const [graphData, setGraphData] = useState<CodebaseGraph | null>(null);
@@ -252,12 +252,14 @@ export default function App() {
   });
   const [tourType, setTourType] = useState<'basic' | 'advanced'>('basic');
   const [showTourMenu, setShowTourMenu] = useState(false);
+  const [isTourMenuLocked, setIsTourMenuLocked] = useState(false);
   const tourMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (tourMenuRef.current && !tourMenuRef.current.contains(event.target as Node)) {
         setShowTourMenu(false);
+        setIsTourMenuLocked(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -468,7 +470,7 @@ export default function App() {
       } else {
         queryParams.delete('depth');
       }
-      
+
       queryParams.set('theme', theme);
       if (collabRoomId) {
         queryParams.set('collab', collabRoomId);
@@ -494,8 +496,8 @@ export default function App() {
       }
     }
 
-    const newUrl = queryParams.toString() 
-      ? `${window.location.pathname}?${queryParams.toString()}` 
+    const newUrl = queryParams.toString()
+      ? `${window.location.pathname}?${queryParams.toString()}`
       : window.location.pathname;
 
     window.history.replaceState(null, '', newUrl);
@@ -503,7 +505,7 @@ export default function App() {
 
   const handleCopyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
-    
+
     // Show toast
     const toast = document.createElement('div');
     toast.style.position = 'fixed';
@@ -558,7 +560,7 @@ export default function App() {
   useEffect(() => {
     (window as any).locateFileNode = (filePath: string) => {
       if (!filePath) return;
-      
+
       const hasExtension = filePath.includes('.');
       const isDbTable = !hasExtension && !filePath.includes('/') && !filePath.includes('\\');
 
@@ -684,7 +686,7 @@ export default function App() {
 
   const formatMarkdown = (text: string): string => {
     if (!text) return '';
-    
+
     // Clean up LaTeX symbols like \to, \rightarrow, \Rightarrow, \implies wrapped in dollar signs
     let cleanedText = text
       .replace(/\\+\s*to\b/gi, '→')
@@ -778,9 +780,9 @@ export default function App() {
     return processedText;
   };
 
-  const handleDataLoaded = (data: { 
-    files: ParsedFile[]; 
-    repoName: string; 
+  const handleDataLoaded = (data: {
+    files: ParsedFile[];
+    repoName: string;
     commits?: import('./utils/repoParser').GitHubCommitInfo[];
   }) => {
     setRepoData(data);
@@ -990,32 +992,32 @@ export default function App() {
                 🧠 explain
               </button>
               {(viewMode === 'dependency' || viewMode === 'cluster') && (
-              <button
-                className="tree-graph-toggle"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCollapsedFolders(prev => {
-                    const next = new Set(prev);
-                    if (next.has(item.path)) next.delete(item.path);
-                    else next.add(item.path);
-                    return next;
-                  });
-                }}
-                title={collapsedFolders.has(item.path) ? "Expand in Graph" : "Collapse in Graph"}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: collapsedFolders.has(item.path) ? 'var(--color-warning)' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '2px 6px',
-                  fontSize: '0.65rem',
-                  flexShrink: 0,
-                  transition: 'color 0.2s ease'
-                }}
-              >
-                {collapsedFolders.has(item.path) ? '📁 collapsed' : '📂 collapse'}
-              </button>
-            )}
+                <button
+                  className="tree-graph-toggle"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCollapsedFolders(prev => {
+                      const next = new Set(prev);
+                      if (next.has(item.path)) next.delete(item.path);
+                      else next.add(item.path);
+                      return next;
+                    });
+                  }}
+                  title={collapsedFolders.has(item.path) ? "Expand in Graph" : "Collapse in Graph"}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: collapsedFolders.has(item.path) ? 'var(--color-warning)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                    fontSize: '0.65rem',
+                    flexShrink: 0,
+                    transition: 'color 0.2s ease'
+                  }}
+                >
+                  {collapsedFolders.has(item.path) ? '📁 collapsed' : '📂 collapse'}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1048,9 +1050,9 @@ export default function App() {
                 <Download size={14} />
                 Export ZIP
               </button>
-              <button 
-                className="cyber-button secondary" 
-                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }} 
+              <button
+                className="cyber-button secondary"
+                style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                 onClick={handleCopyShareLink}
                 title="Copy shareable link with current view state"
               >
@@ -1066,14 +1068,14 @@ export default function App() {
 
           {/* Collaboration HUD */}
           <div className="collab-hud-wrapper" style={{ position: 'relative' }}>
-            <div 
-              className="collab-hud-container" 
+            <div
+              className="collab-hud-container"
               onClick={() => setShowCollabLogs(!showCollabLogs)}
               style={{ cursor: 'pointer', userSelect: 'none' }}
             >
               {/* Status Dot */}
               <div className={`collab-status-indicator ${isCollabSimulating ? 'simulating' : (collabRoomId && collabManager.getIsConnected() ? 'online' : 'offline')}`} />
-              
+
               {/* Room label / invite code */}
               <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {collabRoomId ? (
@@ -1087,9 +1089,9 @@ export default function App() {
               {collabPeers.size > 0 && (
                 <div className="collab-avatar-stack">
                   {Array.from(collabPeers.values()).map((peer) => (
-                    <div 
-                      key={peer.clientId} 
-                      className="collab-avatar-item" 
+                    <div
+                      key={peer.clientId}
+                      className="collab-avatar-item"
                       style={{ backgroundColor: peer.color }}
                     >
                       {peer.username.substring(0, 2)}
@@ -1110,8 +1112,8 @@ export default function App() {
                     <Users size={15} className="text-primary" />
                     Live Collaboration
                   </h3>
-                  <button 
-                    onClick={() => setShowCollabLogs(false)} 
+                  <button
+                    onClick={() => setShowCollabLogs(false)}
                     style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
                   >
                     Close
@@ -1121,8 +1123,8 @@ export default function App() {
                 {/* Room Actions */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Enter Room ID..."
                       defaultValue={collabRoomId || ''}
                       onKeyDown={(e) => {
@@ -1132,18 +1134,18 @@ export default function App() {
                           else setCollabRoomId(null);
                         }
                       }}
-                      style={{ 
-                        flex: 1, 
-                        background: 'var(--input-bg)', 
-                        border: '1px solid var(--panel-border)', 
-                        borderRadius: '6px', 
-                        padding: '6px 10px', 
-                        fontSize: '0.72rem', 
+                      style={{
+                        flex: 1,
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--panel-border)',
+                        borderRadius: '6px',
+                        padding: '6px 10px',
+                        fontSize: '0.72rem',
                         color: 'var(--text-primary)',
                         outline: 'none'
                       }}
                     />
-                    <button 
+                    <button
                       className="cyber-button"
                       style={{ padding: '6px 12px', fontSize: '0.7rem' }}
                       onClick={(e) => {
@@ -1159,7 +1161,7 @@ export default function App() {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
                     {!collabRoomId && (
-                      <button 
+                      <button
                         className="cyber-button secondary"
                         style={{ flex: 1, padding: '6px', fontSize: '0.7rem' }}
                         onClick={() => {
@@ -1170,9 +1172,9 @@ export default function App() {
                         Generate Room
                       </button>
                     )}
-                    
+
                     {collabRoomId && (
-                      <button 
+                      <button
                         className="cyber-button secondary"
                         style={{ flex: 1, padding: '6px', fontSize: '0.7rem', color: '#fca5a5' }}
                         onClick={() => setCollabRoomId(null)}
@@ -1181,7 +1183,7 @@ export default function App() {
                       </button>
                     )}
 
-                    <button 
+                    <button
                       className={`cyber-button ${isCollabSimulating ? 'warning' : 'secondary'}`}
                       style={{ flex: 1, padding: '6px', fontSize: '0.7rem', opacity: graphData ? 1 : 0.5 }}
                       onClick={toggleCollabSimulation}
@@ -1200,11 +1202,11 @@ export default function App() {
                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{collabPeers.size} peer(s)</span>
                   </div>
 
-                  <div style={{ 
-                    maxHeight: '180px', 
-                    overflowY: 'auto', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                  <div style={{
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
                     gap: '6px',
                     paddingRight: '4px'
                   }}>
@@ -1214,12 +1216,12 @@ export default function App() {
                       </div>
                     ) : (
                       collabActivityLog.map((log) => (
-                        <div 
-                          key={log.id} 
-                          style={{ 
-                            fontSize: '0.68rem', 
-                            padding: '5px 8px', 
-                            background: 'var(--input-bg)', 
+                        <div
+                          key={log.id}
+                          style={{
+                            fontSize: '0.68rem',
+                            padding: '5px 8px',
+                            background: 'var(--input-bg)',
                             border: '1px solid var(--panel-border)',
                             borderRadius: '4px',
                             color: 'var(--text-secondary)',
@@ -1269,117 +1271,141 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'var(--text-secondary)',
-              transition: 'var(--transition-smooth)',
-              borderLeft: '1px solid var(--panel-border)',
-              paddingLeft: '8px',
-              paddingRight: '4px',
               userSelect: 'none',
               whiteSpace: 'nowrap',
               flexShrink: 0
             }}
-            className="tour-trigger-btn"
-            onClick={() => setShowTourMenu(!showTourMenu)}
+            onMouseEnter={() => setShowTourMenu(true)}
+            onMouseLeave={() => {
+              if (!isTourMenuLocked) {
+                setShowTourMenu(false);
+              }
+            }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--color-primary)' }}>
-              <Sparkles size={14} />
-              <span>Interactive Tours</span>
-              <ChevronDown size={10} style={{ opacity: 0.7 }} />
+            <div
+              className="tour-trigger-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                transition: 'var(--transition-smooth)',
+                borderLeft: '1px solid var(--panel-border)',
+                paddingLeft: '8px',
+                paddingRight: '4px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextLocked = !isTourMenuLocked;
+                setIsTourMenuLocked(nextLocked);
+                setShowTourMenu(nextLocked);
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--color-primary)' }}>
+                <Sparkles size={14} />
+                <span>Interactive Tours</span>
+                <ChevronDown size={10} style={{ opacity: 0.7 }} />
+              </div>
             </div>
 
             {showTourMenu && (
-              <div 
-                className="glass-panel"
+              <div
                 style={{
                   position: 'absolute',
                   top: '100%',
                   right: 0,
-                  marginTop: '8px',
-                  background: 'var(--panel-bg, rgba(15, 23, 42, 0.95))',
-                  border: '1px solid var(--panel-border)',
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(139, 92, 246, 0.1)',
-                  zIndex: 1000,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '6px',
-                  width: '200px',
-                  animation: 'onboarding-card-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                  paddingTop: '8px',
+                  zIndex: 9999
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTourType('basic');
-                    setIsTourOpen(true);
-                    setShowTourMenu(false);
-                  }}
+                <div
+                  className="glass-panel"
                   style={{
+                    background: 'var(--panel-bg, rgba(15, 23, 42, 0.95))',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(139, 92, 246, 0.1)',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: 'var(--text-primary)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    gap: '2px',
-                    width: '100%'
-                  }}
-                  className="tour-menu-item"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.color = 'var(--color-secondary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--text-primary)';
+                    padding: '6px',
+                    width: '200px',
+                    animation: 'onboarding-card-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                   }}
                 >
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>✨ Quick Tour (Basic)</span>
-                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Master the core platform features</span>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTourType('advanced');
-                    setIsTourOpen(true);
-                    setShowTourMenu(false);
-                  }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: 'var(--text-primary)',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    gap: '2px',
-                    marginTop: '4px',
-                    width: '100%'
-                  }}
-                  className="tour-menu-item"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.color = 'var(--color-primary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--text-primary)';
-                  }}
-                >
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>🚀 Advanced Features</span>
-                  <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Git Replay, Sonification & Weather</span>
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTourType('basic');
+                      setIsTourOpen(true);
+                      setShowTourMenu(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      color: 'var(--text-primary)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      gap: '2px',
+                      width: '100%'
+                    }}
+                    className="tour-menu-item"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--color-secondary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                  >
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>✨ Quick Tour (Basic)</span>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Master the core platform features</span>
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTourType('advanced');
+                      setIsTourOpen(true);
+                      setShowTourMenu(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      color: 'var(--text-primary)',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      gap: '2px',
+                      marginTop: '4px',
+                      width: '100%'
+                    }}
+                    className="tour-menu-item"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = 'var(--color-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                  >
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>🚀 Advanced Features</span>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Git Replay, Sonification & Weather</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1411,13 +1437,13 @@ export default function App() {
           </div>
 
           {/* Settings API Key Toggle indicator */}
-          <div 
+          <div
             onClick={() => setIsSettingsOpen(true)}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              borderLeft: '1px solid var(--panel-border)', 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderLeft: '1px solid var(--panel-border)',
               paddingLeft: '8px',
               cursor: 'pointer',
               userSelect: 'none',
@@ -1474,8 +1500,8 @@ export default function App() {
             <p style={{ margin: '0 0 16px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
               {repoLoadError}
             </p>
-            <button 
-              className="cyber-button" 
+            <button
+              className="cyber-button"
               style={{ margin: '0 auto' }}
               onClick={() => {
                 setRepoLoadError(null);
@@ -1488,156 +1514,158 @@ export default function App() {
           </div>
         </div>
       ) : !repoData ? (
-        <RepoSelector 
-          onDataLoaded={handleDataLoaded} 
-          onTakeTour={() => setIsTourOpen(true)}
-        />
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <RepoSelector
+            onDataLoaded={handleDataLoaded}
+            onTakeTour={() => setIsTourOpen(true)}
+          />
+        </div>
       ) : (
         graphData && (
           <main className={`workspace-layout ${viewMode === 'docs' ? 'docs-active-layout' : ''}`}>
             {/* Left Sidebar - File Explorer */}
             {viewMode !== 'docs' && (
               <aside className="glass-panel sidebar-left glass-panel-glow-hover" onMouseMove={handleMouseMove}>
-              <div className="sidebar-header">
-                <div className="sidebar-title">
-                  <span>Files Panel</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{repoData.files.length} items</span>
-                </div>
-                <div className="search-box">
-                  <Search size={14} className="search-icon" />
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Filter tree or ask AI..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSemanticSearch();
-                      }
-                    }}
-                  />
-                  <button
-                    className="search-ai-btn"
-                    title="Semantic AI Search (Enter)"
-                    onClick={handleSemanticSearch}
-                    disabled={!searchQuery.trim() || isSearchingSemantically}
-                  >
-                    {isSearchingSemantically ? (
-                      <div className="search-spinner" />
-                    ) : (
-                      <Sparkles size={13} />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              {repoData && (
-                <div className="multi-select-toggle-row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                  <button 
-                    className={`cyber-button ${isMultiSelectActive ? 'active' : 'secondary'}`} 
-                    style={{ fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }} 
-                    onClick={() => {
-                      setIsMultiSelectActive(!isMultiSelectActive);
-                      setSelectedFilePaths(new Set());
-                    }}
-                  >
-                    {isMultiSelectActive ? '✕ Exit Multi-Select' : '☑️ Multi-File Refactor'}
-                  </button>
-                  {isMultiSelectActive && selectedFilePaths.size > 0 && (
-                    <span 
-                      className="multi-select-clear-link"
-                      onClick={() => setSelectedFilePaths(new Set())}
+                <div className="sidebar-header">
+                  <div className="sidebar-title">
+                    <span>Files Panel</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{repoData.files.length} items</span>
+                  </div>
+                  <div className="search-box">
+                    <Search size={14} className="search-icon" />
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Filter tree or ask AI..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSemanticSearch();
+                        }
+                      }}
+                    />
+                    <button
+                      className="search-ai-btn"
+                      title="Semantic AI Search (Enter)"
+                      onClick={handleSemanticSearch}
+                      disabled={!searchQuery.trim() || isSearchingSemantically}
                     >
-                      Clear ({selectedFilePaths.size})
-                    </span>
+                      {isSearchingSemantically ? (
+                        <div className="search-spinner" />
+                      ) : (
+                        <Sparkles size={13} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {repoData && (
+                  <div className="multi-select-toggle-row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)' }}>
+                    <button
+                      className={`cyber-button ${isMultiSelectActive ? 'active' : 'secondary'}`}
+                      style={{ fontSize: '0.68rem', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      onClick={() => {
+                        setIsMultiSelectActive(!isMultiSelectActive);
+                        setSelectedFilePaths(new Set());
+                      }}
+                    >
+                      {isMultiSelectActive ? '✕ Exit Multi-Select' : '☑️ Multi-File Refactor'}
+                    </button>
+                    {isMultiSelectActive && selectedFilePaths.size > 0 && (
+                      <span
+                        className="multi-select-clear-link"
+                        onClick={() => setSelectedFilePaths(new Set())}
+                      >
+                        Clear ({selectedFilePaths.size})
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="file-tree-container" style={{ position: 'relative' }}>
+                  {isSearchingSemantically ? (
+                    <div className="semantic-loading" style={{ padding: '24px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div className="search-spinner" style={{ width: '20px', height: '20px' }} />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Gemini is indexing & mapping files...</span>
+                    </div>
+                  ) : semanticSearchError ? (
+                    <div className="semantic-results-container">
+                      <div className="semantic-results-header">
+                        <span>⚠️ AI Search Error</span>
+                        <button
+                          className="semantic-clear-btn"
+                          onClick={() => {
+                            setSemanticSearchResults(null);
+                            setSemanticSearchError(null);
+                            setSearchQuery('');
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="semantic-error" style={{ margin: '10px 0', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#fca5a5' }}>
+                        {semanticSearchError}
+                      </div>
+                    </div>
+                  ) : semanticSearchResults ? (
+                    <div className="semantic-results-container">
+                      <div className="semantic-results-header">
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <AiIcon size={14} />
+                          AI Matches ({semanticSearchResults.length})
+                        </span>
+                        <button
+                          className="semantic-clear-btn"
+                          onClick={() => {
+                            setSemanticSearchResults(null);
+                            setSemanticSearchError(null);
+                            setSearchQuery('');
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      {semanticSearchResults.length === 0 ? (
+                        <div className="semantic-empty" style={{ padding: '20px 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
+                          No matches found. Try describing functions or components.
+                        </div>
+                      ) : (
+                        <div className="semantic-results-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>
+                          {semanticSearchResults.map((result) => (
+                            <div
+                              key={result.filePath}
+                              className={`semantic-result-item ${selectedNodeId === result.filePath ? 'active' : ''}`}
+                              onClick={() => setSelectedNodeId(result.filePath)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <div className="semantic-result-title-row">
+                                <span className="semantic-result-name">{result.filePath.split('/').pop()}</span>
+                                <span className="relevance-badge">{result.relevanceScore}% Match</span>
+                              </div>
+                              <div className="semantic-result-path">{result.filePath}</div>
+                              <div className="match-reason">{result.reason}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    fileTree && renderTree(fileTree)
                   )}
                 </div>
-              )}
-
-              <div className="file-tree-container" style={{ position: 'relative' }}>
-                {isSearchingSemantically ? (
-                  <div className="semantic-loading" style={{ padding: '24px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                    <div className="search-spinner" style={{ width: '20px', height: '20px' }} />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>Gemini is indexing & mapping files...</span>
-                  </div>
-                ) : semanticSearchError ? (
-                  <div className="semantic-results-container">
-                    <div className="semantic-results-header">
-                      <span>⚠️ AI Search Error</span>
-                      <button 
-                        className="semantic-clear-btn" 
-                        onClick={() => {
-                          setSemanticSearchResults(null);
-                          setSemanticSearchError(null);
-                          setSearchQuery('');
-                        }}
-                      >
-                        Clear
-                      </button>
+                {isMultiSelectActive && selectedFilePaths.size >= 2 && (
+                  <div className="multi-select-toolbar">
+                    <div className="multi-select-header">
+                      <span>Selected Files</span>
+                      <span className="multi-select-count">{selectedFilePaths.size}</span>
                     </div>
-                    <div className="semantic-error" style={{ margin: '10px 0', padding: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '0.75rem', color: '#fca5a5' }}>
-                      {semanticSearchError}
-                    </div>
+                    <button className="multi-select-btn" onClick={handleRunCrossFileRefactor}>
+                      <Sparkles size={14} /> Refactor Selected Files
+                    </button>
                   </div>
-                ) : semanticSearchResults ? (
-                  <div className="semantic-results-container">
-                    <div className="semantic-results-header">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <AiIcon size={14} />
-                        AI Matches ({semanticSearchResults.length})
-                      </span>
-                      <button 
-                        className="semantic-clear-btn" 
-                        onClick={() => {
-                          setSemanticSearchResults(null);
-                          setSemanticSearchError(null);
-                          setSearchQuery('');
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    {semanticSearchResults.length === 0 ? (
-                      <div className="semantic-empty" style={{ padding: '20px 10px', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', fontStyle: 'italic' }}>
-                        No matches found. Try describing functions or components.
-                      </div>
-                    ) : (
-                      <div className="semantic-results-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>
-                        {semanticSearchResults.map((result) => (
-                          <div 
-                            key={result.filePath}
-                            className={`semantic-result-item ${selectedNodeId === result.filePath ? 'active' : ''}`}
-                            onClick={() => setSelectedNodeId(result.filePath)}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className="semantic-result-title-row">
-                              <span className="semantic-result-name">{result.filePath.split('/').pop()}</span>
-                              <span className="relevance-badge">{result.relevanceScore}% Match</span>
-                            </div>
-                            <div className="semantic-result-path">{result.filePath}</div>
-                            <div className="match-reason">{result.reason}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  fileTree && renderTree(fileTree)
                 )}
-              </div>
-              {isMultiSelectActive && selectedFilePaths.size >= 2 && (
-                <div className="multi-select-toolbar">
-                  <div className="multi-select-header">
-                    <span>Selected Files</span>
-                    <span className="multi-select-count">{selectedFilePaths.size}</span>
-                  </div>
-                  <button className="multi-select-btn" onClick={handleRunCrossFileRefactor}>
-                    <Sparkles size={14} /> Refactor Selected Files
-                  </button>
-                </div>
-              )}
-            </aside>
+              </aside>
             )}
 
             {/* Center Area - D3 Graph Visualizer or Analytics Dashboard */}
@@ -1859,16 +1887,16 @@ export default function App() {
             e.currentTarget.style.borderColor = 'var(--panel-border)';
           }}
         >
-          <img 
-            src="/ai-logo.png" 
-            alt="CodeGraph AI" 
-            style={{ 
-              width: '30px', 
-              height: '30px', 
+          <img
+            src="/ai-logo.png"
+            alt="CodeGraph AI"
+            style={{
+              width: '30px',
+              height: '30px',
               borderRadius: '50%',
               boxShadow: '0 0 10px var(--color-primary-glow)',
               border: '1px solid rgba(255,255,255,0.05)'
-            }} 
+            }}
           />
         </button>
       )}
@@ -1897,25 +1925,25 @@ export default function App() {
                 <Key size={18} />
                 AI Linter & Assistant Settings
               </h3>
-              <button 
+              <button
                 onClick={() => setIsSettingsOpen(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 <X size={18} />
               </button>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--panel-border)', marginTop: '16px' }}>
-              <img 
-                src="/ai-logo.png" 
-                alt="CodeGraph AI Logo" 
-                style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: '10px', 
+              <img
+                src="/ai-logo.png"
+                alt="CodeGraph AI Logo"
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '10px',
                   boxShadow: '0 0 16px var(--color-primary-glow)',
                   border: '1px solid rgba(255,255,255,0.1)'
-                }} 
+                }}
               />
               <div>
                 <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>CodeGraph Gemini Intelligence</h4>
@@ -1926,10 +1954,10 @@ export default function App() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--panel-border)', paddingTop: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ 
-                  width: '10px', 
-                  height: '10px', 
-                  borderRadius: '50%', 
+                <div style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
                   background: apiKey ? '#10b981' : '#ef4444',
                   boxShadow: apiKey ? '0 0 8px #10b981' : '0 0 8px #ef4444'
                 }} />
@@ -1948,7 +1976,7 @@ export default function App() {
                 <Activity size={14} />
                 AI Cache & Token Telemetry
               </h4>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
                 {/* Cache Hit Rate */}
                 <div className="glass-panel" style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)' }}>
@@ -1974,16 +2002,16 @@ export default function App() {
                     <span>Tokens Processed vs Saved</span>
                     <span style={{ color: 'var(--color-primary)' }}>{(telemetry.savedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1) * 100).toFixed(0)}% Offloaded</span>
                   </div>
-                  
+
                   {/* Progress bar visual */}
                   <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', marginTop: '8px', overflow: 'hidden', display: 'flex' }}>
-                    <div style={{ 
-                      width: `${(telemetry.processedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`, 
-                      background: 'var(--color-primary)' 
+                    <div style={{
+                      width: `${(telemetry.processedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`,
+                      background: 'var(--color-primary)'
                     }} />
-                    <div style={{ 
-                      width: `${(telemetry.savedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`, 
-                      background: '#10b981' 
+                    <div style={{
+                      width: `${(telemetry.savedTokens / (telemetry.processedTokens + telemetry.savedTokens || 1)) * 100}%`,
+                      background: '#10b981'
                     }} />
                   </div>
 
@@ -2000,7 +2028,7 @@ export default function App() {
               <h4 style={{ margin: '0 0 12px 0', fontSize: '0.8rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 <span>🔊 Codebase Sonification (Audio Feedback)</span>
               </h4>
-              
+
               <div className="glass-panel" style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--panel-border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -2008,8 +2036,8 @@ export default function App() {
                     <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>Plays responsive synthesized chimes on hover and simulation ticks.</span>
                   </div>
                   <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px' }}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={audioEnabled}
                       onChange={(e) => {
                         const nextVal = e.target.checked;
@@ -2043,10 +2071,10 @@ export default function App() {
                       <span>{Math.round(audioVolume * 100)}%</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="1" 
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
                         step="0.05"
                         value={audioVolume}
                         onChange={(e) => {
@@ -2063,7 +2091,7 @@ export default function App() {
                           cursor: 'pointer'
                         }}
                       />
-                      <button 
+                      <button
                         className="cyber-button secondary"
                         style={{ fontSize: '0.7rem', padding: '4px 10px', height: '24px', display: 'flex', alignItems: 'center', gap: '4px' }}
                         onClick={() => {
@@ -2080,7 +2108,7 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
-              <button 
+              <button
                 className="cyber-button"
                 style={{ padding: '8px 20px', fontSize: '0.85rem' }}
                 onClick={() => setIsSettingsOpen(false)}
@@ -2100,14 +2128,14 @@ export default function App() {
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
                 🧠 Module Explainer: {explainingFolderName}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowFolderExplainModal(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="custom-scrollbar" style={{ maxHeight: '60vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
               {isExplainingFolder && !folderExplainReport ? (
                 <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -2115,15 +2143,15 @@ export default function App() {
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>AI is mapping module boundaries & reading files...</span>
                 </div>
               ) : (
-                <div 
-                  className="markdown-body" 
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(folderExplainReport || '') + (isExplainingFolder ? ' <span class="typing-cursor"></span>' : '') }} 
+                <div
+                  className="markdown-body"
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(folderExplainReport || '') + (isExplainingFolder ? ' <span class="typing-cursor"></span>' : '') }}
                 />
               )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
-              <button 
+              <button
                 className="cyber-button"
                 style={{ padding: '8px 20px', fontSize: '0.85rem' }}
                 onClick={() => setShowFolderExplainModal(false)}
@@ -2143,14 +2171,14 @@ export default function App() {
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-primary)', fontSize: '1.1rem' }}>
                 ✨ Cross-File AI Refactoring Proposal
               </h3>
-              <button 
+              <button
                 onClick={() => setShowRefactorModal(false)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="custom-scrollbar" style={{ maxHeight: '65vh', overflowY: 'auto', marginTop: '16px', paddingRight: '8px' }}>
               {isRefactoring && !refactorProposal ? (
                 <div style={{ padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -2158,15 +2186,15 @@ export default function App() {
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gemini is auditing overlapping logic & compiling DRY blueprints...</span>
                 </div>
               ) : (
-                <div 
-                  className="markdown-body" 
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(refactorProposal || '') + (isRefactoring ? ' <span class="typing-cursor"></span>' : '') }} 
+                <div
+                  className="markdown-body"
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(refactorProposal || '') + (isRefactoring ? ' <span class="typing-cursor"></span>' : '') }}
                 />
               )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', borderTop: '1px solid var(--panel-border)', paddingTop: '12px' }}>
-              <button 
+              <button
                 className="cyber-button"
                 style={{ padding: '8px 20px', fontSize: '0.85rem' }}
                 onClick={() => setShowRefactorModal(false)}
@@ -2195,9 +2223,9 @@ export default function App() {
         />
       )}
 
-      <KeyboardShortcutsHelp 
-        isOpen={isHelpOpen} 
-        onClose={() => setIsHelpOpen(false)} 
+      <KeyboardShortcutsHelp
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
       />
 
       <OnboardingTour
