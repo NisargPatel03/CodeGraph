@@ -57,7 +57,7 @@
   - [Visual AppSec & Dependency CVE Vulnerability Map](#visual-appsec--dependency-cve-vulnerability-map)
   - [Codebase "Fingerprint" Score Card](#codebase-fingerprint-score-card)
   - [README.md Auto-Generator](#readme-auto-generator)
-  - [Interactive Onboarding Tour](#onboarding-tour)
+  - [Dual-Mode Interactive Onboarding Tour](#onboarding-tour)
   - [WebSocket-Based Live Collaboration System](#live-collaboration)
   - [Digital Forensic Investigator Mode](#forensic-investigator-mode)
   - [Eco-Climate Weather Visualizer](#eco-climate-weather-visualizer)
@@ -269,6 +269,12 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Hotspot Magma & Smoke** — Releases orange smoke particles and draws pulsating red radial heat gradients around complex, high-churn files.
 - **Fractal Lightning Strikes** — Releases sharp electric bolts from the sky to strike vulnerable package nodes, coupled with spatial audio thunder claps.
 
+### 🧭 Dual-Mode Interactive Onboarding Tour
+- **Basic & Advanced Tracks** — Interactive, step-by-step guidance tours tailored for both first-time users (exploring core components) and expert developers (diving into Git Replay, forensic stack trace analysis, audio sonification, weather rendering, and multi-file refactoring).
+- **Glassmorphic Dropdown Trigger** — Redesigned header button into an "Interactive Tours" dropdown, allowing users to independently trigger either onboarding session at any point.
+- **App-State Automation Hooks** — Deeply integrated with application controls; starting or transitioning through steps automatically opens/closes panels (like Settings or AI Chat), switches visualization modes, or toggles tool sets.
+- **Post-Tour Mastery Prompt** — Automatically triggers a glassmorphic prompt card upon basic tour completion to seamlessly invite users to begin the Advanced Features Tour.
+
 ---
 
 ## Tech Stack
@@ -301,16 +307,22 @@ CodeGraph/
 │   │   ├── AiIcon.tsx               # Reusable animated AI sparkle icon component
 │   │   ├── AnalyticsDashboard.tsx   # Detailed analysis metrics & AI reports dashboard
 │   │   ├── ApiDocsPortal.tsx        # REST API documentation portal with live tester
+│   │   ├── CodebaseFingerprint.tsx  # Codebase biometric radar fingerprint scorecard
 │   │   ├── CommandPalette.tsx       # Global keyboard-driven shortcuts & search command palette
 │   │   ├── EvolutionPlayer.tsx      # Git timeline replay slider & commit controls
 │   │   ├── GraphCanvas.tsx          # D3.js multi-mode graph renderer
 │   │   ├── Inspector.tsx            # File inspector sidebar with AI tools
+│   │   ├── KeyboardShortcutsHelp.tsx # Global keyboard shortcuts helper dialog
 │   │   ├── KpiRibbon.tsx            # Sticky canvas KPI summary ribbon
-│   │   ├── Reports.tsx              # Bottom analytics panel & AI reports
-│   │   └── RepoSelector.tsx         # Landing page — GitHub URL / ZIP uploader
+│   │   ├── OnboardingTour.tsx       # Dual-mode interactive guidance tour component
+│   │   ├── RepoSelector.tsx         # Landing page — GitHub URL / ZIP uploader
+│   │   └── Reports.tsx              # Bottom analytics panel & AI reports
 │   ├── utils/
-│   │   ├── aiHelper.ts              # All Gemini AI API helpers (1099 lines)
-│   │   ├── codeAnalyzer.ts          # Static analysis engine (1161 lines)
+│   │   ├── aiHelper.ts              # All Gemini AI API helpers
+│   │   ├── audioSonifier.ts         # Web Audio API-based codebase topological sonifier
+│   │   ├── codeAnalyzer.ts          # Static analysis engine
+│   │   ├── collabManager.ts         # WebSocket collaboration session synchronization
+│   │   ├── cveScanner.ts            # Dependency package vulnerability scanner and advisory mapper
 │   │   ├── repoParser.ts            # GitHub API & ZIP file parser
 │   │   └── schemaParser.ts          # Database schema parsing engine (Prisma, SQL DDL, Mongoose, SQLAlchemy)
 │   ├── App.tsx                      # Root layout, routing, theme controller
@@ -964,15 +976,21 @@ Provides a one-click automated documentation synthesizer that generates standard
 ---
 
 <a id="onboarding-tour"></a>
-### 30. Interactive Onboarding Tour
+### 30. Dual-Mode Interactive Onboarding Tour
 
 **Files:** `src/components/OnboardingTour.tsx` and `src/App.tsx`
 
-Provides a premium, step-by-step interactive guidance tour designed to help first-time users master CodeGraph's capabilities:
-- **Reactive Backdrop Spotlight**: Draws a dark overlay with a dynamic CSS box-shadow spotlight that highlights the exact targeted element (e.g., File Explorer, visual tab headers, D3 canvas, or KPI telemetry ribbon).
-- **Auto-Ingestion Integration**: Automatically loads the demo sandbox codebase if a user starts the tour from the repository selector page, enabling immediate interactive graph exploration.
-- **Theme-Synchronized Tooltips**: Renders glassmorphic tooltip boxes containing descriptions, progress indicators, and keyboard shortcut triggers that match the active neon visual theme.
-- **Header Trigger Actions**: Includes a top-right header trigger button (`Quick Tour`) and a setup-screen launch card allowing users to replay or skip the walkthrough at any time.
+Provides a premium, step-by-step interactive guidance system designed to help users master both basic and advanced CodeGraph capabilities:
+
+#### Core Architecture
+- **Dual-Mode Tracks:** Select between a 10-step **Quick Tour (Basic)** covering core UI components (canvas, inspector, search, settings, filters) and an 8-step **Advanced Features Tour** highlighting advanced development and debugging tools.
+- **Reactive Backdrop Spotlight:** Renders a fixed dark mask overlay (`rgba(3, 7, 18, 0.45)`) with a dynamic CSS box-shadow spotlight that seamlessly transitions focus between targeted DOM elements based on active step coordinates.
+- **Header Control Dropdown:** Replaced the single "Quick Tour" button in the header actions with a glassmorphic "Interactive Tours" dropdown list. The trigger is built on click-to-toggle logic and is backed by a global click-outside reference listener to prevent unwanted closure.
+
+#### Interactive Experience & Automation
+- **Synchronized App State Control:** The onboarding component is integrated with application state controllers via React callback props. Changing steps automatically manages drawers (opening/closing Settings or AI Chat panels) and toggles features (running Git Replay simulations, activating multi-file refactor select checkboxes, or muting audio) to keep the app in sync with the step descriptions.
+- **Post-Tour Prompt Overlay:** Upon completion of the Basic Tour, a glassmorphic modal card renders over the viewport to summarize basic mastery and offer a one-click transition to immediately start the Advanced Features Tour.
+- **Auto-Ingestion Integration:** Automatically ingests and parses a pre-configured multi-file sandbox database demo when starting either tour from the repository selector dashboard, ensuring instant, rich visualization data is available.
 
 ---
 
