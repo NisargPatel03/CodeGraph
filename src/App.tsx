@@ -244,6 +244,20 @@ export default function App() {
   });
   const [tourType, setTourType] = useState<'basic' | 'advanced'>('basic');
   const [showTourMenu, setShowTourMenu] = useState(false);
+  const tourMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tourMenuRef.current && !tourMenuRef.current.contains(event.target as Node)) {
+        setShowTourMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const [telemetry, setTelemetry] = useState(() => getCacheTelemetry());
 
   const handleLoadDemo = () => {
@@ -1241,6 +1255,7 @@ export default function App() {
 
           {/* Onboarding Tour Button */}
           <div
+            ref={tourMenuRef}
             style={{
               position: 'relative',
               display: 'flex',
@@ -1257,8 +1272,7 @@ export default function App() {
               flexShrink: 0
             }}
             className="tour-trigger-btn"
-            onMouseEnter={() => setShowTourMenu(true)}
-            onMouseLeave={() => setShowTourMenu(false)}
+            onClick={() => setShowTourMenu(!showTourMenu)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--color-primary)' }}>
               <Sparkles size={14} />
@@ -1285,9 +1299,11 @@ export default function App() {
                   width: '200px',
                   animation: 'onboarding-card-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setTourType('basic');
                     setIsTourOpen(true);
                     setShowTourMenu(false);
@@ -1321,7 +1337,8 @@ export default function App() {
                   <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Master the core platform features</span>
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setTourType('advanced');
                     setIsTourOpen(true);
                     setShowTourMenu(false);
