@@ -61,8 +61,13 @@
   - [WebSocket-Based Live Collaboration System](#live-collaboration)
   - [Digital Forensic Investigator Mode](#forensic-investigator-mode)
   - [Eco-Climate Weather Visualizer](#eco-climate-weather-visualizer)
-- [Collapsible File Explorer Sidebar & Folder Explanations](#file-explorer-sidebar)
-- [Workspace Management Controls](#workspace-management-controls)
+  - [Collapsible File Explorer Sidebar & Folder Explanations](#file-explorer-sidebar)
+  - [Workspace Management Controls](#workspace-management-controls)
+  - [Topological Morphing Transitions](#topological-morphing-transitions)
+  - [Bioluminescent Link Flows](#bioluminescent-link-flows)
+  - [UI Sound Haptics & Synthesized Chimes](#ui-sound-haptics--synthesized-chimes)
+  - [AI Sparkle Particle Trail & Typing Effects](#ai-sparkle-particle-trail--typing-effects)
+  - [Visual Git Branch Time-Traveler](#visual-git-branch-time-traveler)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -1082,6 +1087,55 @@ Translates codebase quality parameters, structural smells, and security risks in
 - **Workspace ZIP Exporter:** Click **Export ZIP** in the workspace header to bundle the in-memory files (including any edits or AI patches applied via the Monaco IDE Editor) and trigger a download of the modified repository as a `.zip` archive.
 - **Deep-Linked Share View:** Click **Share View** to copy the current session URL directly to the clipboard, persisting all visualization parameters (`repo`, `view`, `node`, `search`, `trace`, `depth`, `theme`) so other developers can instantly load the exact same graph state.
 - **Reset Workspace:** Click **Reset Workspace** to purge all in-memory repository cache entries and return to the main landing page.
+
+---
+
+<a id="topological-morphing-transitions"></a>
+### 36. Topological Morphing Transitions (Bezier Trajectory Curves)
+
+**File:** `src/components/GraphCanvas.tsx`
+
+- **Custom Coordinate Interpolator:** Instead of abruptly flickering or resetting node coordinates when toggling between view modes (such as from Dependency Graph to DB Schema), CodeGraph implements a custom transition animation.
+- **Bezier Path Trajectories:** Nodes are smoothly pulled along curved bezier paths to their new target coordinates rather than straight lines, preserving visual context and giving the graph a natural, organic feel.
+
+---
+
+<a id="bioluminescent-link-flows"></a>
+### 37. Bioluminescent Link Flows (Constant Faint Particle Streams)
+
+**File:** `src/components/GraphCanvas.tsx`
+
+- **Sub-Pixel Particle Trails:** Runs a constant canvas/SVG animation loop spawning faint, sub-pixel light packets traversing active import lines.
+- **Activity Mapping:** Highlights relative code usage and data flow direction throughout the repository network even when call graphs are idle.
+
+---
+
+<a id="ui-sound-haptics--synthesized-chimes"></a>
+### 38. UI Sound Haptics & Synthesized Chimes
+
+**File:** `src/utils/audioSonifier.ts`
+
+- **Microsecond Envelope Pings:** Integrates low-latency microsecond chimes that trigger during UI clicks and navigation transitions.
+- **Hover Chimes:** Hovering over nodes, directories, or lists synthesizes high-pitched, soft chords to indicate hover haptics without visual clutter.
+
+---
+
+<a id="ai-sparkle-particle-trail--typing-effects"></a>
+### 39. AI Sparkle Particle Trail & Typing Effects
+
+**Files:** `src/index.css` and `src/components/Inspector.tsx`
+
+- **Typing Cursor Particles:** When a streaming AI response is generated, a custom typing cursor blinks and emits small CSS-animated sparkle particles.
+- **Dynamic Emitting Loops:** Uses twin CSS `@keyframes` sparkles (`sparkle-emit-1` and `sparkle-emit-2`) that rotate and drift outwards to emphasize AI-powered code streaming.
+
+---
+
+<a id="visual-git-branch-time-traveler"></a>
+### 40. Visual Git Branch Time-Traveler
+
+**Files:** `src/components/EvolutionPlayer.tsx` and `src/components/GraphCanvas.tsx`
+
+- **Dynamic Branch Diffing:** Let users select two different Git branches or tags to inspect, watching the canvas nodes dynamically morph, split, color-code, and reposition in real-time as the changeset is applied.
 
 ---
 
