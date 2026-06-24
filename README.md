@@ -61,6 +61,8 @@
   - [WebSocket-Based Live Collaboration System](#live-collaboration)
   - [Digital Forensic Investigator Mode](#forensic-investigator-mode)
   - [Eco-Climate Weather Visualizer](#eco-climate-weather-visualizer)
+- [Collapsible File Explorer Sidebar & Folder Explanations](#file-explorer-sidebar)
+- [Workspace Management Controls](#workspace-management-controls)
 - [Architecture](#architecture)
 - [Security & Privacy](#security-privacy-error-handling)
 - [Contributing](#contributing)
@@ -274,6 +276,17 @@ Six built-in visual themes, switchable with an animated ripple effect:
 - **Glassmorphic Dropdown Trigger** — Redesigned header button into an "Interactive Tours" dropdown, allowing users to independently trigger either onboarding session at any point.
 - **App-State Automation Hooks** — Deeply integrated with application controls; starting or transitioning through steps automatically opens/closes panels (like Settings or AI Chat), switches visualization modes, or toggles tool sets.
 - **Post-Tour Mastery Prompt** — Automatically triggers a glassmorphic prompt card upon basic tour completion to seamlessly invite users to begin the Advanced Features Tour.
+
+### 📂 Collapsible File Explorer Sidebar & Folder Explanations
+- **Collapsible Hierarchical Tree** — Interactive tree layout managing folder collapse states and search queries.
+- **AI Folder Summaries** — Explains directory layout and module responsibilities dynamically.
+- **Semantic search input** — Uses Gemini to query functions or folders using natural language queries.
+- **Multi-File Refactoring Selection** — Lets developers select multiple files and request modular refactoring proposals.
+
+### 📥 Workspace Export & ZIP Compilation Controls
+- **ZIP Exporter** — Downloads the updated codebase workspace with Monaco edits and AI patches applied as a standard `.zip` file.
+- **Deep-Linked URL State Sharing** — Encodes the exact visualization viewport, traces, query strings, and parameters for one-click restoration.
+- **Workspace Reset** — Cleans current codebase cache entries to start a fresh project setup.
 
 ---
 
@@ -582,6 +595,9 @@ A premium, multi-tab intelligence command center featuring:
 - **Tab 4: Restructuring & Contracts** (AI Simulator Suite):
   - **Folder Restructure Simulator**: Evaluates coupling limits and generates a clean folder/file structural blueprint. Includes a **📄 PDF Export** button that renders a printable light-mode document.
   - **API-Database Contract Auditor**: Statically scans express/next routing endpoints and database schemas (Prisma, SQL, SQLAlchemy, Mongoose). Uses Gemini to check model attribute drift or invalid type casts. Includes a **📄 PDF Export** button that outputs a print-friendly audit report.
+- **Tab 5: Codebase Fingerprint** — Shows the dynamic Canvas-based radial radar sweeper mapping lines of code, code smell flags, cycle markers, and vulnerability counts to nested concentric ridges. It calculates the overall composite health grade (A-F) out of 100 points, displays the relative language profile bar, and allows exporting a high-fidelity 16:9 certificate PNG.
+- **Tab 6: README.md Generator** — The user interface wrapper for the one-click `generateReadmeFile` AI generator, providing direct preview, copy-to-clipboard, and download options for `README.md`.
+- **Tab 7: AppSec Security Scan** — Lists all detected CVE dependency vulnerabilities in a tabular layout, showing package name, CVE identifier, ecosystem, severity tier, import location, and remediation command, serving as a centralized security management dashboard.
 
 ---
 
@@ -1043,6 +1059,29 @@ Translates codebase quality parameters, structural smells, and security risks in
   - **Fractal Lightning Strikes:** Synthesizes random branching lightning bolts striking vulnerable package nodes, coupled with spatial thunder audio.
 - **Eco-Climate Ambient Audio Drone:** Connects to the Web Audio API to play an ambient low-frequency synthesizer drone (`OscillatorNode` running at $82.4\text{Hz}$) that modulates its volume and texture based on the cumulative structural degradation of the codebase.
 - **Atmospheric Status HUD:** Features a collapsible glassmorphic weather HUD at the bottom left displaying metrics (CVE Count, Cycle Count, Hotspots Count) and active weather statuses (Clear, Rain, Magma, Lightning, Storm).
+
+---
+
+<a id="file-explorer-sidebar"></a>
+### 34. Collapsible File Explorer Sidebar & Folder Explanations
+
+**Files:** `src/App.tsx` and `src/utils/aiHelper.ts`
+
+- **Collapsible Hierarchical Tree:** Renders the loaded repository files and directories in an interactive, nested directory tree supporting collapse/expand states.
+- **Interactive Folder Explanation:** Clicking the AI sparkles icon next to any folder in the tree initiates `explainEntireFolderStream`, invoking Gemini to write a streamed plain-English architectural overview of that folder's contents and responsibilities in a glassmorphic popup modal.
+- **Integrated Semantic Code Search:** The search input supports standard text filter mode as well as a semantic search mode (pressing Enter or the sparkles button) that leverages Gemini to locate files by natural language concepts, listing match relevance percentages and AI explanations.
+- **Multi-File Refactoring Console:** Activating `☑️ Multi-File Refactor` checkbox selection allows developers to select multiple files in the tree and send them to the cross-file refactoring engine to produce shared architectural layout proposals.
+
+---
+
+<a id="workspace-management-controls"></a>
+### 35. Workspace Management Controls (Export ZIP, Share View, Reset)
+
+**Files:** `src/App.tsx`
+
+- **Workspace ZIP Exporter:** Click **Export ZIP** in the workspace header to bundle the in-memory files (including any edits or AI patches applied via the Monaco IDE Editor) and trigger a download of the modified repository as a `.zip` archive.
+- **Deep-Linked Share View:** Click **Share View** to copy the current session URL directly to the clipboard, persisting all visualization parameters (`repo`, `view`, `node`, `search`, `trace`, `depth`, `theme`) so other developers can instantly load the exact same graph state.
+- **Reset Workspace:** Click **Reset Workspace** to purge all in-memory repository cache entries and return to the main landing page.
 
 ---
 

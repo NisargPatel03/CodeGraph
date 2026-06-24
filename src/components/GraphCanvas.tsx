@@ -5968,6 +5968,54 @@ code, pre, .mono {
                 </div>
               )}
             </div>
+
+            {/* Wow Layer Control Center */}
+            <div className="toolbox-section" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                ✨ Extra Premium Features
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <button
+                  className="cyber-button"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    background: isPresenterMode ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    borderColor: isPresenterMode ? '#a855f7' : 'rgba(255,255,255,0.08)',
+                    color: isPresenterMode ? '#c084fc' : 'var(--text-secondary)',
+                    fontWeight: 600
+                  }}
+                  onClick={startPresenterFlyThrough}
+                >
+                  🎥 {isPresenterMode ? 'Stop Presenter Mode' : 'Cinematic Presenter Mode'}
+                </button>
+                
+                <button
+                  className="cyber-button"
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    background: radarActive ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                    borderColor: radarActive ? '#a855f7' : 'rgba(255,255,255,0.08)',
+                    color: radarActive ? '#c084fc' : 'var(--text-secondary)',
+                    fontWeight: 600
+                  }}
+                  onClick={() => setRadarActive(!radarActive)}
+                >
+                  📡 {radarActive ? 'Deactivate Radar Scan' : 'Activate Radar Sweeper'}
+                </button>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -6689,54 +6737,6 @@ code, pre, .mono {
                 </button>
               </div>
             )}
-
-            {/* Wow Layer Control Center */}
-            <div className="toolbox-section" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                ✨ Extra Premium Features
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <button
-                  className="cyber-button"
-                  style={{
-                    width: '100%',
-                    padding: '6px 10px',
-                    fontSize: '0.72rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    background: isPresenterMode ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                    borderColor: isPresenterMode ? '#a855f7' : 'rgba(255,255,255,0.08)',
-                    color: isPresenterMode ? '#c084fc' : 'var(--text-secondary)',
-                    fontWeight: 600
-                  }}
-                  onClick={startPresenterFlyThrough}
-                >
-                  🎥 {isPresenterMode ? 'Stop Presenter Mode' : 'Cinematic Presenter Mode'}
-                </button>
-                
-                <button
-                  className="cyber-button"
-                  style={{
-                    width: '100%',
-                    padding: '6px 10px',
-                    fontSize: '0.72rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    background: radarActive ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                    borderColor: radarActive ? '#a855f7' : 'rgba(255,255,255,0.08)',
-                    color: radarActive ? '#c084fc' : 'var(--text-secondary)',
-                    fontWeight: 600
-                  }}
-                  onClick={() => setRadarActive(!radarActive)}
-                >
-                  📡 {radarActive ? 'Deactivate Radar Scan' : 'Activate Radar Sweeper'}
-                </button>
-              </div>
-            </div>
           </div>
         );
       })()}
